@@ -15,6 +15,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /testAttempts/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow read:   if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /moodLogs/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
