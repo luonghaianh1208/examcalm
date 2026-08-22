@@ -37,10 +37,17 @@ export function pairBeforeAfter(logs: MoodRecord[]): MoodPair[] {
   const before = new Map<string, number>();
   const after = new Map<string, number>();
 
+  // logs đến theo thứ tự mới nhất trước, nên bản ghi đầu tiên gặp cho mỗi ref
+  // chính là bản ghi mới nhất — đó là bản ghi ta muốn giữ. Không ghi đè nếu
+  // ref đã từng thấy, để tránh bản cũ hơn (do Map.set ghi đè) thắng bản mới.
   for (const log of logs) {
     if (!log.linkedActivityRef) continue;
-    if (log.context === "before") before.set(log.linkedActivityRef, log.moodScore);
-    if (log.context === "after") after.set(log.linkedActivityRef, log.moodScore);
+    if (log.context === "before" && !before.has(log.linkedActivityRef)) {
+      before.set(log.linkedActivityRef, log.moodScore);
+    }
+    if (log.context === "after" && !after.has(log.linkedActivityRef)) {
+      after.set(log.linkedActivityRef, log.moodScore);
+    }
   }
 
   const pairs: MoodPair[] = [];

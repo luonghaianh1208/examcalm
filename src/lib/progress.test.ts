@@ -44,4 +44,22 @@ describe("pairBeforeAfter", () => {
   it("bỏ qua ghi chép standalone", () => {
     expect(pairBeforeAfter([log({ context: "standalone" })])).toEqual([]);
   });
+
+  it("khi có hai ghi chép 'before' cùng ref, giữ bản mới nhất (đầu tiên gặp trong mảng)", () => {
+    const pairs = pairBeforeAfter([
+      log({ id: "before-new", context: "before", moodScore: 5, linkedActivityRef: "testAttempts/x" }),
+      log({ id: "before-old", context: "before", moodScore: 2, linkedActivityRef: "testAttempts/x" }),
+      log({ id: "after", context: "after", moodScore: 7, linkedActivityRef: "testAttempts/x" }),
+    ]);
+    expect(pairs).toEqual([{ activityRef: "testAttempts/x", before: 5, after: 7, delta: 2 }]);
+  });
+
+  it("khi có hai ghi chép 'after' cùng ref, giữ bản mới nhất (đầu tiên gặp trong mảng)", () => {
+    const pairs = pairBeforeAfter([
+      log({ id: "after-new", context: "after", moodScore: 8, linkedActivityRef: "testAttempts/y" }),
+      log({ id: "after-old", context: "after", moodScore: 4, linkedActivityRef: "testAttempts/y" }),
+      log({ id: "before", context: "before", moodScore: 3, linkedActivityRef: "testAttempts/y" }),
+    ]);
+    expect(pairs).toEqual([{ activityRef: "testAttempts/y", before: 3, after: 8, delta: 5 }]);
+  });
 });
