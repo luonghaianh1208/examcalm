@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Output đã build và dependency vendor của Cloud Functions — không phải
+    // source, không nên lint.
+    "functions/lib/**",
+    "functions/node_modules/**",
   ]),
 ]);
 

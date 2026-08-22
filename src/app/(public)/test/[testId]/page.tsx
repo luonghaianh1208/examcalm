@@ -3,7 +3,11 @@ import { getPublishedTest } from "@/lib/firebase/queries-public";
 import { getSessionUser } from "@/lib/firebase/session";
 import { TestSession } from "@/components/test/TestSession";
 
-export const revalidate = 300;
+// Trang đọc dữ liệu do admin quản lý trong Firestore — nếu prerender lúc
+// build (ISR), build sẽ phụ thuộc vào việc kết nối được database, cả ở CI
+// lẫn ở Cloud Build khi deploy. Render động theo từng request để build
+// không bao giờ cần database.
+export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: Promise<{ testId: string }> }) {
   const { testId } = await params;
