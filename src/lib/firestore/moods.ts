@@ -4,7 +4,7 @@ import {
   addDoc, collection, deleteDoc, doc, getDocs,
   limit as fbLimit, orderBy, query, serverTimestamp, Timestamp, where,
 } from "firebase/firestore";
-import { getDb } from "@/lib/firebase/client";
+import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import { moodLogSchema, type MoodContext, type MoodIcon } from "@/lib/types/mood";
 
 export type MoodInput = {
@@ -19,6 +19,7 @@ export type MoodInput = {
 export type MoodRecord = MoodInput & { id: string; createdAt: Date | null };
 
 export async function saveMoodLog(uid: string, input: MoodInput): Promise<string> {
+  await ensureAuthReady();
   const payload = moodLogSchema.parse({ ...input, userId: uid, imageUrl: null });
   const ref = await addDoc(collection(getDb(), "moodLogs"), {
     ...payload,

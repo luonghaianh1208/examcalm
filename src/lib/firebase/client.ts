@@ -39,6 +39,29 @@ export function getFirebaseAuth(): Auth {
   return auth;
 }
 
+/**
+ * Đóng race: ngay sau signIn(), nếu thao tác Firestore ĐẦU TIÊN của phiên
+ * (vd: addDoc) chạy ngay lập tức, Firestore có thể mở stream ghi TRƯỚC KHI
+ * credentials provider của nó kịp lấy ID token — request đi ra như chưa đăng
+ * nhập, bị Rules từ chối (PERMISSION_DENIED) dù user đã verify. Vì Firestore
+ * có offline persistence, addDoc() đã lỡ resolve ở local trước khi lỗi đó xảy
+ * ra, nên UI hiển thị "đã lưu" nhưng dữ liệu không bao giờ tới server — mất
+ * dữ liệu âm thầm. authStateReady() là primitive CHÍNH THỨC của Auth SDK để
+ * đợi trạng thái đăng nhập ổn định (đã khôi phục xong từ persistence, nếu
+ * có) — không dùng timer/retry vì đó chỉ là phỏng đoán, không phải fix.
+ * Sau đó gọi getIdToken() một lần để đảm bảo token đã thực sự được lấy về
+ * (không chỉ user object tồn tại) trước khi Firestore mở stream ghi.
+ * Gọi hàm này ở đầu MỌI hàm ghi Firestore lần đầu trong phiên (saveMoodLog,
+ * saveTestAttempt) — sau lần gọi đầu, token đã cache nên các lần sau rẻ.
+ */
+export async function ensureAuthReady(): Promise<void> {
+  const auth = getFirebaseAuth();
+  await auth.authStateReady();
+  if (auth.currentUser) {
+    await auth.currentUser.getIdToken();
+  }
+}
+
 // Hình dạng lỗi mà Firestore SDK ném ra (FirestoreError) — dùng để phân biệt
 // lỗi "đã khởi tạo rồi" với lỗi thật (misconfig...) mà không cần import class lỗi.
 interface FirestoreLikeError {

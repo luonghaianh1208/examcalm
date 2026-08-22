@@ -4,7 +4,7 @@ import {
   addDoc, collection, getDocs, limit as fbLimit,
   orderBy, query, serverTimestamp, where, Timestamp,
 } from "firebase/firestore";
-import { getDb } from "@/lib/firebase/client";
+import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import type { TestAttempt } from "@/lib/types/test";
 import type { CompletedTest } from "@/components/test/TestRunner";
 
@@ -15,6 +15,7 @@ export type AttemptRecord = TestAttempt & { id: string; createdAt: Date | null }
  * dữ liệu vào IndexedDB — không đợi server.
  */
 export async function saveTestAttempt(uid: string, completed: CompletedTest): Promise<string> {
+  await ensureAuthReady();
   const ref = await addDoc(collection(getDb(), "testAttempts"), {
     userId: uid,
     testId: completed.testId,
