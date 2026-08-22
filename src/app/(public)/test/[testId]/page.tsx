@@ -21,6 +21,7 @@ export default async function Page({ params }: { params: Promise<{ testId: strin
       <h1 className="mb-6 text-2xl font-semibold">{test.title}</h1>
       <TestSession
         test={test}
+        uid={user?.uid ?? null}
         isSignedIn={Boolean(user)}
         canSave={Boolean(user?.emailVerified)}
       />

@@ -7,9 +7,11 @@ type Props = {
   isSampleContent: boolean;
   /** Guest thấy CTA đăng ký; Student thấy thông báo đã lưu. */
   isSignedIn: boolean;
+  /** id của doc testAttempts đã lưu; null nếu chưa/không lưu. */
+  savedAttemptId?: string | null;
 };
 
-export function TestResult({ result, disclaimer, isSampleContent, isSignedIn }: Props) {
+export function TestResult({ result, disclaimer, isSampleContent, isSignedIn, savedAttemptId }: Props) {
   return (
     <section className="flex flex-col gap-5">
       <div className="rounded-2xl bg-teal-50 px-5 py-6">
@@ -36,7 +38,7 @@ export function TestResult({ result, disclaimer, isSampleContent, isSignedIn }: 
             Đăng ký để lưu kết quả và xem thay đổi theo thời gian
           </Link>
         )}
-        {isSignedIn && (
+        {isSignedIn && savedAttemptId && (
           <p className="text-slate-600">Kết quả đã được lưu vào trang Tiến trình của bạn.</p>
         )}
       </div>
