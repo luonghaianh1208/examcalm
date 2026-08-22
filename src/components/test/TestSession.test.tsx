@@ -42,6 +42,7 @@ describe("TestSession", () => {
 
     expect(saveTestAttempt).not.toHaveBeenCalled();
     expect(loadGuestResult("t1")?.score).toBe(2);
+    expect(screen.queryByText(/đã được lưu vào trang Tiến trình/i)).not.toBeInTheDocument();
   });
 
   it("Student đã verify: gọi saveTestAttempt và KHÔNG ghi sessionStorage", async () => {
@@ -50,6 +51,7 @@ describe("TestSession", () => {
 
     expect(saveTestAttempt).toHaveBeenCalledWith("u1", expect.objectContaining({ score: 2, level: "cao" }));
     expect(loadGuestResult("t1")).toBeNull();
+    expect(await screen.findByText(/đã được lưu vào trang Tiến trình/i)).toBeInTheDocument();
   });
 
   it("Student CHƯA verify email: không lưu, hiện lời nhắc xác thực", async () => {
@@ -58,6 +60,7 @@ describe("TestSession", () => {
 
     expect(saveTestAttempt).not.toHaveBeenCalled();
     expect(screen.getByText(/xác thực email/i)).toBeInTheDocument();
+    expect(screen.queryByText(/đã được lưu vào trang Tiến trình/i)).not.toBeInTheDocument();
   });
 
   it("vẫn hiện kết quả cho Student ngay cả khi lưu thất bại", async () => {
@@ -66,5 +69,7 @@ describe("TestSession", () => {
     await completeTest();
 
     expect(await screen.findByText("2")).toBeInTheDocument();
+    expect(await screen.findByText(/đang chờ đồng bộ/i)).toBeInTheDocument();
+    expect(screen.queryByText(/đã được lưu vào trang Tiến trình/i)).not.toBeInTheDocument();
   });
 });
