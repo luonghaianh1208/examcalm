@@ -53,12 +53,28 @@ export function getFirebaseAuth(): Auth {
  * (không chỉ user object tồn tại) trước khi Firestore mở stream ghi.
  * Gọi hàm này ở đầu MỌI hàm ghi Firestore lần đầu trong phiên (saveMoodLog,
  * saveTestAttempt) — sau lần gọi đầu, token đã cache nên các lần sau rẻ.
+ *
+ * BEST-EFFORT — KHÔNG BAO GIỜ được chặn việc ghi dữ liệu: ID token hết hạn
+ * sau khoảng 1 giờ; nếu máy offline đủ lâu để token cache hết hạn, getIdToken()
+ * ở trên phải refresh qua mạng và sẽ reject khi không có mạng. Hàm này được
+ * gọi làm DÒNG ĐẦU TIÊN của saveMoodLog/saveTestAttempt — nếu để lỗi đó ném
+ * ra ngoài, addDoc() sẽ không bao giờ được gọi, và bài nộp/nhật ký sẽ không
+ * bao giờ vào được hàng đợi ghi offline của Firestore. Đó là hỏng nặng hơn cả
+ * race ban đầu: spec §7.4 yêu cầu bài nộp phải sống sót qua wifi trường chập
+ * chờn, nên một lần ghi vào được hàng đợi offline rồi đồng bộ sau LUÔN LUÔN
+ * tốt hơn một lần ghi không xảy ra. Vì vậy toàn bộ thân hàm nằm trong
+ * try/catch nuốt lỗi: đóng race lúc mới đăng nhập chỉ là tối ưu hoá, thất bại
+ * ở đây không được ngăn caller gọi addDoc() bình thường.
  */
 export async function ensureAuthReady(): Promise<void> {
-  const auth = getFirebaseAuth();
-  await auth.authStateReady();
-  if (auth.currentUser) {
-    await auth.currentUser.getIdToken();
+  try {
+    const auth = getFirebaseAuth();
+    await auth.authStateReady();
+    if (auth.currentUser) {
+      await auth.currentUser.getIdToken();
+    }
+  } catch {
+    // Nuốt lỗi có chủ đích — xem giải thích "BEST-EFFORT" ở trên.
   }
 }
 

@@ -13,7 +13,11 @@ type Props = {
 
 /**
  * Widget nổi. Mobile: bám safe-area góc phải dưới (spec §8).
- * Guest bấm vào sẽ thấy lời mời đăng ký thay vì form lưu.
+ * Guest bấm vào sẽ thấy lời mời đăng ký; học sinh đã có tài khoản nhưng CHƯA
+ * xác thực email thấy lời mời xác thực — không phải lời mời đăng ký (rủ ai đó
+ * đã có tài khoản "đăng ký" lại nghe khó hiểu và hơi thờ ơ). `uid` đã đủ để
+ * phân biệt hai trường hợp (Guest: uid null; chưa verify: uid có nhưng
+ * canSave false), không cần thêm prop.
  */
 export function MoodWidget({ uid, canSave }: Props) {
   const [open, setOpen] = useState(false);
@@ -43,6 +47,13 @@ export function MoodWidget({ uid, canSave }: Props) {
         >
           {canSave ? (
             <MoodForm onSubmit={handleSubmit} />
+          ) : uid ? (
+            <div className="flex flex-col gap-3">
+              <p>Xác thực email xong là bạn ghi được vào nhật ký cảm xúc ngay.</p>
+              <a href="/xac-thuc-email" className="rounded-lg bg-teal-600 px-4 py-2 text-center font-medium text-white">
+                Xác thực email
+              </a>
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               <p>Ghi lại cảm xúc để xem nó thay đổi thế nào theo thời gian.</p>

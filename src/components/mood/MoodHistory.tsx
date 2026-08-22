@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listMyMoodLogs, deleteMoodLog, type MoodRecord } from "@/lib/firestore/moods";
 
 const dateFormatter = new Intl.DateTimeFormat("vi-VN", {
@@ -9,14 +9,46 @@ const dateFormatter = new Intl.DateTimeFormat("vi-VN", {
 
 export function MoodHistory({ uid }: { uid: string }) {
   const [logs, setLogs] = useState<MoodRecord[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const load = useCallback(() => {
+    listMyMoodLogs(uid)
+      .then((result) => {
+        setLogs(result);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true));
+  }, [uid]);
 
   useEffect(() => {
-    listMyMoodLogs(uid).then(setLogs).catch(() => setLogs([]));
-  }, [uid]);
+    load();
+  }, [load]);
 
   async function handleDelete(id: string) {
     await deleteMoodLog(id);
     setLogs((prev) => prev?.filter((l) => l.id !== id) ?? null);
+  }
+
+  // Trạng thái lỗi PHẢI tách riêng khỏi trạng thái rỗng: gộp lỗi tải vào danh
+  // sách rỗng sẽ khiến một học sinh đã viết nhật ký nhiều tuần, gặp trục trặc
+  // mạng, đọc được dòng "chưa viết gì" — đọc như thể bài viết của mình đã mất,
+  // dù nó vẫn còn nguyên trên server.
+  if (loadFailed) {
+    return (
+      <div className="rounded-xl bg-amber-50 px-4 py-6 text-amber-900">
+        <p>
+          Chưa tải được nhật ký lúc này — có thể do mạng chập chờn thôi.
+          Những gì bạn đã viết vẫn còn nguyên, không mất đâu.
+        </p>
+        <button
+          type="button"
+          onClick={load}
+          className="mt-3 rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-900"
+        >
+          Thử tải lại
+        </button>
+      </div>
+    );
   }
 
   if (logs === null) {
