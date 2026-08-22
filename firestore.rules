@@ -32,8 +32,9 @@ service cloud.firestore {
     }
 
     match /resources/{id} {
-      allow read: if resource.data.status == "published" &&
-                     (resource.data.visibility == "public" || isSignedIn());
+      allow read: if (resource.data.status == "published" &&
+                      (resource.data.visibility == "public" || isSignedIn()))
+                  || isAdmin();
       allow write: if isAdmin();
     }
 

@@ -62,9 +62,14 @@ describe("resources/{id}", () => {
     await assertFails(setDoc(doc(guestDb(env), "resources/r9"), PUBLIC_RES));
   });
 
-  it("Admin KHÔNG đọc được resource draft qua rule đọc trực tiếp (chỉ status quyết định, không có bypass cho admin)", async () => {
+  it("Admin đọc được resource draft", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "resources/r2"), DRAFT_RES); });
-    await assertFails(getDoc(doc(adminDb(env), "resources/r2")));
+    await assertSucceeds(getDoc(doc(adminDb(env), "resources/r2")));
+  });
+
+  it("Student KHÔNG đọc được resource draft", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "resources/r2"), DRAFT_RES); });
+    await assertFails(getDoc(doc(authedDb(env, "u1"), "resources/r2")));
   });
 });
 
