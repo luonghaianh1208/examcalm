@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "examcalm-dev",
+    "dev": "examcalm-dev",
+    "prod": "examcalm"
+  }
+}

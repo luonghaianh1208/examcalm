@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "emu": "firebase emulators:start --only auth,firestore,functions,storage",
+    "emu:exec": "firebase emulators:exec --only auth,firestore"
   },
   "dependencies": {
     "next": "16.3.2",
