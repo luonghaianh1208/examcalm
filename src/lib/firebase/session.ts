@@ -35,17 +35,21 @@ export async function clearSessionCookie(): Promise<void> {
 
 /** Trả về user đã xác minh, hoặc null. Không bao giờ ném lỗi. */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const store = await cookies();
-  const cookie = store.get(SESSION_COOKIE_NAME)?.value;
-  if (!cookie) return null;
-
   try {
+    // cookies() có thể ném lỗi ngoài request context (vd: prerender tĩnh) —
+    // phải nằm trong try để giữ đúng cam kết "không bao giờ ném lỗi".
+    const store = await cookies();
+    const cookie = store.get(SESSION_COOKIE_NAME)?.value;
+    if (!cookie) return null;
+
     // checkRevoked = true: đăng xuất mọi thiết bị có tác dụng ngay.
     const claims = await adminAuth().verifySessionCookie(cookie, true);
     return {
       uid: claims.uid,
       email: claims.email ?? null,
       emailVerified: claims.email_verified === true,
+      // role là custom claim không có kiểu tĩnh trên DecodedIdToken; mặc định
+      // "student" là hướng fail-closed có chủ đích.
       role: claims.role === "admin" ? "admin" : "student",
     };
   } catch {

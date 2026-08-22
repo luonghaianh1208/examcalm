@@ -6,7 +6,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/firebase/session-config";
  * Xác minh chữ ký và kiểm tra role làm ở Server Component layout (requireUser/requireAdmin).
  * Đây KHÔNG phải lớp bảo mật; Security Rules mới là lớp bảo mật.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (hasSession) return NextResponse.next();
 
