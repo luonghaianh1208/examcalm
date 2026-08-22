@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { getResourceBySlug } from "@/lib/firebase/queries-public";
 import { getSessionUser } from "@/lib/firebase/session";
 import { VideoEmbed } from "@/components/library/VideoEmbed";
+import { FavoriteButton } from "@/components/library/FavoriteButton";
 
 // Trang đọc dữ liệu do admin quản lý trong Firestore — nếu prerender lúc
 // build (ISR), build sẽ phụ thuộc vào việc kết nối được database, cả ở CI
@@ -37,6 +38,12 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
       <div className="prose prose-slate max-w-none">
         <Markdown remarkPlugins={[remarkGfm]}>{resource.content}</Markdown>
       </div>
+
+      {user && (
+        <div className="mt-8">
+          <FavoriteButton uid={user.uid} resourceId={resource.id} />
+        </div>
+      )}
     </main>
   );
 }
