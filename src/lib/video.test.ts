@@ -26,6 +26,14 @@ describe("getYouTubeEmbedUrl", () => {
     expect(getYouTubeEmbedUrl("https://youtube.com.evil.com/watch?v=abc123XYZ_-")).toBeNull();
   });
 
+  it("từ chối domain giả mạo có đuôi trùng youtube.com", () => {
+    expect(getYouTubeEmbedUrl("https://evilyoutube.com/watch?v=abc123XYZ_-")).toBeNull();
+  });
+
+  it("từ chối chiêu userinfo giả làm host youtube.com", () => {
+    expect(getYouTubeEmbedUrl("https://youtube.com@evil.com/watch?v=abc123XYZ_-")).toBeNull();
+  });
+
   it("từ chối javascript: và dữ liệu rác", () => {
     expect(getYouTubeEmbedUrl("javascript:alert(1)")).toBeNull();
     expect(getYouTubeEmbedUrl("khong-phai-url")).toBeNull();

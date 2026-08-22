@@ -25,7 +25,7 @@ export function getYouTubeEmbedUrl(rawUrl: string): string | null {
   if (!ALLOWED_HOSTS.has(url.hostname.toLowerCase())) return null;
 
   let id: string | null = null;
-  if (url.hostname.toLowerCase().endsWith("youtu.be")) {
+  if (url.hostname.toLowerCase() === "youtu.be") {
     id = url.pathname.slice(1);
   } else if (url.pathname === "/watch") {
     id = url.searchParams.get("v");
