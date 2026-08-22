@@ -39,6 +39,13 @@ export function getFirebaseAuth(): Auth {
   return auth;
 }
 
+// Hình dạng lỗi mà Firestore SDK ném ra (FirestoreError) — dùng để phân biệt
+// lỗi "đã khởi tạo rồi" với lỗi thật (misconfig...) mà không cần import class lỗi.
+interface FirestoreLikeError {
+  code?: string;
+  message?: string;
+}
+
 /**
  * Firestore với offline persistence (spec §7.4): ghi vào IndexedDB trước,
  * SDK tự đồng bộ khi có mạng — submit test/mood không mất dữ liệu.
@@ -51,13 +58,27 @@ export function getDb(): Firestore {
     dbInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
-  } catch {
-    // Đã được khởi tạo ở nơi khác (ví dụ Fast Refresh) — dùng lại instance có sẵn.
+  } catch (err) {
+    // Chỉ nuốt đúng lỗi "Firestore đã được khởi tạo rồi" (ví dụ Fast Refresh
+    // re-eval module nhưng app trong registry của SDK vẫn còn) — mọi lỗi khác
+    // (misconfig, v.v.) phải throw tiếp, nếu không sẽ âm thầm mất persistence.
+    const fsErr = err as FirestoreLikeError;
+    const isAlreadyInitialized =
+      fsErr.code === "failed-precondition" && (fsErr.message ?? "").includes("already");
+    if (!isAlreadyInitialized) {
+      throw err;
+    }
     dbInstance = getFirestore(app);
   }
 
-  if (useEmulator) {
+  // Marker nằm trên instance Firestore (không phải biến module-scope) vì Fast
+  // Refresh reset lại module scope nhưng instance/app trong registry của SDK
+  // vẫn tồn tại — giống hệt cách getFirebaseAuth() đánh dấu bằng __examcalmEmulator.
+  // Thiếu marker này thì connectFirestoreEmulator() sẽ bị gọi lại trên client đã
+  // start, và Firestore sẽ throw.
+  if (useEmulator && !("__examcalmEmulator" in dbInstance)) {
     connectFirestoreEmulator(dbInstance, "127.0.0.1", 8080);
+    Object.defineProperty(dbInstance, "__examcalmEmulator", { value: true });
   }
   return dbInstance;
 }
