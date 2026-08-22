@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "emu": "firebase emulators:start --only auth,firestore,functions,storage",
-    "emu:exec": "firebase emulators:exec --only auth,firestore"
+    "emu:exec": "firebase emulators:exec --only auth,firestore",
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.mts\""
   },
   "dependencies": {
     "next": "16.3.2",
@@ -19,6 +20,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -29,8 +31,11 @@
     "@vitejs/plugin-react": "^6.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
+    "firebase": "^12.18.0",
+    "firebase-tools": "^15.28.1",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.11"
   }
