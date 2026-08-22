@@ -76,6 +76,16 @@ describe("users/{uid}", () => {
     );
   });
 
+  it("admin sửa được hồ sơ người khác", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
+    await assertSucceeds(updateDoc(doc(adminDb(env), "users/u1"), { nickname: "Mèo lớn" }));
+  });
+
+  it("admin nâng được role của người khác", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
+    await assertSucceeds(updateDoc(doc(adminDb(env), "users/u1"), { role: "admin" }));
+  });
+
   it("KHÔNG ai xóa được doc users trực tiếp (phải qua Cloud Function)", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
     await assertFails(deleteDoc(doc(authedDb(env, "u1"), "users/u1")));
