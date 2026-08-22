@@ -15,6 +15,7 @@
     "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.mts\""
   },
   "dependencies": {
+    "firebase": "^12.18.0",
     "next": "16.3.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -32,7 +33,6 @@
     "@vitejs/plugin-react": "^6.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
-    "firebase": "^12.18.0",
     "firebase-tools": "^15.28.1",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
