@@ -38,10 +38,19 @@ export const setUserRole = onCall({ region: "asia-southeast1" }, async (request)
   // Thu hồi refresh token để claim mới có hiệu lực ngay ở phiên đang mở.
   await auth.revokeRefreshTokens(targetUid);
 
-  await getFirestore().collection("users").doc(targetUid).set(
-    { role, updatedAt: FieldValue.serverTimestamp() },
-    { merge: true },
-  );
+  // Claim đã là nguồn sự thật (rules đọc custom claim, không đọc field này của
+  // Firestore) nên nếu bản mirror ghi thất bại thì KHÔNG rollback claim. Nhưng
+  // audit log vẫn phải ghi lại việc đổi quyền đã xảy ra, kể cả khi mirror lỗi —
+  // nếu không sẽ mất dấu vết của chính thay đổi quan trọng nhất.
+  let mirrorWriteFailed = false;
+  try {
+    await getFirestore().collection("users").doc(targetUid).set(
+      { role, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+  } catch {
+    mirrorWriteFailed = true;
+  }
 
   await writeAuditLog({
     actorUid,
@@ -49,8 +58,17 @@ export const setUserRole = onCall({ region: "asia-southeast1" }, async (request)
     targetType: "user",
     targetId: targetUid,
     before: { role: previousRole },
-    after: { role },
+    after: mirrorWriteFailed ? { role, mirrorWriteFailed: true } : { role },
   });
+
+  if (mirrorWriteFailed) {
+    // Claim đã đổi thật, nhưng hồ sơ users/{uid} chưa khớp — báo lỗi để admin
+    // biết và thử lại (an toàn vì thao tác này idempotent).
+    throw new HttpsError(
+      "internal",
+      "Đã đổi quyền nhưng chưa cập nhật được hồ sơ người dùng. Vui lòng thử lại.",
+    );
+  }
 
   return { ok: true, role };
 });
