@@ -33,6 +33,9 @@ export async function listFavoriteIds(uid: string): Promise<string[]> {
 
 /** Đánh dấu "đã dùng" — chỉ ghi khi bài đã được lưu. */
 export async function markUsed(uid: string, resourceId: string): Promise<void> {
+  // Đóng race giống toggleFavorite ở trên — markUsed cũng có thể là lần ghi
+  // đầu tiên của phiên một khi có nơi gọi tới nó.
+  await ensureAuthReady();
   const ref = favRef(uid, resourceId);
   if (!(await getDoc(ref)).exists()) return;
   await updateDoc(ref, { usedAt: serverTimestamp() });
