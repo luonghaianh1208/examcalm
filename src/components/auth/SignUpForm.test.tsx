@@ -34,4 +34,20 @@ describe("signUpInputSchema", () => {
   it("cho phép examGoals rỗng", () => {
     expect(signUpInputSchema.safeParse({ ...valid, examGoals: [] }).success).toBe(true);
   });
+
+  it("từ chối biệt danh chỉ có khoảng trắng", () => {
+    expect(signUpInputSchema.safeParse({ ...valid, nickname: "   " }).success).toBe(false);
+  });
+
+  it("từ chối tên trường chỉ có khoảng trắng", () => {
+    expect(signUpInputSchema.safeParse({ ...valid, school: "   " }).success).toBe(false);
+  });
+
+  it("cắt khoảng trắng đầu/cuối biệt danh", () => {
+    const parsed = signUpInputSchema.safeParse({ ...valid, nickname: "  Mèo con  " });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.nickname).toBe("Mèo con");
+    }
+  });
 });

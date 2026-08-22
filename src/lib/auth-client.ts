@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   sendEmailVerification,
   signOut,
+  deleteUser,
   type User,
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -15,9 +16,9 @@ import { DEFAULT_PRIVACY_SETTINGS } from "@/lib/types/user";
 export const signUpInputSchema = z.object({
   email: z.string().email("Email không hợp lệ."),
   password: z.string().min(8, "Mật khẩu cần ít nhất 8 ký tự."),
-  nickname: z.string().min(1, "Hãy nhập biệt danh.").max(50),
+  nickname: z.string().trim().min(1, "Hãy nhập biệt danh.").max(50),
   gradeLevel: z.enum(["10", "11", "12"]),
-  school: z.string().min(1, "Hãy nhập tên trường.").max(120),
+  school: z.string().trim().min(1, "Hãy nhập tên trường.").max(120),
   examGoals: z.array(z.string().max(100)).max(10),
 });
 
@@ -40,20 +41,33 @@ export async function signUp(input: SignUpInput): Promise<void> {
 
   const cred = await createUserWithEmailAndPassword(auth, parsed.email, parsed.password);
 
-  // Ghi hồ sơ TRƯỚC khi verify — rules cho phép create users mà không đòi email_verified.
-  await setDoc(doc(getDb(), "users", cred.user.uid), {
-    uid: cred.user.uid,
-    role: "student",
-    nickname: parsed.nickname,
-    gradeLevel: parsed.gradeLevel,
-    school: parsed.school,
-    examGoals: parsed.examGoals,
-    privacySettings: { ...DEFAULT_PRIVACY_SETTINGS },
-    researchConsent: null,
-    deletionRequestedAt: null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    // Ghi hồ sơ TRƯỚC khi verify — rules cho phép create users mà không đòi email_verified.
+    await setDoc(doc(getDb(), "users", cred.user.uid), {
+      uid: cred.user.uid,
+      role: "student",
+      nickname: parsed.nickname,
+      gradeLevel: parsed.gradeLevel,
+      school: parsed.school,
+      examGoals: parsed.examGoals,
+      privacySettings: { ...DEFAULT_PRIVACY_SETTINGS },
+      researchConsent: null,
+      deletionRequestedAt: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    // Ghi hồ sơ thất bại → xoá luôn tài khoản Auth vừa tạo, tránh để lại tài khoản
+    // "mồ côi" (có Auth nhưng không có hồ sơ) mà học sinh không có cách nào tự sửa.
+    try {
+      await deleteUser(cred.user);
+    } catch {
+      // Xoá cũng thất bại: học sinh thực sự kẹt lại — báo lỗi trung thực, không gợi ý
+      // "đăng nhập lại" vì tài khoản này không có hồ sơ để đăng nhập vào.
+      throw Object.assign(new Error("signup-cleanup-failed"), { code: "auth/signup-cleanup-failed" });
+    }
+    throw err;
+  }
 
   await sendEmailVerification(cred.user);
   await establishSession(cred.user);
@@ -85,10 +99,14 @@ export function authErrorMessage(error: unknown): string {
     case "auth/wrong-password":
     case "auth/user-not-found":
       return "Email hoặc mật khẩu chưa đúng.";
+    case "auth/weak-password":
+      return "Mật khẩu này chưa đủ an toàn. Bạn thử một mật khẩu khác dài hơn nhé.";
     case "auth/too-many-requests":
       return "Bạn thử lại sau ít phút nhé.";
     case "auth/network-request-failed":
       return "Mất kết nối mạng. Kiểm tra lại đường truyền giúp mình.";
+    case "auth/signup-cleanup-failed":
+      return "Có lỗi khi tạo tài khoản. Bạn thử lại với một email khác, hoặc liên hệ người quản trị trang nếu vẫn gặp lỗi.";
     default:
       return "Có lỗi xảy ra. Bạn thử lại sau nhé.";
   }
