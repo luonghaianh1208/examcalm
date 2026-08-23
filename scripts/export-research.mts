@@ -8,7 +8,11 @@
  * QUY TẮC BẤT DI BẤT DỊCH:
  *   1. Chỉ lấy user có researchConsent.granted === true
  *   2. userId thay bằng hash có salt; salt KHÔNG lưu cùng file xuất
- *   3. TUYỆT ĐỐI không xuất moodLogs.note, nickname, school, email
+ *   3. TUYỆT ĐỐI không xuất moodLogs.note, moodLogs.tags, nickname, school, email
+ *      — tags cũng là văn bản tự do học sinh tự gõ (không có vocabulary cố định),
+ *        có thể chứa tên người/lớp/trường giống hệt note (vd: "cãi nhau với Minh
+ *        12A2"). Muốn dùng tags cho nghiên cứu sau này thì phải sửa MoodForm để
+ *        chọn từ một bộ tag định sẵn trước — không phải nới lỏng ở script này.
  *
  * File .mts (không phải .ts) vì script dùng top-level await, và một script .ts
  * dưới setup CommonJS của project này không chạy được (xem scripts/bootstrap-admin.mts).
@@ -20,6 +24,7 @@
 import { createHash } from "node:crypto";
 import { initializeApp, cert, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { toMoodExportRow, type MoodExportRow } from "./export-research.logic";
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 const salt = process.env.RESEARCH_SALT;
@@ -39,7 +44,7 @@ function anonymize(uid: string): string {
 const consented = await db.collection("users").where("researchConsent.granted", "==", true).get();
 const consentedUids = consented.docs.map((d) => d.id);
 
-const moodRows: unknown[] = [];
+const moodRows: MoodExportRow[] = [];
 const testRows: unknown[] = [];
 
 for (const uid of consentedUids) {
@@ -47,15 +52,10 @@ for (const uid of consentedUids) {
 
   const moods = await db.collection("moodLogs").where("userId", "==", uid).get();
   for (const d of moods.docs) {
-    const data = d.data();
-    // KHÔNG lấy data.note — đó là văn bản tự do có thể chứa thông tin nhận dạng.
-    moodRows.push({
-      participantId: pid,
-      moodScore: data.moodScore,
-      tags: data.tags ?? [],
-      context: data.context,
-      createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
-    });
+    // toMoodExportRow là allowlist tường minh (xem export-research.logic.ts):
+    // KHÔNG lấy data.note, KHÔNG lấy data.tags — cả hai đều là văn bản tự do có
+    // thể chứa thông tin nhận dạng, dù được yêu cầu xuất tags trong lần trước.
+    moodRows.push(toMoodExportRow(pid, d.data()));
   }
 
   const attempts = await db.collection("testAttempts").where("userId", "==", uid).get();

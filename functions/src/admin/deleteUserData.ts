@@ -2,7 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { z } from "zod";
-import { canDelete } from "./deleteUserData.logic";
+import { canDelete, isAuthAlreadyDeleted } from "./deleteUserData.logic";
 import { writeAuditLog } from "../audit/writeAuditLog";
 
 const inputSchema = z.object({ targetUid: z.string().min(1) });
@@ -53,9 +53,24 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
   );
 
   await db.collection("users").doc(targetUid).delete();
-  await getAuth().deleteUser(targetUid).catch(() => {
-    // Tài khoản Auth có thể đã bị xóa trước đó — dữ liệu Firestore vẫn phải được dọn.
-  });
+
+  // Chỉ nuốt đúng lỗi "tài khoản Auth đã bị xóa từ trước" — mọi lỗi khác (thiếu
+  // quyền, hết quota, mất kết nối...) phải được coi là THẤT BẠI thật sự. Dữ liệu
+  // Firestore đã dọn xong ở bước trên, nên không rollback được nữa — nhưng cũng
+  // không được ghi audit log và trả về như thể Auth cũng đã xóa xong, kẻo học
+  // sinh tưởng nhầm tài khoản đăng nhập của mình đã biến mất trong khi vẫn còn.
+  let authDeleteFailed = false;
+  try {
+    await getAuth().deleteUser(targetUid);
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (!isAuthAlreadyDeleted(code)) {
+      console.error("deleteUserData: xóa Auth thất bại, dữ liệu Firestore đã xóa xong", {
+        targetUid, error,
+      });
+      authDeleteFailed = true;
+    }
+  }
 
   await writeAuditLog({
     actorUid: auth!.uid,
@@ -63,8 +78,10 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
     targetType: "user",
     targetId: targetUid,
     before: { attempts, moods, favorites },
-    after: null,
+    after: authDeleteFailed ? { authDeleteFailed: true } : null,
   });
 
-  return { ok: true, deleted: { attempts, moods, favorites } };
+  return authDeleteFailed
+    ? { ok: true, deleted: { attempts, moods, favorites }, authDeleteFailed: true }
+    : { ok: true, deleted: { attempts, moods, favorites } };
 });

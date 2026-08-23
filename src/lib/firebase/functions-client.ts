@@ -43,3 +43,29 @@ export async function callSetUserRole(
   const result = await fn({ targetUid, role });
   return result.data;
 }
+
+/**
+ * Khớp response thật của Cloud Function `deleteUserData`
+ * (functions/src/admin/deleteUserData.ts): `attempts`/`moods`/`favorites` là số
+ * document đã xóa ở từng collection. `authDeleteFailed` chỉ xuất hiện khi dữ
+ * liệu Firestore đã xóa xong nhưng bản ghi Auth (đăng nhập) chưa xóa được vì lý
+ * do khác "đã xóa từ trước" (thiếu quyền, hết quota, mất kết nối...) — hàm
+ * KHÔNG throw trong trường hợp đó, vì dữ liệu thật sự đã bị xóa, caller cần
+ * phân biệt "xóa thất bại" với "xóa xong nhưng còn sót Auth".
+ */
+export type DeleteUserDataResult = {
+  ok: true;
+  deleted: { attempts: number; moods: number; favorites: number };
+  authDeleteFailed?: boolean;
+};
+
+export async function callDeleteUserData(targetUid: string): Promise<DeleteUserDataResult> {
+  // Đóng race giống callSetUserRole ở trên — xem giải thích ensureAuthReady() ở client.ts.
+  await ensureAuthReady();
+  const fn = httpsCallable<{ targetUid: string }, DeleteUserDataResult>(
+    functionsInstance(),
+    "deleteUserData",
+  );
+  const result = await fn({ targetUid });
+  return result.data;
+}

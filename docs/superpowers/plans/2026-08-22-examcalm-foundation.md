@@ -17,6 +17,7 @@ Mọi task đều ngầm bao gồm các ràng buộc sau. Giá trị chép nguy�
 - **Ngôn ngữ giao diện:** tiếng Việt. Tên file, tên biến, tên hàm: tiếng Anh. **Không** cài i18n library — dùng `Intl` API cho ngày/giờ/số.
 - **TypeScript `strict: true`.** Không dùng `any` trừ khi có comment giải thích.
 - **Không bao giờ** import `firebase-admin` vào code chạy ở client. Mọi file dùng Admin SDK phải bắt đầu bằng `import "server-only"`.
+- **Mọi trang public đọc Firestore phải có `export const dynamic = "force-dynamic"`.** Không dùng `revalidate`. Lý do: `revalidate` khiến Next prerender lúc build, nên `npm run build` sẽ đòi hỏi có database chạy được — hỏng ở CI (Task 24) và rủi ro ở Cloud Build (Task 25). Đổi lại mất CDN cache, nhưng với quy mô vài chục học sinh đọc vài chục bài thì không đáng kể, và SEO vẫn nguyên vì Next render HTML đầy đủ phía server mỗi request.
 - **Security Rules là nguồn bảo mật duy nhất.** Middleware và điều kiện trong UI chỉ là UX, không được coi là bảo vệ.
 - **Rules luôn đọc `request.auth.token.role`** (custom claim), **không bao giờ** đọc `resource.data.role`.
 - **Không có màn hình nào** diễn đạt kết quả test như chẩn đoán y khoa/tâm lý. Mọi màn kết quả test phải hiển thị `disclaimer` của `testDefinition`.
@@ -44,7 +45,7 @@ Mọi task đều ngầm bao gồm các ràng buộc sau. Giá trị chép nguy�
 | `src/lib/firebase/admin.ts` | Khởi tạo Admin SDK (server-only) |
 | `src/lib/firebase/session.ts` | Tạo/đọc/xóa session cookie, giải mã role |
 | `src/lib/firebase/queries-public.ts` | Truy vấn nội dung công khai bằng Admin SDK (Server Component) |
-| `src/middleware.ts` | Chặn route `(student)` và `(admin)` theo session cookie |
+| `src/proxy.ts` | Chặn route `(student)` và `(admin)` theo session cookie |
 | `src/components/mascot/CatMascot.tsx` | SVG mèo placeholder, tách riêng để thay asset thật |
 | `src/components/mascot/MoodWidget.tsx` | Widget nổi: mở form mood check-in |
 | `src/components/test/TestRunner.tsx` | Chạy bộ câu hỏi, thu answers |
@@ -1033,8 +1034,11 @@ Chèn vào trước `match /{document=**}`:
     }
 
     match /resources/{id} {
-      allow read: if resource.data.status == "published" &&
-                     (resource.data.visibility == "public" || isSignedIn());
+      // Nhánh `|| isAdmin()` là BẮT BUỘC: Task 20 đọc cả bài draft qua client SDK
+      // để Admin console sửa được. Thiếu nó, admin tạo draft xong không xem lại được.
+      allow read: if (resource.data.status == "published" &&
+                      (resource.data.visibility == "public" || isSignedIn()))
+                  || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -1639,13 +1643,24 @@ export function getDb(): Firestore {
     dbInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
-  } catch {
-    // Đã được khởi tạo ở nơi khác (ví dụ Fast Refresh) — dùng lại instance có sẵn.
+  } catch (error) {
+    // CHỈ nuốt đúng trường hợp Firestore đã khởi tạo sẵn (Fast Refresh làm
+    // module này chạy lại trong khi FirebaseApp vẫn là instance cũ).
+    // Mọi lỗi khác phải ném tiếp: nếu nuốt hết, một lần persistentLocalCache
+    // hỏng sẽ âm thầm trả về Firestore KHÔNG có offline persistence, và
+    // Task 13/14 mất dữ liệu khi mạng chập chờn mà không có tín hiệu nào.
+    if (!(error instanceof Error) || !error.message.includes("already been started")) {
+      throw error;
+    }
     dbInstance = getFirestore(app);
   }
 
-  if (useEmulator) {
+  // Cờ đánh dấu phải nằm TRÊN CHÍNH instance, không nằm ở biến module:
+  // Fast Refresh reset biến module nhưng instance Firestore thì vẫn là cái cũ.
+  // Gọi connectFirestoreEmulator lần hai trên client đã khởi động sẽ ném lỗi.
+  if (useEmulator && !("__examcalmEmulator" in dbInstance)) {
     connectFirestoreEmulator(dbInstance, "127.0.0.1", 8080);
+    Object.defineProperty(dbInstance, "__examcalmEmulator", { value: true });
   }
   return dbInstance;
 }
@@ -1864,7 +1879,7 @@ git commit -m "feat(firebase): Admin SDK server-only + truy vấn nội dung cô
 ## Task 10: Session cookie, middleware và route bảo vệ
 
 **Files:**
-- Create: `src/lib/firebase/session.ts`, `src/app/api/session/route.ts`, `src/middleware.ts`
+- Create: `src/lib/firebase/session.ts`, `src/app/api/session/route.ts`, `src/proxy.ts`
 - Test: `src/lib/firebase/session.test.ts`
 
 **Interfaces:**
@@ -1873,7 +1888,7 @@ git commit -m "feat(firebase): Admin SDK server-only + truy vấn nội dung cô
   - `createSessionCookie(idToken)`, `getSessionUser()`, `requireUser()`, `requireAdmin()`, `clearSessionCookie()`
   - Route `POST /api/session` (đăng nhập), `DELETE /api/session` (đăng xuất)
 
-**Bẫy kỹ thuật quan trọng:** `src/middleware.ts` chạy trên **Edge runtime**, nơi `firebase-admin` **không chạy được**. Vì vậy middleware **chỉ kiểm tra sự tồn tại của cookie** (lớp UX). Việc xác minh chữ ký và đọc custom claim `role` phải làm trong **Server Component layout** bằng Admin SDK. Đừng nhầm hai lớp này.
+**Bẫy kỹ thuật quan trọng:** `src/proxy.ts` chạy trên **Edge runtime**, nơi `firebase-admin` **không chạy được**. Vì vậy middleware **chỉ kiểm tra sự tồn tại của cookie** (lớp UX). Việc xác minh chữ ký và đọc custom claim `role` phải làm trong **Server Component layout** bằng Admin SDK. Đừng nhầm hai lớp này.
 
 **Tên cookie bắt buộc là `__session`** — Firebase Hosting/App Hosting chỉ chuyển tiếp đúng cookie tên này qua CDN; cookie tên khác sẽ bị loại bỏ ở production.
 
@@ -1983,11 +1998,14 @@ export async function clearSessionCookie(): Promise<void> {
 
 /** Trả về user đã xác minh, hoặc null. Không bao giờ ném lỗi. */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const store = await cookies();
-  const cookie = store.get(SESSION_COOKIE_NAME)?.value;
-  if (!cookie) return null;
-
   try {
+    // cookies() PHẢI nằm trong try: nó ném lỗi khi được gọi ngoài ngữ cảnh
+    // request (ví dụ lúc prerender tĩnh). Để ngoài là phá vỡ cam kết
+    // "không bao giờ ném lỗi" mà 9 task sau đang dựa vào.
+    const store = await cookies();
+    const cookie = store.get(SESSION_COOKIE_NAME)?.value;
+    if (!cookie) return null;
+
     // checkRevoked = true: đăng xuất mọi thiết bị có tác dụng ngay.
     const claims = await adminAuth().verifySessionCookie(cookie, true);
     return {
@@ -2046,7 +2064,7 @@ export async function DELETE() {
 }
 ```
 
-- [ ] **Step 7: Viết `src/middleware.ts` (chỉ là lớp UX)**
+- [ ] **Step 7: Viết `src/proxy.ts` (chỉ là lớp UX)**
 
 ```ts
 import { NextResponse, type NextRequest } from "next/server";
@@ -2057,7 +2075,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/firebase/session-config";
  * Xác minh chữ ký và kiểm tra role làm ở Server Component layout (requireUser/requireAdmin).
  * Đây KHÔNG phải lớp bảo mật; Security Rules mới là lớp bảo mật.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (hasSession) return NextResponse.next();
 
@@ -2080,7 +2098,7 @@ Expected: tất cả pass
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/lib/firebase/session.ts src/lib/firebase/session-config.ts src/lib/firebase/session.test.ts src/app/api/session src/middleware.ts
+git add src/lib/firebase/session.ts src/lib/firebase/session-config.ts src/lib/firebase/session.test.ts src/app/api/session src/proxy.ts
 git commit -m "feat(auth): session cookie __session, middleware UX và guard bằng Admin SDK"
 ```
 
@@ -2089,7 +2107,9 @@ git commit -m "feat(auth): session cookie __session, middleware UX và guard b�
 ## Task 11: Đăng ký, đăng nhập, xác thực email và tạo hồ sơ
 
 **Files:**
-- Create: `src/lib/auth-client.ts`, `src/components/auth/SignUpForm.tsx`, `src/components/auth/SignInForm.tsx`, `src/components/auth/VerifyEmailNotice.tsx`, `src/app/(public)/dang-ky/page.tsx`, `src/app/(public)/dang-nhap/page.tsx`, `src/app/(student)/layout.tsx`, `src/app/(student)/ho-so/page.tsx`
+- Create: `src/lib/auth-client.ts`, `src/components/auth/SignUpForm.tsx`, `src/components/auth/SignInForm.tsx`, `src/components/auth/VerifyEmailNotice.tsx`, `src/app/(public)/dang-ky/page.tsx`, `src/app/(public)/dang-nhap/page.tsx`, `src/app/(public)/xac-thuc-email/page.tsx`, `src/app/(student)/layout.tsx`
+
+> `src/app/(student)/ho-so/page.tsx` **không** thuộc task này — nó được tạo ở **Task 22** cùng với phiếu đồng ý nghiên cứu và mục xóa dữ liệu.
 - Test: `src/components/auth/SignUpForm.test.tsx`
 
 **Interfaces:**

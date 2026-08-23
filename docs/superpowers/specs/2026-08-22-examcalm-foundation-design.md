@@ -306,8 +306,9 @@ service cloud.firestore {
     }
 
     match /resources/{id} {
-      allow read: if resource.data.status == "published" &&
-                     (resource.data.visibility == "public" || isSignedIn());
+      allow read: if (resource.data.status == "published" &&
+                      (resource.data.visibility == "public" || isSignedIn()))
+                  || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -324,6 +325,7 @@ service cloud.firestore {
 ```
 
 **Khác biệt có chủ đích so với PRD §6:**
+- `resources` read có thêm nhánh `|| isAdmin()`. PRD §6 thiếu nhánh này, khiến admin không đọc được bài draft của chính mình qua client SDK — mâu thuẫn với yêu cầu Admin CRUD ở §7.3. `testDefinitions` trong PRD vốn đã có nhánh này, nên đây là sơ suất chứ không phải chủ ý. An toàn: admin vốn đã có `write` toàn collection, cho đọc draft không mở thêm đặc quyền nào.
 - Thêm `isVerified()` cho `create` dữ liệu cá nhân — chặn tài khoản email rác.
 - `users` update: chặn user tự sửa field `role` của chính mình.
 - Thêm catch-all `deny` ở cuối — PRD không có, nhưng bắt buộc để collection tương lai không vô tình mở.

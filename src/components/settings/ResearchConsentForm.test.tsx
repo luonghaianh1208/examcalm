@@ -29,7 +29,6 @@ describe("ResearchConsentForm", () => {
 
     await user.click(screen.getByRole("checkbox"));
 
-    expect(ensureAuthReady).toHaveBeenCalled();
     expect(mockedUpdateDoc).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -58,6 +57,25 @@ describe("ResearchConsentForm", () => {
         },
       }),
     );
+  });
+
+  // Finding 5 của review: assert toHaveBeenCalled() không bắt được lỗi đảo thứ
+  // tự (ensureAuthReady sau updateDoc) — đúng chỗ regression carry-forward này
+  // muốn ngăn. Phải assert thứ tự tương đối, không chỉ "có gọi hay không".
+  it("gọi ensureAuthReady TRƯỚC khi ghi Firestore — đóng race lúc mới đăng nhập", async () => {
+    const order: string[] = [];
+    vi.mocked(ensureAuthReady).mockImplementation(async () => {
+      order.push("ensureAuthReady");
+    });
+    mockedUpdateDoc.mockImplementation(async () => {
+      order.push("updateDoc");
+    });
+
+    const user = userEvent.setup();
+    render(<ResearchConsentForm uid="u1" initialGranted={false} />);
+    await user.click(screen.getByRole("checkbox"));
+
+    expect(order).toEqual(["ensureAuthReady", "updateDoc"]);
   });
 
   it("nói rõ từ chối vẫn dùng đầy đủ mọi tính năng", () => {

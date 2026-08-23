@@ -1,37 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { getFirebaseApp, ensureAuthReady } from "@/lib/firebase/client";
+import { callDeleteUserData } from "@/lib/firebase/functions-client";
 import { signOutEverywhere } from "@/lib/auth-client";
 
 const CONFIRM_PHRASE = "XOA DU LIEU";
-let connected = false;
 
 export function DeleteAccountSection({ uid }: { uid: string }) {
   const [phrase, setPhrase] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function handleDelete() {
     setPending(true);
     setError(null);
+    setNotice(null);
+
     try {
-      // Đóng race giữa lần điều hướng trang đầu tiên và lúc client Auth khôi phục
-      // xong currentUser từ persistence — xem giải thích ensureAuthReady() ở client.ts.
-      // Thiếu bước này, callable có thể đi ra trước khi ID token sẵn sàng, server
-      // thấy request.auth = undefined và từ chối dù học sinh thực sự đã đăng nhập.
-      await ensureAuthReady();
-      const fns = getFunctions(getFirebaseApp(), "asia-southeast1");
-      if (process.env.NEXT_PUBLIC_USE_EMULATOR === "true" && !connected) {
-        connectFunctionsEmulator(fns, "127.0.0.1", 5001);
-        connected = true;
-      }
-      await httpsCallable(fns, "deleteUserData")({ targetUid: uid });
+      await callDeleteUserData(uid);
+    } catch {
+      // Callable thất bại — dữ liệu CHƯA bị xóa, báo lỗi thật.
+      setError("Chưa xóa được. Bạn thử lại sau ít phút nhé.");
+      setPending(false);
+      return;
+    }
+
+    // Từ đây trở đi, dữ liệu ĐÃ bị xóa thật (callable đã resolve thành công) —
+    // lỗi bên dưới chỉ còn là vấn đề đăng xuất, KHÔNG được báo lại như "chưa xóa
+    // được": học sinh sẽ hiểu nhầm và thử "xóa lại" dữ liệu vốn đã không còn tồn
+    // tại, trên một tài khoản vốn cũng đã không còn tồn tại.
+    try {
       await signOutEverywhere();
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- reload toàn trang có chủ đích: xóa sạch cache Auth/Firestore phía client sau khi tài khoản đã bị xóa vĩnh viễn; router.push() sẽ giữ lại state cũ trong bộ nhớ.
       window.location.href = "/";
     } catch {
-      setError("Chưa xóa được. Bạn thử lại sau ít phút nhé.");
+      setNotice("Dữ liệu của bạn đã được xóa. Bạn hãy đóng trình duyệt hoặc tự đăng xuất giúp mình nhé.");
       setPending(false);
     }
   }
@@ -53,6 +57,7 @@ export function DeleteAccountSection({ uid }: { uid: string }) {
       </label>
 
       {error && <p role="alert" className="mt-2 text-rose-800">{error}</p>}
+      {notice && <p role="status" className="mt-2 text-teal-800">{notice}</p>}
 
       <button
         type="button" onClick={handleDelete}

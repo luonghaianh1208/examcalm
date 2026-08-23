@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { collectDeletionTargets, canDelete } from "./deleteUserData.logic";
+import { collectDeletionTargets, canDelete, isAuthAlreadyDeleted } from "./deleteUserData.logic";
 
 describe("collectDeletionTargets", () => {
   it("liệt kê đủ mọi nơi chứa dữ liệu cá nhân", () => {
@@ -29,5 +29,21 @@ describe("canDelete", () => {
 
   it("từ chối khi chưa đăng nhập", () => {
     expect(canDelete(undefined, "u1")).toBe(false);
+  });
+});
+
+describe("isAuthAlreadyDeleted", () => {
+  it("coi là đã xóa khi đúng mã lỗi auth/user-not-found", () => {
+    expect(isAuthAlreadyDeleted("auth/user-not-found")).toBe(true);
+  });
+
+  it("KHÔNG coi là đã xóa với lỗi khác — quyền, quota, mất kết nối...", () => {
+    expect(isAuthAlreadyDeleted("auth/insufficient-permission")).toBe(false);
+    expect(isAuthAlreadyDeleted("auth/internal-error")).toBe(false);
+    expect(isAuthAlreadyDeleted("auth/network-request-failed")).toBe(false);
+  });
+
+  it("KHÔNG coi là đã xóa khi không có mã lỗi", () => {
+    expect(isAuthAlreadyDeleted(undefined)).toBe(false);
   });
 });
