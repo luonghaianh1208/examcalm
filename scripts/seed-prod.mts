@@ -9,10 +9,10 @@
  *    client SDK nghĩa là mọi lệnh ghi đều bị Security Rules kiểm tra thật —
  *    đây là điểm cộng, không phải hạn chế: nếu rule chặn thứ gì, ta biết ngay.
  *
- * 2. Bài test được ghi ở trạng thái **draft**, không phải published. Rule
- *    production cấm publish bài test mang `isSampleContent: true`. Đó là chủ ý:
- *    nội dung tâm lý chưa qua thẩm định chuyên môn không được phục vụ học sinh
- *    thật. Muốn mở bài test cho học sinh, xem phần "Mở bài test" bên dưới.
+ * 2. Trạng thái bài test được SUY RA từ cờ `isSampleContent`, không hardcode.
+ *    Rule production cấm publish bài test mang `isSampleContent: true`, nên
+ *    script tuân đúng luật đó: nội dung mẫu -> draft, thang đo thật -> published.
+ *    Nội dung tâm lý chưa qua thẩm định không được phục vụ học sinh thật.
  *
  * Chạy:
  *   EXAMCALM_ADMIN_EMAIL=... EXAMCALM_ADMIN_PASSWORD=... \
@@ -21,18 +21,16 @@
  * Idempotent: mọi document dùng id cố định và ghi bằng setDoc(), chạy lại không
  * tạo bản sao.
  *
- * ## Mở bài test cho học sinh
+ * ## Nội dung bài test hiện tại
  *
- * Có đúng hai cách hợp lệ, và cả hai đều là quyết định của con người:
+ * Đang dùng GAD-7 — thang đo sàng lọc lo âu công khai, chuẩn, dùng rộng rãi.
+ * Vì là thang đo thật chứ không phải câu hỏi tự nghĩ, `isSampleContent` là
+ * false và script publish nó.
  *
- *   a) Thay nội dung mẫu bằng thang đo đã được chuyên gia tâm lý thẩm định,
- *      đặt `isSampleContent: false`, rồi publish qua Admin console. Đây là
- *      đường đúng.
- *   b) Nới rule production để cho phép publish nội dung mẫu. Chỉ nên làm khi
- *      chấp nhận rằng học sinh sẽ làm một bài test chưa được thẩm định — giao
- *      diện vẫn hiện banner cảnh báo, nhưng banner không thay được thẩm định.
- *
- * Script này KHÔNG tự chọn giúp. Nó ghi draft và dừng lại.
+ * Việc còn lại của con người: bản tiếng Việt trong `seed-data.mts` là bản
+ * CHUYỂN NGỮ theo nội dung chuẩn, chưa được kiểm định tâm lý học tại Việt Nam.
+ * Cần người có chuyên môn đọc lại và đối chiếu với một bản dịch đã công bố
+ * trước khi dùng cho nghiên cứu hoặc mở rộng ngoài lớp học có giáo viên đi kèm.
  */
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
@@ -67,14 +65,17 @@ console.log(`Đăng nhập thành công với quyền admin (uid ${cred.user.uid
 
 const db = getFirestore(app);
 
-// Bài test: ghi DRAFT. Rule production chặn published + isSampleContent.
+// Trạng thái SUY RA từ cờ, không hardcode: script tuân đúng cùng một luật với
+// rule production (cấm published + isSampleContent). Nếu ai đó đổi nội dung về
+// dạng mẫu, script tự hạ xuống draft thay vì bị rule từ chối giữa chừng.
+const testStatus = SAMPLE_TEST.isSampleContent ? "draft" : "published";
 await setDoc(doc(db, "testDefinitions", SAMPLE_TEST_ID), {
   ...SAMPLE_TEST,
-  status: "draft",
+  status: testStatus,
   updatedBy: cred.user.uid,
   updatedAt: serverTimestamp(),
 });
-console.log(`Đã ghi bài test "${SAMPLE_TEST.title}" ở trạng thái DRAFT.`);
+console.log(`Đã ghi bài test "${SAMPLE_TEST.title}" — trạng thái ${testStatus.toUpperCase()}.`);
 
 for (const resource of SAMPLE_RESOURCES) {
   await setDoc(doc(db, "resources", resource.slug), {
@@ -88,5 +89,9 @@ for (const resource of SAMPLE_RESOURCES) {
 }
 
 console.log(`\nĐã nạp ${SAMPLE_RESOURCES.length} tài nguyên thư viện (published).`);
-console.log("Bài test vẫn là DRAFT — học sinh CHƯA thấy. Xem phần \"Mở bài test\" ở đầu file.");
+if (testStatus === "draft") {
+  console.log("Bài test là DRAFT — học sinh CHƯA thấy. Xem phần \"Mở bài test\" ở đầu file.");
+} else {
+  console.log("Bài test đã PUBLISHED — học sinh thấy được ngay.");
+}
 process.exit(0);

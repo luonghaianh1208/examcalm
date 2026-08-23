@@ -11,35 +11,77 @@
 
 export const SEED_ACTOR = "seed-script";
 
-export const SAMPLE_TEST_ID = "sample-exam-stress-v1";
+export const SAMPLE_TEST_ID = "gad7-vi-v1";
 
+/**
+ * GAD-7 (Generalized Anxiety Disorder 7-item scale) — thang đo SÀNG LỌC lo âu
+ * phổ biến, công khai, dùng rộng rãi cho cả thanh thiếu niên.
+ *
+ * Điểm: 7 mục × 0–3, tổng 0–21. Mốc chuẩn 5 / 10 / 15 chia thành bốn mức
+ * tối thiểu / nhẹ / vừa / nặng. Từ 10 điểm trở lên, tài liệu chuyên môn khuyến
+ * nghị nên được đánh giá kỹ hơn bởi người có chuyên môn.
+ *
+ * `isSampleContent: false` vì đây là thang đo THẬT, không phải câu hỏi tự nghĩ.
+ *
+ * NHƯNG: bản tiếng Việt dưới đây là bản CHUYỂN NGỮ do AI soạn theo nội dung
+ * chuẩn của GAD-7, KHÔNG phải bản dịch đã được kiểm định tâm lý học tại Việt
+ * Nam. Trước khi dùng cho nghiên cứu hoặc mở rộng ngoài phạm vi lớp học có
+ * giáo viên đi kèm, cần người có chuyên môn đọc lại và đối chiếu với một bản
+ * dịch đã công bố. Ghi nhận việc này ở docs/superpowers/plans/roadmap.
+ */
 export const SAMPLE_TEST = {
-  title: "Bài test tham khảo về căng thẳng trước kỳ thi (MẪU)",
+  title: "Thang đo lo âu GAD-7",
   version: 1,
-  isSampleContent: true,
+  isSampleContent: false,
   disclaimer:
-    "Đây là công cụ tự tìm hiểu, không phải chẩn đoán y khoa hay tâm lý. " +
+    "Hãy nghĩ về HAI TUẦN VỪA QUA khi trả lời. " +
+    "Đây là công cụ tự tìm hiểu, giúp bạn nhìn rõ hơn cảm giác của mình — " +
+    "nó KHÔNG phải chẩn đoán y khoa hay tâm lý, và không thay thế người có chuyên môn. " +
     "Nếu bạn đang thấy rất khó khăn, hãy nói với phụ huynh, thầy cô hoặc cán bộ tâm lý học đường.",
   questions: [
-    { id: "q1", text: "Dạo này, bạn có khó đi vào giấc ngủ vì cứ nghĩ đến kỳ thi không?" },
-    { id: "q2", text: "Khi ngồi vào bàn học, bạn có thấy khó tập trung không?" },
-    { id: "q3", text: "Bạn có hay lo rằng mình sẽ làm bài không tốt không?" },
-    { id: "q4", text: "Bạn có thấy căng cơ, đau đầu hoặc khó chịu ở bụng khi nghĩ đến kỳ thi không?" },
-    { id: "q5", text: "Bạn có né tránh việc ôn tập vì cảm thấy quá tải không?" },
+    { id: "q1", text: "Cảm thấy lo lắng, bồn chồn hoặc căng thẳng" },
+    { id: "q2", text: "Không thể ngừng lo hoặc không kiểm soát được nỗi lo" },
+    { id: "q3", text: "Lo quá nhiều về những chuyện khác nhau" },
+    { id: "q4", text: "Khó thư giãn" },
+    { id: "q5", text: "Bồn chồn tới mức khó ngồi yên" },
+    { id: "q6", text: "Dễ bực bội hoặc cáu kỉnh" },
+    { id: "q7", text: "Cảm thấy sợ, như thể sắp có chuyện gì đó không hay xảy ra" },
   ].map((q) => ({
     ...q,
     options: [
-      { label: "Không bao giờ", score: 0 },
-      { label: "Thỉnh thoảng", score: 1 },
-      { label: "Khá thường xuyên", score: 2 },
+      { label: "Không có ngày nào", score: 0 },
+      { label: "Vài ngày", score: 1 },
+      { label: "Hơn một nửa số ngày", score: 2 },
       { label: "Gần như mỗi ngày", score: 3 },
     ],
   })),
   scoring: {
     thresholds: [
-      { min: 0, max: 4, level: "thap", interpretation: "Bạn đang khá ổn. Giữ nhịp sinh hoạt hiện tại nhé." },
-      { min: 5, max: 9, level: "trung-binh", interpretation: "Có vài dấu hiệu căng thẳng. Thử một kỹ thuật thư giãn ngắn trong thư viện." },
-      { min: 10, max: 15, level: "cao", interpretation: "Bạn đang chịu khá nhiều áp lực. Hãy cân nhắc chia sẻ với người bạn tin tưởng." },
+      {
+        min: 0, max: 4, level: "toi-thieu",
+        interpretation:
+          "Trong hai tuần qua, có vẻ bạn không bị lo âu làm phiền nhiều. " +
+          "Giữ nhịp sinh hoạt hiện tại, và cứ quay lại đây khi bạn muốn xem mình đang thế nào.",
+      },
+      {
+        min: 5, max: 9, level: "nhe",
+        interpretation:
+          "Có một vài dấu hiệu lo âu ở mức nhẹ. Điều này khá thường gặp quanh mùa thi. " +
+          "Thử một kỹ thuật thư giãn ngắn trong Thư viện, và để ý xem cảm giác thay đổi thế nào.",
+      },
+      {
+        min: 10, max: 14, level: "vua",
+        interpretation:
+          "Kết quả gợi ý mức lo âu vừa phải. Ở mức này, nói chuyện với một người bạn tin tưởng " +
+          "— phụ huynh, thầy cô, hoặc cán bộ tâm lý học đường — thường giúp ích nhiều hơn là tự xoay xở một mình.",
+      },
+      {
+        min: 15, max: 21, level: "nang",
+        interpretation:
+          "Từ những gì bạn chia sẻ, có vẻ bạn đang phải chịu đựng khá nhiều trong hai tuần qua. " +
+          "Bạn không cần tự mình vượt qua chuyện này. Hãy nói với phụ huynh, thầy cô hoặc cán bộ tâm lý " +
+          "học đường sớm nhất có thể — kể cả khi bạn chưa biết diễn đạt thế nào.",
+      },
     ],
   },
   updatedBy: SEED_ACTOR,
