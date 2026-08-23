@@ -12,7 +12,7 @@
     "redirects": [
       {
         "source": "/**",
-        "destination": "https://REPLACE_WITH_APP_HOSTING_URL/:splat",
+        "destination": "https://examcalm-web--examcalm.asia-southeast1.hosted.app/:splat",
         "type": 301
       }
     ]
@@ -25,11 +25,37 @@
     }
   ],
   "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "functions": { "port": 5001 },
-    "storage": { "port": 9199 },
-    "ui": { "enabled": true, "port": 4000 },
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "functions": {
+      "port": 5001
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
     "singleProjectMode": true
-  }
+  },
+  "apphosting": [
+    {
+      "backendId": "examcalm-web",
+      "rootDir": "/",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        ".superpowers",
+        "tests",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ]
+    }
+  ]
 }
