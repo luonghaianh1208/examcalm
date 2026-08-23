@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { ResearchConsentForm } from "@/components/settings/ResearchConsentForm";
 import { DeleteAccountSection } from "@/components/settings/DeleteAccountSection";
 
-export const metadata = { title: "Hồ sơ · ExamCalm" };
+export const metadata = { title: "Hồ sơ" };
 
 export default async function Page() {
   const user = await requireUser();

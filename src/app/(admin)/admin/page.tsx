@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Quản trị · ExamCalm" };
+export const metadata = { title: "Quản trị" };
 
 export default function Page() {
   return (

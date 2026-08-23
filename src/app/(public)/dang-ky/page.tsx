@@ -1,6 +1,6 @@
 import { SignUpForm } from "@/components/auth/SignUpForm";
 
-export const metadata = { title: "Đăng ký · ExamCalm" };
+export const metadata = { title: "Đăng ký" };
 
 export default function Page() {
   return (

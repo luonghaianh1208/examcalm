@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const user = await getSessionUser();
   const resource = await getResourceBySlug(slug, Boolean(user));
-  return { title: resource ? `${resource.title} · ExamCalm` : "Không tìm thấy · ExamCalm" };
+  return { title: resource ? resource.title : "Không tìm thấy" };
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {

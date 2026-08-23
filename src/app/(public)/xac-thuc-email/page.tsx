@@ -1,6 +1,6 @@
 import { VerifyEmailNotice } from "@/components/auth/VerifyEmailNotice";
 
-export const metadata = { title: "Xác thực email · ExamCalm" };
+export const metadata = { title: "Xác thực email" };
 
 export default function Page() {
   return (

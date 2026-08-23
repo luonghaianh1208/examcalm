@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/firebase/session";
 import { MoodHistory } from "@/components/mood/MoodHistory";
 
-export const metadata = { title: "Nhật ký cảm xúc · ExamCalm" };
+export const metadata = { title: "Nhật ký cảm xúc" };
 
 export default async function Page() {
   const user = await requireUser();

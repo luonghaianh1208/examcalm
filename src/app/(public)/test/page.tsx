@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listPublishedTests } from "@/lib/firebase/queries-public";
 
-export const metadata = { title: "Bài test · ExamCalm" };
+export const metadata = { title: "Bài test" };
 // Trang đọc dữ liệu do admin quản lý trong Firestore — nếu prerender lúc
 // build (ISR), build sẽ phụ thuộc vào việc kết nối được database, cả ở CI
 // lẫn ở Cloud Build khi deploy. Render động theo từng request để build

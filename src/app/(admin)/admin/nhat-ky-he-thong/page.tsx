@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/firebase/session";
 import { listAuditLogs } from "@/lib/firestore/admin-users";
 
-export const metadata = { title: "Nhật ký hệ thống · ExamCalm" };
+export const metadata = { title: "Nhật ký hệ thống" };
 
 const formatter = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 

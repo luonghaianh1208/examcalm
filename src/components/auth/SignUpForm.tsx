@@ -35,6 +35,7 @@ export function SignUpForm() {
     try {
       await signUp(parsed.data);
       router.push("/xac-thuc-email");
+      router.refresh();
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {

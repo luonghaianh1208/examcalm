@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { SignInForm } from "@/components/auth/SignInForm";
 
-export const metadata = { title: "Đăng nhập · ExamCalm" };
+export const metadata = { title: "Đăng nhập" };
 
 export default function Page() {
   return (

@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/firebase/session";
 import { TestEditor } from "@/components/admin/TestEditor";
 
-export const metadata = { title: "Quản lý bài test · ExamCalm" };
+export const metadata = { title: "Quản lý bài test" };
 
 export default async function Page() {
   const admin = await requireAdmin();

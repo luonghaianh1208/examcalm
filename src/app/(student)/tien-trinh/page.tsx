@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/firebase/session";
 import { ProgressView } from "@/components/progress/ProgressView";
 
-export const metadata = { title: "Tiến trình · ExamCalm" };
+export const metadata = { title: "Tiến trình" };
 
 export default async function Page() {
   const user = await requireUser();

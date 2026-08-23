@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/firebase/session";
 import { listPublishedResources } from "@/lib/firebase/queries-public";
 import { SavedResourceList } from "@/components/library/SavedResourceList";
 
-export const metadata = { title: "Đã lưu · ExamCalm" };
+export const metadata = { title: "Đã lưu" };
 
 export default async function Page() {
   const user = await requireUser();

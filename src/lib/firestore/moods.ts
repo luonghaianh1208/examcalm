@@ -29,6 +29,11 @@ export async function saveMoodLog(uid: string, input: MoodInput): Promise<string
 }
 
 export async function listMyMoodLogs(uid: string, max = 100): Promise<MoodRecord[]> {
+  // Đóng race giống saveMoodLog ở trên — xem giải thích ensureAuthReady() ở
+  // client.ts. Thiếu bước này, học sinh vừa đăng nhập xong (vd: được điều
+  // hướng thẳng tới /tien-trinh) sẽ luôn bị Firestore từ chối đọc vì
+  // request.auth chưa kịp khôi phục.
+  await ensureAuthReady();
   const snap = await getDocs(
     query(
       collection(getDb(), "moodLogs"),

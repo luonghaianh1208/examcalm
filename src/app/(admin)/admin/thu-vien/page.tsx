@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/firebase/session";
 import { ResourceEditor } from "@/components/admin/ResourceEditor";
 
-export const metadata = { title: "Quản lý thư viện · ExamCalm" };
+export const metadata = { title: "Quản lý thư viện" };
 
 export default async function Page() {
   const admin = await requireAdmin();

@@ -4,7 +4,7 @@ import { getSessionUser } from "@/lib/firebase/session";
 import { ResourceCard } from "@/components/library/ResourceCard";
 
 export const metadata = {
-  title: "Thư viện · ExamCalm",
+  title: "Thư viện",
   description: "Bài viết, mẹo nhỏ và hướng dẫn giúp bạn bớt căng thẳng trước kỳ thi.",
 };
 

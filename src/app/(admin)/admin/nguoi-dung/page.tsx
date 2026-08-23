@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/firebase/session";
 import { listUsers } from "@/lib/firestore/admin-users";
 import { UserRoleManager } from "@/components/admin/UserRoleManager";
 
-export const metadata = { title: "Người dùng · ExamCalm" };
+export const metadata = { title: "Người dùng" };
 
 export default async function Page() {
   const admin = await requireAdmin();

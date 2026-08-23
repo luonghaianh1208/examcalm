@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "emu": "firebase emulators:start --only auth,firestore,functions,storage",
     "emu:exec": "firebase emulators:exec --only auth,firestore",
-    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.mts\""
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.mts\"",
+    "seed": "tsx scripts/seed.mts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

@@ -29,6 +29,11 @@ export async function saveTestAttempt(uid: string, completed: CompletedTest): Pr
 }
 
 export async function listMyAttempts(uid: string, max = 50): Promise<AttemptRecord[]> {
+  // Đóng race giống saveTestAttempt ở trên — xem giải thích ensureAuthReady()
+  // ở client.ts. Thiếu bước này, học sinh vừa đăng nhập xong (vd: được điều
+  // hướng thẳng tới /tien-trinh) sẽ luôn bị Firestore từ chối đọc vì
+  // request.auth chưa kịp khôi phục.
+  await ensureAuthReady();
   const snap = await getDocs(
     query(
       collection(getDb(), "testAttempts"),
