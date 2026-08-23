@@ -1,0 +1,86 @@
+"use client";
+
+import {
+  addDoc, collection, doc, getDocs, serverTimestamp, updateDoc,
+} from "firebase/firestore";
+import { z } from "zod";
+import { getDb, ensureAuthReady } from "@/lib/firebase/client";
+import { questionSchema, thresholdSchema, type TestDefinition } from "@/lib/types/test";
+
+/** Phần admin nhập tay; status/updatedBy/updatedAt do hệ thống đặt. */
+export const testDraftSchema = z.object({
+  title: z.string().min(1),
+  version: z.number().int().min(1),
+  isSampleContent: z.boolean(),
+  disclaimer: z.string().min(1),
+  questions: z.array(questionSchema),
+  scoring: z.object({ thresholds: z.array(thresholdSchema) }),
+});
+
+export type TestDefinitionDraft = z.infer<typeof testDraftSchema>;
+export type TestRecord = TestDefinition & { id: string };
+export type ParseResult =
+  | { ok: true; value: TestDefinitionDraft }
+  | { ok: false; error: string };
+
+export function parseTestDraft(json: string): ParseResult {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return { ok: false, error: "JSON sai cú pháp. Kiểm tra lại dấu ngoặc và dấu phẩy." };
+  }
+
+  const parsed = testDraftSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { ok: false, error: `${issue?.path.join(".") || "dữ liệu"}: ${issue?.message}` };
+  }
+
+  const ids = parsed.data.questions.map((q) => q.id);
+  if (new Set(ids).size !== ids.length) {
+    return { ok: false, error: "Có câu hỏi trùng id. Mỗi câu cần một id riêng." };
+  }
+
+  const badThreshold = parsed.data.scoring.thresholds.find((t) => t.min > t.max);
+  if (badThreshold) {
+    return { ok: false, error: `Ngưỡng "${badThreshold.level}" có min lớn hơn max.` };
+  }
+
+  return { ok: true, value: parsed.data };
+}
+
+export async function listAllTests(): Promise<TestRecord[]> {
+  const snap = await getDocs(collection(getDb(), "testDefinitions"));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as TestDefinition) }));
+}
+
+export async function saveTest(
+  testId: string | null,
+  draft: TestDefinitionDraft,
+  adminUid: string,
+): Promise<string> {
+  // Đóng race giống saveMoodLog/toggleFavorite: admin vừa đăng nhập xong có
+  // thể lưu bài test ngay lập tức — xem giải thích ensureAuthReady() ở client.ts.
+  await ensureAuthReady();
+  const payload = { ...draft, updatedBy: adminUid, updatedAt: serverTimestamp() };
+
+  if (testId) {
+    await updateDoc(doc(getDb(), "testDefinitions", testId), payload);
+    return testId;
+  }
+  const ref = await addDoc(collection(getDb(), "testDefinitions"), {
+    ...payload,
+    status: "draft",
+  });
+  return ref.id;
+}
+
+export async function publishTest(testId: string, publish: boolean): Promise<void> {
+  // Đóng race giống saveTest ở trên — publish/unpublish cũng là một lần ghi.
+  await ensureAuthReady();
+  await updateDoc(doc(getDb(), "testDefinitions", testId), {
+    status: publish ? "published" : "draft",
+    updatedAt: serverTimestamp(),
+  });
+}
