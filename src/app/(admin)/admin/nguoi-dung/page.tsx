@@ -12,8 +12,9 @@ export default async function Page() {
     <>
       <h1 className="mb-2 text-2xl font-semibold">Người dùng</h1>
       <p className="mb-6 text-slate-600">
-        Trang này chỉ hiển thị thông tin hành chính. Nhật ký cảm xúc và kết quả test
-        của học sinh là dữ liệu riêng tư, quản trị viên không đọc được.
+        Trang này chỉ hiển thị thông tin hành chính. Nhật ký cảm xúc của học sinh là dữ liệu
+        riêng tư, bạn không đọc được. Với bài test, bạn xem được điểm số và mức độ để nhận ra
+        học sinh cần hỗ trợ, nhưng không xem được đáp án từng câu các em đã chọn.
       </p>
       <UserRoleManager users={users} currentAdminUid={admin.uid} />
     </>

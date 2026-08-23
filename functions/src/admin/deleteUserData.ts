@@ -38,11 +38,15 @@ async function deleteQueryInBatches(
  */
 const DELETION_TARGET_HANDLERS: Record<
   string,
-  { resultKey: "attempts" | "moods" | "favorites"; query: (targetUid: string) => FirebaseFirestore.Query }
+  { resultKey: "attempts" | "answers" | "moods" | "favorites"; query: (targetUid: string) => FirebaseFirestore.Query }
 > = {
   testAttempts: {
     resultKey: "attempts",
     query: (targetUid) => getFirestore().collection("testAttempts").where("userId", "==", targetUid),
+  },
+  testAnswers: {
+    resultKey: "answers",
+    query: (targetUid) => getFirestore().collection("testAnswers").where("userId", "==", targetUid),
   },
   moodLogs: {
     resultKey: "moods",
@@ -89,6 +93,7 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
     deleted[handler.resultKey] = await deleteQueryInBatches(() => handler.query(targetUid));
   }
   const attempts = deleted.attempts ?? 0;
+  const answers = deleted.answers ?? 0;
   const moods = deleted.moods ?? 0;
   const favorites = deleted.favorites ?? 0;
 
@@ -117,11 +122,11 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
     action: "deleteUserData",
     targetType: "user",
     targetId: targetUid,
-    before: { attempts, moods, favorites },
+    before: { attempts, answers, moods, favorites },
     after: authDeleteFailed ? { authDeleteFailed: true } : null,
   });
 
   return authDeleteFailed
-    ? { ok: true, deleted: { attempts, moods, favorites }, authDeleteFailed: true }
-    : { ok: true, deleted: { attempts, moods, favorites } };
+    ? { ok: true, deleted: { attempts, answers, moods, favorites }, authDeleteFailed: true }
+    : { ok: true, deleted: { attempts, answers, moods, favorites } };
 });

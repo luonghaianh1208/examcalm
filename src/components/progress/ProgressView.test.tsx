@@ -18,7 +18,7 @@ const mockedListMyMoodLogs = vi.mocked(listMyMoodLogs);
 
 const attempt: AttemptRecord = {
   id: "a1", userId: "u1", testId: "t1", testVersion: 1,
-  answers: {}, score: 12, level: "moderate",
+  score: 12, level: "moderate",
   createdAt: new Date("2026-08-20T10:00:00Z"),
 };
 

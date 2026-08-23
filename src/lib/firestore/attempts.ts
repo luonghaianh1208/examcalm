@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  addDoc, collection, getDocs, limit as fbLimit,
-  orderBy, query, serverTimestamp, where, Timestamp,
+  collection, doc, getDocs, limit as fbLimit,
+  orderBy, query, serverTimestamp, setDoc, where, Timestamp,
 } from "firebase/firestore";
 import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import type { TestAttempt } from "@/lib/types/test";
@@ -11,20 +11,38 @@ import type { CompletedTest } from "@/components/test/TestRunner";
 export type AttemptRecord = TestAttempt & { id: string; createdAt: Date | null };
 
 /**
- * Ghi lượt làm bài. Với offline persistence, promise này resolve ngay khi
- * dữ liệu vào IndexedDB — không đợi server.
+ * Ghi lượt làm bài thành HAI document cùng id: testAttempts (điểm, mức độ —
+ * chủ sở hữu hoặc admin đọc được) và testAnswers (đáp án từng câu — CHỈ chủ
+ * sở hữu đọc được). Rules Firestore không kiểm soát được theo field trong
+ * một document, nên "admin thấy điểm nhưng không thấy đáp án" chỉ làm được
+ * bằng cách tách document (xem firestore.rules).
+ *
+ * Ghi testAnswers TRƯỚC testAttempts: nếu có lỗi giữa chừng (mất mạng, ứng
+ * dụng bị đóng...), một dòng testAttempts không có testAnswers đi kèm chỉ là
+ * bản ghi mồ côi vô hại; ngược lại — có đáp án nhưng chưa có kết quả — sẽ để
+ * lại một lượt làm bài mà học sinh không thể tra cứu lại được.
+ *
+ * Với offline persistence, các promise dưới đây resolve ngay khi dữ liệu vào
+ * IndexedDB — không đợi server.
  */
 export async function saveTestAttempt(uid: string, completed: CompletedTest): Promise<string> {
   await ensureAuthReady();
-  const ref = await addDoc(collection(getDb(), "testAttempts"), {
+  const ref = doc(collection(getDb(), "testAttempts"));
+
+  await setDoc(doc(getDb(), "testAnswers", ref.id), {
+    userId: uid,
+    answers: completed.answers,
+  });
+
+  await setDoc(ref, {
     userId: uid,
     testId: completed.testId,
     testVersion: completed.testVersion,
-    answers: completed.answers,
     score: completed.score,
     level: completed.level,
     createdAt: serverTimestamp(),
   });
+
   return ref.id;
 }
 
@@ -51,7 +69,6 @@ export async function listMyAttempts(uid: string, max = 50): Promise<AttemptReco
       userId: data.userId as string,
       testId: data.testId as string,
       testVersion: data.testVersion as number,
-      answers: data.answers as Record<string, number>,
       score: data.score as number,
       level: data.level as string,
       createdAt: createdAt instanceof Timestamp ? createdAt.toDate() : null,

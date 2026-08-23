@@ -5,7 +5,7 @@ import type { CallerAuth } from "./guards";
  * để đối chiếu, và nếu dừng giữa chừng thì doc user còn lại là dấu hiệu cần chạy lại.
  */
 export function collectDeletionTargets(): string[] {
-  return ["testAttempts", "moodLogs", "users/{uid}/favorites", "users/{uid}"];
+  return ["testAttempts", "testAnswers", "moodLogs", "users/{uid}/favorites", "users/{uid}"];
 }
 
 export function canDelete(auth: CallerAuth, targetUid: string): boolean {

@@ -33,9 +33,17 @@ export const testAttemptSchema = z.object({
   userId: z.string().min(1),
   testId: z.string().min(1),
   testVersion: z.number().int().min(1),
-  answers: z.record(z.string(), z.number().int()),
   score: z.number().int(),
   level: z.string().min(1),
+});
+
+// Đáp án từng câu tách riêng khỏi testAttempts (cùng id) — Firestore Rules
+// không kiểm soát được theo field trong một document, nên "admin thấy điểm
+// nhưng không thấy đáp án" chỉ làm được bằng cách tách document. Xem
+// firestore.rules và src/lib/firestore/attempts.ts.
+export const testAnswerSchema = z.object({
+  userId: z.string().min(1),
+  answers: z.record(z.string(), z.number().int()),
 });
 
 export type Option = z.infer<typeof optionSchema>;
@@ -43,3 +51,4 @@ export type Question = z.infer<typeof questionSchema>;
 export type Threshold = z.infer<typeof thresholdSchema>;
 export type TestDefinition = z.infer<typeof testDefinitionSchema>;
 export type TestAttempt = z.infer<typeof testAttemptSchema>;
+export type TestAnswer = z.infer<typeof testAnswerSchema>;

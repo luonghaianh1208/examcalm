@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { userProfileSchema } from "./user";
-import { testDefinitionSchema, testAttemptSchema } from "./test";
+import { testDefinitionSchema, testAttemptSchema, testAnswerSchema } from "./test";
 import { moodLogSchema } from "./mood";
 import { resourceSchema } from "./resource";
 
@@ -71,8 +71,15 @@ describe("testAttemptSchema", () => {
   it("chấp nhận lượt làm bài hợp lệ", () => {
     const r = testAttemptSchema.safeParse({
       userId: "u1", testId: "t1", testVersion: 1,
-      answers: { q1: 2 }, score: 2, level: "nhe",
+      score: 2, level: "nhe",
     });
+    expect(r.success).toBe(true);
+  });
+});
+
+describe("testAnswerSchema", () => {
+  it("chấp nhận đáp án hợp lệ", () => {
+    const r = testAnswerSchema.safeParse({ userId: "u1", answers: { q1: 2 } });
     expect(r.success).toBe(true);
   });
 });

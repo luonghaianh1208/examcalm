@@ -4,7 +4,7 @@ import { collectDeletionTargets, canDelete, isAuthAlreadyDeleted } from "./delet
 describe("collectDeletionTargets", () => {
   it("liệt kê đủ mọi nơi chứa dữ liệu cá nhân", () => {
     expect(collectDeletionTargets()).toEqual([
-      "testAttempts", "moodLogs", "users/{uid}/favorites", "users/{uid}",
+      "testAttempts", "testAnswers", "moodLogs", "users/{uid}/favorites", "users/{uid}",
     ]);
   });
 

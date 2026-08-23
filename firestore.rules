@@ -17,8 +17,18 @@ service cloud.firestore {
 
     match /testAttempts/{id} {
       allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
-      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read:   if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // Đáp án từng câu, tách khỏi testAttempts nhưng dùng CHUNG id (xem
+    // src/lib/firestore/attempts.ts). testAttempts cho phép admin đọc để giáo
+    // viên biết điểm/mức độ mà can thiệp kịp thời, nhưng đáp án cụ thể từng
+    // câu là riêng tư tuyệt đối — chỉ chủ sở hữu mới đọc được.
+    match /testAnswers/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow update: if false;
     }
 

@@ -27,9 +27,11 @@ export default function Page() {
       <section className="mb-8">
         <h2 className="mb-2 text-lg font-medium">Dữ liệu của bạn</h2>
         <p className="text-slate-700">
-          Nhật ký cảm xúc và kết quả test là <strong>riêng tư</strong>. Quản trị viên
-          không đọc được nội dung bạn ghi. Bạn xóa được từng ghi chép, hoặc xóa toàn bộ
-          dữ liệu bất cứ lúc nào ở trang Hồ sơ.
+          Nhật ký cảm xúc <strong>hoàn toàn riêng tư</strong> — quản trị viên (giáo viên
+          phụ trách) không bao giờ đọc được nội dung bạn ghi. Với bài test, quản trị viên
+          xem được <strong>điểm số và mức độ</strong> để kịp thời hỏi thăm khi bạn cần hỗ
+          trợ, nhưng <strong>không xem được bạn đã chọn đáp án nào</strong> ở từng câu. Bạn
+          xóa được từng ghi chép, hoặc xóa toàn bộ dữ liệu bất cứ lúc nào ở trang Hồ sơ.
         </p>
       </section>
 
