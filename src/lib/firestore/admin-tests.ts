@@ -50,9 +50,29 @@ export function parseTestDraft(json: string): ParseResult {
   return { ok: true, value: parsed.data };
 }
 
+/**
+ * Liệt kê tường minh từng field thay vì spread `d.data()` — document đọc về
+ * từ SDK có thể mang theo field không nằm trong type (vd: `updatedAt` là một
+ * Firestore `Timestamp`, một class instance) mà spread sẽ vô tình mang theo.
+ * Xem giải thích đầy đủ ở toResourceListItem() trong queries-public.ts.
+ */
+function toTestRecord(id: string, data: TestDefinition): TestRecord {
+  return {
+    id,
+    title: data.title,
+    version: data.version,
+    status: data.status,
+    isSampleContent: data.isSampleContent,
+    questions: data.questions,
+    scoring: data.scoring,
+    disclaimer: data.disclaimer,
+    updatedBy: data.updatedBy,
+  };
+}
+
 export async function listAllTests(): Promise<TestRecord[]> {
   const snap = await getDocs(collection(getDb(), "testDefinitions"));
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as TestDefinition) }));
+  return snap.docs.map((d) => toTestRecord(d.id, d.data() as TestDefinition));
 }
 
 export async function saveTest(
