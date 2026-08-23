@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  # Job "app": lint → typecheck → unit → rules → e2e → build. KHÔNG BAO GIỜ cài
+  # dependency của functions/ trong job này — xem giải thích chi tiết ở bước
+  # "Build production" bên dưới. Đây chính là job tái hiện đúng môi trường build
+  # thật của App Hosting (chỉ cài root package.json), để một lỗi cùng dạng với
+  # bug từng làm hỏng deploy production (root tsconfig vô tình type-check cả
+  # functions/src, chỉ "chạy được" cục bộ vì functions/node_modules tình cờ có
+  # sẵn) sẽ FAIL Ở ĐÂY thay vì chỉ lộ ra lúc deploy thật.
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cài dependency (chỉ root — KHÔNG đụng functions/)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Kiểm tra kiểu
+        run: npm run typecheck
+
+      - name: Unit test
+        run: npm test
+
+      - name: Test Security Rules
+        run: npm run test:rules
+
+      - name: Cài trình duyệt cho Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_USE_EMULATOR: "true"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: examcalm-dev
+          NEXT_PUBLIC_FIREBASE_API_KEY: fake-api-key-for-emulator
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: examcalm-dev.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: examcalm-dev.appspot.com
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
+
+      - name: Upload báo cáo Playwright khi có test fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      # Chạy SAU e2e, TRƯỚC KHI job này từng cài functions/ (không bao giờ cài) —
+      # thứ tự này quan trọng: nếu root tsconfig.json lỡ mất dòng exclude
+      # "functions" (regression đúng dạng bug đã làm hỏng deploy production),
+      # `next build` sẽ cố type-check cả functions/src. Vì job này chưa từng chạy
+      # `npm ci --prefix functions`, functions/node_modules KHÔNG tồn tại — import
+      # không resolve được — build FAIL ngay tại đây, đúng như nó đã fail thật ở
+      # App Hosting, thay vì "chạy được" một cách giả tạo như từng xảy ra lúc còn
+      # functions/node_modules sẵn có cục bộ.
+      - name: Build production
+        run: npm run build
+
+      - name: Chặn firebase-admin lọt vào client bundle
+        run: |
+          if grep -rl "firebase-admin" .next/static 2>/dev/null; then
+            echo "LỖI: firebase-admin xuất hiện trong client bundle"
+            exit 1
+          fi
+          echo "OK: client bundle sạch"
+
+  # Job "functions": tách RIÊNG khỏi job "app" ở trên, với checkout + cài
+  # dependency của chính nó — cố ý KHÔNG dùng chung runner/checkout với job
+  # "app" để cài dependency của functions/ không bao giờ có cơ hội "rò" sang môi
+  # trường build root, dù chỉ tình cờ. Đây là bước "cài dependency của functions/
+  # một cách tường minh, ngay trước khi chạy functions suite" mà lỗi gốc còn
+  # thiếu.
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Cài dependency functions/
+        run: npm ci --prefix functions
+
+      - name: Test Cloud Functions
+        run: npm test --prefix functions
+
+      - name: Build functions
+        run: npm run build --prefix functions

@@ -13,7 +13,8 @@
     "emu": "firebase emulators:start --only auth,firestore,functions,storage",
     "emu:exec": "firebase emulators:exec --only auth,firestore",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.mts\"",
-    "seed": "tsx scripts/seed.mts"
+    "seed": "tsx scripts/seed.mts",
+    "test:e2e": "firebase emulators:exec --only auth,firestore \"npm run seed && playwright test\""
   },
   "dependencies": {
     "firebase": "^12.18.0",

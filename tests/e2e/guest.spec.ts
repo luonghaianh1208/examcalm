@@ -1,0 +1,87 @@
+import { test, expect, type Page } from "@playwright/test";
+import { seedSampleContentTest } from "./support/seed-sample-test";
+import { clickAndConfirmChecked } from "./support/hydration";
+
+/**
+ * Vào /test rồi bấm link bài test mẫu (MẪU). Next `<Link>` điều hướng phía
+ * client (router.push()) — click() của Playwright chỉ đợi sự kiện click nổ
+ * ra, KHÔNG đợi điều hướng bất đồng bộ đó hoàn tất (khác với một thẻ <a>
+ * tải lại cả trang, thứ Playwright tự đợi). Nếu đọc DOM ngay sau click(),
+ * có thể vẫn đang đứng ở trang /test cũ. Đợi một phần tử CHỈ có ở trang đích
+ * (nút "Xem kết quả") xuất hiện — expect(...).toBeVisible() tự poll tới khi
+ * đúng — là cách xác định để đồng bộ, không phải một waitForTimeout() đoán mò.
+ */
+async function openSampleTest(page: Page): Promise<void> {
+  await page.goto("/test");
+  await page.getByRole("link", { name: /MẪU/ }).click();
+  await expect(page.getByRole("button", { name: /xem kết quả/i })).toBeVisible();
+}
+
+async function answerAllWithNever(page: Page): Promise<void> {
+  const radios = page.getByRole("radio", { name: "Không bao giờ" });
+  const count = await radios.count();
+  for (let i = 0; i < count; i++) await clickAndConfirmChecked(radios.nth(i));
+}
+
+test.describe("Khách chưa đăng nhập", () => {
+  // scripts/seed.mts hiện chỉ seed một bài test THẬT (GAD-7, isSampleContent=false)
+  // — không còn bài test mẫu (MẪU) nào nữa. Ba test đầu bên dưới cần một bài
+  // test gắn cờ isSampleContent=true để verify banner cảnh báo, nên tự seed
+  // thêm một bài test riêng cho E2E (xem tests/e2e/support/seed-sample-test.ts).
+  test.beforeAll(async () => {
+    await seedSampleContentTest();
+  });
+
+  test("làm được test và thấy kết quả mà không cần tài khoản, thấy cả disclaimer lẫn banner nội dung mẫu", async ({ page }) => {
+    await openSampleTest(page);
+    await answerAllWithNever(page);
+
+    await page.getByRole("button", { name: /xem kết quả/i }).click();
+
+    await expect(page.getByText(/tổng điểm của bạn/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: /đăng ký để lưu kết quả/i })).toBeVisible();
+
+    // Bài test mẫu (isSampleContent=true) phải luôn hiện CẢ disclaimer lẫn banner
+    // cảnh báo trên màn hình kết quả — không chỉ lúc đang làm bài.
+    await expect(page.getByText(/công cụ tự tìm hiểu, không phải chẩn đoán/i)).toBeVisible();
+    await expect(page.getByText(/nội dung mẫu chưa thẩm định/i)).toBeVisible();
+  });
+
+  test("kết quả được giữ trong sessionStorage chứ không ghi Firestore", async ({ page }) => {
+    await openSampleTest(page);
+    await answerAllWithNever(page);
+    await page.getByRole("button", { name: /xem kết quả/i }).click();
+    await expect(page.getByText(/tổng điểm của bạn/i)).toBeVisible();
+
+    const stored = await page.evaluate(() => sessionStorage.getItem("examcalm:guest-results"));
+    expect(stored).toContain("score");
+    const local = await page.evaluate(() => localStorage.length);
+    expect(local).toBe(0);
+  });
+
+  test("luôn thấy banner nội dung mẫu", async ({ page }) => {
+    await openSampleTest(page);
+    await expect(page.getByText(/nội dung mẫu/i)).toBeVisible();
+  });
+
+  test("bị chuyển về trang đăng nhập khi vào khu vực học sinh, giữ nguyên tiep-tuc", async ({ page }) => {
+    await page.goto("/tien-trinh");
+    await expect(page).toHaveURL(/\/dang-nhap/);
+
+    const url = new URL(page.url());
+    expect(url.searchParams.get("tiep-tuc")).toBe("/tien-trinh");
+  });
+
+  test("bị chuyển về trang đăng nhập khi vào khu vực quản trị, giữ nguyên tiep-tuc", async ({ page }) => {
+    await page.goto("/admin");
+    await expect(page).toHaveURL(/\/dang-nhap/);
+
+    const url = new URL(page.url());
+    expect(url.searchParams.get("tiep-tuc")).toBe("/admin");
+  });
+
+  test("đọc được thư viện công khai", async ({ page }) => {
+    await page.goto("/thu-vien");
+    await expect(page.getByRole("link", { name: /kỹ thuật thở/i })).toBeVisible();
+  });
+});
