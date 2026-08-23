@@ -135,6 +135,28 @@ describe("ResourceEditor", () => {
     expect(slugInput.value).toBe("ky-thuat-tho-4-7-8");
   });
 
+  it("sửa bài đã có, xoá trắng slug rồi lưu: từ chối và KHÔNG tự sinh slug từ tiêu đề", async () => {
+    mockedListAllResources.mockResolvedValue([record1]);
+    render(<ResourceEditor adminUid="admin-1" />);
+    await waitFor(() => {
+      expect(screen.getByText("Kỹ thuật thở 4-7-8")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /^sửa$/i }));
+    const slugInput = screen.getByLabelText(/slug/i) as HTMLInputElement;
+    await userEvent.clear(slugInput);
+    expect(slugInput.value).toBe("");
+
+    await userEvent.click(screen.getByRole("button", { name: /lưu bản nháp/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/không được để trống/i);
+    });
+    // Đây là khẳng định chính: KHÔNG được gọi saveResource với slug tự sinh lại
+    // từ tiêu đề hiện có (title-derived) — phải chặn lại trước khi gọi.
+    expect(mockedSaveResource).not.toHaveBeenCalled();
+  });
+
   it("lưu bản nháp thành công: hiện thông báo và tải lại danh sách", async () => {
     mockedListAllResources.mockResolvedValueOnce([]);
     mockedSaveResource.mockResolvedValue("new-id");

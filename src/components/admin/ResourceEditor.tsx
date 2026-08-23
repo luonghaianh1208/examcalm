@@ -54,9 +54,21 @@ export function ResourceEditor({ adminUid }: { adminUid: string }) {
   async function handleSave() {
     setError(null); setMessage(null);
 
+    // Slug rỗng CHỈ được tự sinh lại từ tiêu đề khi TẠO MỚI. Khi đang sửa một
+    // bài đã có, tự sinh lại slug ở đây sẽ âm thầm đổi đường dẫn của một bài
+    // có thể đã được học sinh lưu — phải chặn lại và bắt nhập tay, không đoán hộ.
+    const trimmedSlug = form.slug.trim();
+    if (editingId && !trimmedSlug) {
+      setError(
+        "Slug không được để trống khi sửa bài đã có — học sinh có thể đã lưu đường dẫn cũ, " +
+          "xoá đi sẽ làm hỏng đường dẫn đó. Hãy nhập lại slug (có thể giữ nguyên slug cũ).",
+      );
+      return;
+    }
+
     const parsed = resourceDraftSchema.safeParse({
       title: form.title.trim(),
-      slug: form.slug.trim() || toSlug(form.title),
+      slug: trimmedSlug || toSlug(form.title),
       type: form.type,
       category: form.category.trim(),
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
@@ -155,8 +167,17 @@ export function ResourceEditor({ adminUid }: { adminUid: string }) {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span>Slug (đường dẫn)</span>
-          <input value={form.slug} onChange={(e) => update("slug", e.target.value)} className="rounded-lg border px-3 py-2 font-mono text-sm" />
+          <span>
+            Slug (đường dẫn)
+            {editingId && <span className="text-rose-700"> — bắt buộc, không được để trống</span>}
+          </span>
+          <input
+            value={form.slug}
+            onChange={(e) => update("slug", e.target.value)}
+            required={!!editingId}
+            aria-required={!!editingId}
+            className="rounded-lg border px-3 py-2 font-mono text-sm"
+          />
         </label>
 
         <label className="flex flex-col gap-1">

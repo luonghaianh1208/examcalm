@@ -63,6 +63,9 @@ export async function saveResource(
   // bị Rules từ chối dù admin đã đăng nhập thật.
   await ensureAuthReady();
 
+  // Biết và chấp nhận: kiểm tra rồi mới ghi (check-then-act), không có transaction, nên
+  // hai admin bấm lưu cùng lúc với cùng slug lý thuyết vẫn có thể lọt cả hai. Đội quản trị
+  // nhỏ và ít khi trùng thời điểm — đánh đổi này là cố ý, không phải bị bỏ sót.
   if (await isSlugTaken(draft.slug, resourceId)) {
     throw new Error(`Slug "${draft.slug}" đã được dùng cho bài khác.`);
   }
