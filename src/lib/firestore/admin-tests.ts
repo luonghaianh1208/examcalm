@@ -71,6 +71,10 @@ function toTestRecord(id: string, data: TestDefinition): TestRecord {
 }
 
 export async function listAllTests(): Promise<TestRecord[]> {
+  // Đóng race giống listMyMoodLogs — xem giải thích ensureAuthReady() ở
+  // client.ts. Thiếu bước này, admin vừa đăng nhập xong điều hướng thẳng tới
+  // /admin/tests sẽ luôn bị Firestore từ chối đọc vì request.auth chưa kịp khôi phục.
+  await ensureAuthReady();
   const snap = await getDocs(collection(getDb(), "testDefinitions"));
   return snap.docs.map((d) => toTestRecord(d.id, d.data() as TestDefinition));
 }

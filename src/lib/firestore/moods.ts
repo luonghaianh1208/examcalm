@@ -60,5 +60,9 @@ export async function listMyMoodLogs(uid: string, max = 100): Promise<MoodRecord
 }
 
 export async function deleteMoodLog(logId: string): Promise<void> {
+  // Đóng race giống saveMoodLog/listMyMoodLogs ở trên — xem giải thích
+  // ensureAuthReady() ở client.ts. Thiếu bước này, học sinh vừa đăng nhập xong
+  // xóa ngay một mục nhật ký sẽ bị Firestore từ chối vì request.auth chưa kịp khôi phục.
+  await ensureAuthReady();
   await deleteDoc(doc(getDb(), "moodLogs", logId));
 }

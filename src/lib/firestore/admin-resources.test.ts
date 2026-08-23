@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getDocs } from "firebase/firestore";
-import { isSlugTaken } from "./admin-resources";
+import { ensureAuthReady } from "@/lib/firebase/client";
+import { isSlugTaken, listAllResources } from "./admin-resources";
 
 // Mock đúng tại ranh giới mà admin-resources.ts phụ thuộc vào — gói
 // "firebase/firestore" (các hàm rời collection/query/where/getDocs) và
@@ -34,6 +35,33 @@ function fakeSnap(ids: string[]) {
     docs: ids.map((id) => ({ id })),
   } as unknown as Awaited<ReturnType<typeof getDocs>>;
 }
+
+describe("listAllResources", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("gọi ensureAuthReady TRƯỚC getDocs — đóng race lúc mới đăng nhập", async () => {
+    mockedGetDocs.mockResolvedValue({
+      docs: [{
+        id: "r1",
+        data: () => ({
+          title: "t", slug: "s", type: "article", category: "c", tags: [],
+          content: "nd", videoUrl: null, status: "draft", visibility: "public",
+          createdBy: "u1",
+        }),
+      }],
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    await listAllResources();
+
+    const ensureAuthReadyOrder = vi.mocked(ensureAuthReady).mock.invocationCallOrder[0];
+    const getDocsOrder = mockedGetDocs.mock.invocationCallOrder[0];
+    expect(ensureAuthReadyOrder).toBeDefined();
+    expect(getDocsOrder).toBeDefined();
+    expect(ensureAuthReadyOrder).toBeLessThan(getDocsOrder!);
+  });
+});
 
 describe("isSlugTaken", () => {
   beforeEach(() => {

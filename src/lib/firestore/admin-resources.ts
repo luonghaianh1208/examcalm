@@ -42,6 +42,10 @@ function toResourceRecord(id: string, data: Resource): ResourceRecord {
 }
 
 export async function listAllResources(): Promise<ResourceRecord[]> {
+  // Đóng race giống listMyMoodLogs — xem giải thích ensureAuthReady() ở
+  // client.ts. Thiếu bước này, admin vừa đăng nhập xong điều hướng thẳng tới
+  // /admin/thu-vien sẽ luôn bị Firestore từ chối đọc vì request.auth chưa kịp khôi phục.
+  await ensureAuthReady();
   const snap = await getDocs(collection(getDb(), "resources"));
   return snap.docs.map((d) => toResourceRecord(d.id, d.data() as Resource));
 }
