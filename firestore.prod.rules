@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isAdmin()    { return isSignedIn() && request.auth.token.role == "admin"; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+
+    match /users/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.role == "student";
+      allow update: if (isOwner(uid) && request.resource.data.role == resource.data.role)
+                    || isAdmin();
+      allow delete: if false;
+    }
+
+    match /testAttempts/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow read:   if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /moodLogs/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /users/{uid}/favorites/{resourceId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /resources/{id} {
+      allow read: if (resource.data.status == "published" &&
+                      (resource.data.visibility == "public" || isSignedIn()))
+                  || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /testDefinitions/{id} {
+      allow read:  if resource.data.status == "published" || isAdmin();
+      // Ở production, KHÔNG cho publish nội dung mẫu chưa thẩm định.
+      allow write: if isAdmin() &&
+                   !(request.resource.data.status == "published" &&
+                     request.resource.data.isSampleContent == true);
+    }
+
+    match /auditLogs/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -5,11 +5,14 @@ import {
 } from "@firebase/rules-unit-testing";
 import type { Firestore } from "firebase/firestore";
 
-export async function createTestEnv(): Promise<RulesTestEnvironment> {
+export async function createTestEnv(
+  rulesPath = "firestore.rules",
+  projectId = "examcalm-rules-test",
+): Promise<RulesTestEnvironment> {
   return initializeTestEnvironment({
-    projectId: "examcalm-rules-test",
+    projectId,
     firestore: {
-      rules: fs.readFileSync("firestore.rules", "utf8"),
+      rules: fs.readFileSync(rulesPath, "utf8"),
       host: "127.0.0.1",
       port: 8080,
     },

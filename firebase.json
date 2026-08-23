@@ -6,6 +6,17 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "hosting": {
+    "site": "examcalm",
+    "public": "redirect-site",
+    "redirects": [
+      {
+        "source": "/**",
+        "destination": "https://REPLACE_WITH_APP_HOSTING_URL/:splat",
+        "type": 301
+      }
+    ]
+  },
   "functions": [
     {
       "source": "functions",
