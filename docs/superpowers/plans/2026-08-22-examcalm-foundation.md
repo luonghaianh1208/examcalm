@@ -6925,8 +6925,15 @@ Lặp lại với `--project examcalm-dev` cho môi trường dev.
 
 ```bash
 firebase deploy --only firestore:rules,firestore:indexes,storage --project examcalm-dev
-firebase deploy --only firestore:rules,firestore:indexes,storage --project examcalm
+npm run deploy:rules:prod
+firebase deploy --only storage --project examcalm
 ```
+
+`npm run deploy:rules:prod` dùng `--config firebase.prod.json`, nên deploy đúng
+`firestore.prod.rules` lên `examcalm` — KHÔNG được gọi `firebase deploy --only
+firestore:rules ... --project examcalm` trực tiếp mà thiếu `--config
+firebase.prod.json`, vì mặc định lệnh đó sẽ đọc `firebase.json` (trỏ tới
+`firestore.rules` — bản dev, lỏng hơn) và âm thầm ghi đè rules production.
 
 Expected: deploy thành công; Console → Firestore → Rules hiển thị đúng nội dung `firestore.rules`.
 

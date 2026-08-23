@@ -52,6 +52,10 @@ export async function listAllResources(): Promise<ResourceRecord[]> {
 
 /** Trả về true nếu slug đã được bài KHÁC sử dụng. */
 export async function isSlugTaken(slug: string, exceptId: string | null): Promise<boolean> {
+  // Đóng race giống listAllResources/saveResource ở trên — xem giải thích
+  // ensureAuthReady() ở client.ts. Hàm này được export riêng nên có thể được gọi
+  // trực tiếp mà không đi qua saveResource(), nên tự nó cũng cần guard này.
+  await ensureAuthReady();
   const snap = await getDocs(query(collection(getDb(), "resources"), where("slug", "==", slug)));
   return snap.docs.some((d) => d.id !== exceptId);
 }

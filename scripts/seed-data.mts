@@ -1,9 +1,11 @@
 /**
  * Nội dung MẪU dùng chung cho cả hai script seed.
  *
- * TOÀN BỘ nội dung ở đây là GIẢ và CHƯA qua thẩm định chuyên môn (spec §1.1).
- * Bài test mang cờ `isSampleContent: true`; rule production cấm publish một bài
- * test mang cờ này, nên `seed-prod.mts` ghi nó ở trạng thái `draft`.
+ * SAMPLE_RESOURCES bên dưới là nội dung GIẢ, CHƯA qua thẩm định chuyên môn
+ * (spec §1.1), mang cờ `isSampleContent: true`; rule production cấm publish
+ * nội dung mang cờ này, nên `seed-prod.mts` ghi các bài đó ở trạng thái `draft`.
+ * SAMPLE_TEST (GAD-7) KHÔNG mang cờ này — xem giải thích `isSampleContent: false`
+ * ngay phía trên định nghĩa của nó.
  *
  * Không đặt timestamp ở đây: Admin SDK dùng `FieldValue.serverTimestamp()` còn
  * client SDK dùng `serverTimestamp()` — mỗi script tự thêm loại phù hợp.
@@ -37,6 +39,7 @@ export const SAMPLE_TEST = {
     "Hãy nghĩ về HAI TUẦN VỪA QUA khi trả lời. " +
     "Đây là công cụ tự tìm hiểu, giúp bạn nhìn rõ hơn cảm giác của mình — " +
     "nó KHÔNG phải chẩn đoán y khoa hay tâm lý, và không thay thế người có chuyên môn. " +
+    "Bản tiếng Việt của bài test này đang chờ một chuyên gia tâm lý đối chiếu và thẩm định. " +
     "Nếu bạn đang thấy rất khó khăn, hãy nói với phụ huynh, thầy cô hoặc cán bộ tâm lý học đường.",
   questions: [
     { id: "q1", text: "Cảm thấy lo lắng, bồn chồn hoặc căng thẳng" },
@@ -80,7 +83,10 @@ export const SAMPLE_TEST = {
         interpretation:
           "Từ những gì bạn chia sẻ, có vẻ bạn đang phải chịu đựng khá nhiều trong hai tuần qua. " +
           "Bạn không cần tự mình vượt qua chuyện này. Hãy nói với phụ huynh, thầy cô hoặc cán bộ tâm lý " +
-          "học đường sớm nhất có thể — kể cả khi bạn chưa biết diễn đạt thế nào.",
+          "học đường sớm nhất có thể — kể cả khi bạn chưa biết diễn đạt thế nào. " +
+          "Và nếu ngay lúc này khó tìm được ai để nói, Tổng đài Quốc gia Bảo vệ Trẻ em — số 111 — " +
+          "luôn có người trực để lắng nghe, miễn phí và hoạt động 24/7. Đó cũng là một cánh cửa, " +
+          "bất cứ lúc nào bạn cần.",
       },
     ],
   },

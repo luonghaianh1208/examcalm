@@ -31,9 +31,10 @@ export function ResearchConsentForm({
       <h2 className="mb-2 font-medium">Tham gia nghiên cứu (không bắt buộc)</h2>
       <p className="mb-3 text-slate-600">
         Nhóm nghiên cứu muốn dùng dữ liệu ở dạng <strong>ẩn danh</strong> để phân tích cho
-        đề tài khoa học kỹ thuật. Nếu bạn đồng ý, chỉ điểm cảm xúc, thẻ ngữ cảnh và thời gian
-        được sử dụng — <strong>nội dung ghi chú của bạn không bao giờ được lấy ra</strong>.
-        Bạn từ chối thì vẫn dùng đầy đủ mọi tính năng, và có thể đổi ý bất cứ lúc nào.
+        đề tài khoa học kỹ thuật. Nếu bạn đồng ý, chỉ điểm cảm xúc, thời điểm ghi (trước/sau
+        hoạt động) và thời gian được sử dụng — <strong>ghi chú và thẻ của bạn không bao giờ
+        được lấy ra</strong>. Bạn từ chối thì vẫn dùng đầy đủ mọi tính năng, và có thể đổi ý
+        bất cứ lúc nào.
       </p>
 
       <label className="flex items-start gap-2">

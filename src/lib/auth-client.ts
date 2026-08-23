@@ -10,7 +10,7 @@ import {
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { z } from "zod";
-import { getFirebaseAuth, getDb } from "@/lib/firebase/client";
+import { getFirebaseAuth, getDb, ensureAuthReady } from "@/lib/firebase/client";
 import { DEFAULT_PRIVACY_SETTINGS } from "@/lib/types/user";
 
 export const signUpInputSchema = z.object({
@@ -42,6 +42,13 @@ export async function signUp(input: SignUpInput): Promise<void> {
   const cred = await createUserWithEmailAndPassword(auth, parsed.email, parsed.password);
 
   try {
+    // Đóng race giống saveMoodLog/saveTestAttempt — xem giải thích ensureAuthReady()
+    // ở client.ts. Ở đây hậu quả nặng hơn: với offline persistence, setDoc() dưới
+    // đây sẽ resolve ở local dù request thật bị Rules từ chối, nên catch không bao
+    // giờ chạy tới, deleteUser() dọn dẹp không được gọi, và học sinh bị kẹt lại với
+    // tài khoản Auth "mồ côi" — đúng thứ đoạn cleanup này được viết ra để tránh.
+    await ensureAuthReady();
+
     // Ghi hồ sơ TRƯỚC khi verify — rules cho phép create users mà không đòi email_verified.
     await setDoc(doc(getDb(), "users", cred.user.uid), {
       uid: cred.user.uid,

@@ -59,6 +59,19 @@ describe("moodLogs/{id}", () => {
     await assertFails(deleteDoc(doc(db, "moodLogs/m1")));
   });
 
+  it("chủ sở hữu KHÔNG đổi được userId của nhật ký để cấy vào nhật ký người khác (C1)", async () => {
+    // Kịch bản tấn công: u2 tự tạo doc bằng chính uid của mình (được phép), rồi
+    // update lại userId thành uid nạn nhân — nếu lọt, doc sẽ "thuộc về" nạn nhân
+    // và xuất hiện trong nhật ký của họ dù họ không hề viết ra nội dung đó.
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "moodLogs/m1"), { ...LOG, userId: "u2" });
+    });
+    const db = authedDb(env, "u2");
+    await assertFails(
+      updateDoc(doc(db, "moodLogs/m1"), { userId: "u1", note: "nội dung cấy vào" }),
+    );
+  });
+
   it("ADMIN CŨNG KHÔNG đọc được nhật ký cảm xúc của học sinh", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "moodLogs/m1"), LOG); });
     await assertFails(getDoc(doc(adminDb(env), "moodLogs/m1")));

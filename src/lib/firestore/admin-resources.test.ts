@@ -68,6 +68,18 @@ describe("isSlugTaken", () => {
     vi.clearAllMocks();
   });
 
+  it("gọi ensureAuthReady TRƯỚC getDocs — đóng race lúc mới đăng nhập (I5)", async () => {
+    mockedGetDocs.mockResolvedValue(fakeSnap([]));
+
+    await isSlugTaken("ky-thuat-tho", null);
+
+    const ensureAuthReadyOrder = vi.mocked(ensureAuthReady).mock.invocationCallOrder[0];
+    const getDocsOrder = mockedGetDocs.mock.invocationCallOrder[0];
+    expect(ensureAuthReadyOrder).toBeDefined();
+    expect(getDocsOrder).toBeDefined();
+    expect(ensureAuthReadyOrder).toBeLessThan(getDocsOrder!);
+  });
+
   it("slug đã được bài KHÁC dùng -> true", async () => {
     mockedGetDocs.mockResolvedValue(fakeSnap(["other-id"]));
     expect(await isSlugTaken("ky-thuat-tho", null)).toBe(true);

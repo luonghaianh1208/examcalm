@@ -17,14 +17,21 @@ service cloud.firestore {
 
     match /testAttempts/{id} {
       allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
-      allow read:   if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow update: if false;
     }
 
     match /moodLogs/{id} {
       allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // update chỉ được đổi field khác — userId của document SAU khi ghi phải giữ
+      // nguyên userId TRƯỚC khi ghi, nếu không kẻ tấn công có thể tạo doc bằng uid
+      // của chính mình rồi update lại userId thành uid nạn nhân để "cấy" nội dung
+      // vào nhật ký của người khác.
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId;
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /users/{uid}/favorites/{resourceId} {

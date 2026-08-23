@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/firebase/session";
 import { MoodWidget } from "@/components/mascot/MoodWidget";
 import { FirebaseBootstrap } from "@/components/FirebaseBootstrap";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,6 +38,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <FirebaseBootstrap />
         <SiteHeader user={user} />
         {children}
+        <SiteFooter />
         <MoodWidget uid={user?.uid ?? null} canSave={Boolean(user?.emailVerified)} />
       </body>
     </html>

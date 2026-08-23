@@ -52,9 +52,9 @@ describe("testAttempts/{id}", () => {
     await assertFails(getDoc(doc(guestDb(env), "testAttempts/a1")));
   });
 
-  it("admin đọc được", async () => {
+  it("admin KHÔNG đọc được kết quả test của học sinh", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "testAttempts/a1"), ATTEMPT); });
-    await assertSucceeds(getDoc(doc(adminDb(env), "testAttempts/a1")));
+    await assertFails(getDoc(doc(adminDb(env), "testAttempts/a1")));
   });
 
   it("KHÔNG sửa được sau khi submit — kể cả chủ sở hữu", async () => {
