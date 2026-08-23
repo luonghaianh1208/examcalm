@@ -11,7 +11,7 @@
     "public": "redirect-site",
     "redirects": [
       {
-        "source": "/**",
+        "source": "**",
         "destination": "https://examcalm-web--examcalm.asia-southeast1.hosted.app/:splat",
         "type": 301
       }
