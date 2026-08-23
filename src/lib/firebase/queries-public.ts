@@ -24,6 +24,45 @@ export type ListResourcesOptions = {
 const FETCH_CAP = 300;
 
 /**
+ * Liệt kê tường minh từng field thay vì spread `d.data()` — document Admin SDK
+ * đọc về có thể mang theo field không nằm trong type (vd: `updatedAt` là một
+ * Firestore `Timestamp`, một class instance chứ không phải plain object) mà
+ * spread sẽ vô tình mang theo. Field nào không liệt kê ở đây thì không bao giờ
+ * lọt vào object trả về — kể cả khi document có thêm field mới sau này — nên
+ * không có class instance nào có thể lọt qua Client Component boundary.
+ */
+function toResourceListItem(id: string, data: Resource): ResourceListItem {
+  return {
+    id,
+    title: data.title,
+    slug: data.slug,
+    type: data.type,
+    category: data.category,
+    tags: data.tags,
+    content: data.content,
+    videoUrl: data.videoUrl,
+    status: data.status,
+    visibility: data.visibility,
+    createdBy: data.createdBy,
+  };
+}
+
+/** Xem giải thích ở toResourceListItem() — cùng lý do, cho testDefinitions. */
+function toTestListItem(id: string, data: TestDefinition): TestListItem {
+  return {
+    id,
+    title: data.title,
+    version: data.version,
+    status: data.status,
+    isSampleContent: data.isSampleContent,
+    questions: data.questions,
+    scoring: data.scoring,
+    disclaimer: data.disclaimer,
+    updatedBy: data.updatedBy,
+  };
+}
+
+/**
  * Lọc thuần (không đụng Firestore) áp dụng visibility/category/tag rồi cắt
  * limit — tách riêng để unit-test được mà không cần mock Firebase.
  */
@@ -62,7 +101,7 @@ export async function listPublishedResources(
     .limit(FETCH_CAP)
     .get();
 
-  const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Resource) }));
+  const items = snap.docs.map((d) => toResourceListItem(d.id, d.data() as Resource));
   return filterResources(items, opts);
 }
 
@@ -83,7 +122,7 @@ export async function getResourceBySlug(
   const data = docSnap.data() as Resource;
   if (data.visibility === "student_only" && !includeStudentOnly) return null;
 
-  return { id: docSnap.id, ...data };
+  return toResourceListItem(docSnap.id, data);
 }
 
 export async function listPublishedTests(): Promise<TestListItem[]> {
@@ -91,7 +130,7 @@ export async function listPublishedTests(): Promise<TestListItem[]> {
     .collection("testDefinitions")
     .where("status", "==", "published")
     .get();
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as TestDefinition) }));
+  return snap.docs.map((d) => toTestListItem(d.id, d.data() as TestDefinition));
 }
 
 export async function getPublishedTest(testId: string): Promise<TestListItem | null> {
@@ -99,5 +138,5 @@ export async function getPublishedTest(testId: string): Promise<TestListItem | n
   if (!docSnap.exists) return null;
   const data = docSnap.data() as TestDefinition;
   if (data.status !== "published") return null;
-  return { id: docSnap.id, ...data };
+  return toTestListItem(docSnap.id, data);
 }
