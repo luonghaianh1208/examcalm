@@ -29,6 +29,6 @@ env:
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     secret: examcalm-web-app-id
     availability: [BUILD, RUNTIME]
-  - variable: NEXT_PUBLIC_RECAPTCHA_SITE_KEY
-    secret: examcalm-recaptcha-site-key
-    availability: [BUILD, RUNTIME]
+  # NEXT_PUBLIC_RECAPTCHA_SITE_KEY cố tình CHƯA khai báo: App Check chưa đăng ký
+  # reCAPTCHA Enterprise. startAppCheck() trong client.ts thoát sớm khi biến này
+  # vắng mặt, nên bỏ trống là an toàn. Thêm lại ở Spec #3 khi bật App Check.
