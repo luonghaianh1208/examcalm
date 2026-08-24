@@ -117,7 +117,7 @@ describe("AiConsentSection", () => {
     expect(screen.getByRole("checkbox")).not.toBeChecked();
   });
 
-  it("aiPublic.baseUrl coi như rỗng (enabled=false) -> hiện trạng thái chưa khả dụng, không có nút bật", async () => {
+  it("aiPublic.enabled=false (chưa cấu hình) -> hiện trạng thái chưa khả dụng, không có nút bật", async () => {
     mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
     render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
 
@@ -137,16 +137,77 @@ describe("AiConsentSection", () => {
     expect(screen.getByRole("checkbox")).not.toBeChecked();
   });
 
-  it("ghi hỏng khi tắt: hiện lỗi, KHÔNG đổi trạng thái công tắc, không xoá dữ liệu", async () => {
-    mockedUpdateDoc.mockRejectedValue(new Error("network"));
+  // Fix round 1, Finding 1: tắt phải XOÁ TRƯỚC, ghi cài đặt SAU — lời hứa
+  // "xoá vĩnh viễn" ở hộp thoại chỉ được coi là giữ đúng sau khi xoá xong
+  // thật. Test này khoá thứ tự để không bị đảo lại.
+  it("tắt: gọi deleteAllMyOutputs TRƯỚC, rồi ensureAuthReady, rồi updateDoc", async () => {
+    const order: string[] = [];
+    mockedDeleteAllMyOutputs.mockImplementation(async () => {
+      order.push("deleteAllMyOutputs");
+      return 0;
+    });
+    vi.mocked(ensureAuthReady).mockImplementation(async () => {
+      order.push("ensureAuthReady");
+    });
+    mockedUpdateDoc.mockImplementation(async () => {
+      order.push("updateDoc");
+    });
+
     const user = userEvent.setup();
     render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /tắt/i }));
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("checkbox")).not.toBeChecked());
+    expect(order).toEqual(["deleteAllMyOutputs", "ensureAuthReady", "updateDoc"]);
+  });
+
+  it("xoá phản chiếu lỗi khi tắt: báo đúng lỗi xoá, KHÔNG ghi cài đặt, công tắc vẫn ON, dialog vẫn mở để thử lại", async () => {
+    mockedDeleteAllMyOutputs.mockRejectedValueOnce(new Error("mất mạng"));
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+
+    await user.click(await screen.findByRole("checkbox"));
+    const confirmButton = await screen.findByRole("button", { name: /tắt/i });
+    await user.click(confirmButton);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/xoá/i);
     expect(screen.getByRole("checkbox")).toBeChecked();
+    expect(mockedUpdateDoc).not.toHaveBeenCalled();
+    // Dialog vẫn còn mở — bấm lại đúng nút xác nhận là thử lại toàn bộ flow.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /tắt/i }));
+
+    await waitFor(() => expect(screen.getByRole("checkbox")).not.toBeChecked());
+    expect(mockedDeleteAllMyOutputs).toHaveBeenCalledTimes(2);
+  });
+
+  it("xoá xong nhưng ghi cài đặt lỗi: dữ liệu đã xoá thật (đã gọi deleteAllMyOutputs), báo lỗi LƯU cài đặt (khác lỗi xoá), công tắc vẫn hiện ON", async () => {
+    mockedUpdateDoc.mockRejectedValue(new Error("permission-denied"));
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+
+    await user.click(await screen.findByRole("checkbox"));
+    await user.click(await screen.findByRole("button", { name: /tắt/i }));
+
+    await waitFor(() => expect(mockedDeleteAllMyOutputs).toHaveBeenCalledWith("u1"));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/lưu thay đổi/i);
+    expect(alert).not.toHaveTextContent(/xoá/i);
+    expect(screen.getByRole("checkbox")).toBeChecked();
+  });
+
+  it("ghi hỏng khi bật (đối chứng): hiện lỗi lưu, KHÔNG gọi deleteAllMyOutputs", async () => {
+    mockedUpdateDoc.mockRejectedValue(new Error("permission-denied"));
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+
+    await user.click(await screen.findByRole("checkbox"));
+    await user.click(await screen.findByRole("button", { name: /đồng ý/i }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(mockedDeleteAllMyOutputs).not.toHaveBeenCalled();
   });
 });

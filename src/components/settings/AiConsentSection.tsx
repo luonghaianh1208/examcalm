@@ -12,7 +12,12 @@ type Props = { uid: string; initialAiOptIn: boolean };
 // Đang hỏi bật hay hỏi tắt — quyết định nội dung hộp thoại xác nhận.
 type DialogMode = "turn-on" | "turn-off";
 
-const ERROR_MESSAGE = "Không thể lưu thay đổi lúc này. Bạn thử lại sau nhé.";
+// Hai thông điệp lỗi RIÊNG BIỆT — xem lý do ở handleConfirmOff bên dưới: gộp
+// chung một câu "không lưu được" cho cả lỗi xoá và lỗi ghi khiến học sinh
+// không biết bước nào thực sự thất bại, và (trước fix round 1) từng khiến màn
+// hình báo "đã xoá vĩnh viễn" trong khi thao tác xoá đã lỗi.
+const SAVE_ERROR_MESSAGE = "Không thể lưu thay đổi lúc này. Bạn thử lại sau nhé.";
+const DELETE_ERROR_MESSAGE = "Không thể xoá các phản chiếu đã lưu lúc này. Bạn thử lại sau nhé.";
 
 export function AiConsentSection({ uid, initialAiOptIn }: Props) {
   const [aiOptIn, setAiOptIn] = useState(initialAiOptIn);
@@ -56,28 +61,46 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
       setAiOptIn(true);
       setDialogMode(null);
     } catch {
-      setError(ERROR_MESSAGE);
+      setError(SAVE_ERROR_MESSAGE);
     } finally {
       setPending(false);
     }
   }
 
+  /**
+   * Fix round 1, Finding 1: XOÁ TRƯỚC, GHI CÀI ĐẶT SAU — cố ý ngược lại thứ
+   * tự "tắt rồi mới xoá" ban đầu. Xoá là nửa việc tốn kém và có thể thất bại
+   * (nhiều doc, nhiều batch — xem deleteAllMyOutputs), còn lời hứa "xoá vĩnh
+   * viễn, không thể khôi phục" ở hộp thoại chỉ được coi là đã giữ SAU KHI xoá
+   * xong thật; đảo công tắc sau đó là thao tác rẻ và idempotent.
+   *
+   * Hai nhánh lỗi vì vậy có ý nghĩa khác nhau và PHẢI báo khác nhau:
+   * - Xoá lỗi: chưa ghi gì, công tắc vẫn ON, báo đúng "chưa xoá được" — bấm
+   *   lại (còn đang ON) sẽ mở lại đúng hộp thoại tắt và thử lại toàn bộ.
+   * - Xoá xong nhưng ghi cài đặt lỗi: dữ liệu đã mất thật, AI vẫn đang bật.
+   *   Rối nhưng an toàn hơn: không có lời hứa nào bị nói dối, và bấm lại vẫn
+   *   đúng vì xoá 0 document còn lại là no-op.
+   */
   async function handleConfirmOff() {
     setPending(true);
     setError(null);
+    try {
+      await deleteAllMyOutputs(uid);
+    } catch {
+      setError(DELETE_ERROR_MESSAGE);
+      setPending(false);
+      return;
+    }
     try {
       await ensureAuthReady();
       await updateDoc(doc(getDb(), "users", uid), {
         "privacySettings.aiOptIn": false,
         updatedAt: serverTimestamp(),
       });
-      // Công tắc đã tắt xong (an toàn dù bước xoá bên dưới có lỗi) — rồi mới
-      // xoá thật toàn bộ phản chiếu đã lưu (spec §7.6: tắt là xoá, không phải ẩn).
       setAiOptIn(false);
       setDialogMode(null);
-      await deleteAllMyOutputs(uid);
     } catch {
-      setError(ERROR_MESSAGE);
+      setError(SAVE_ERROR_MESSAGE);
     } finally {
       setPending(false);
     }
@@ -103,8 +126,9 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
     <section className="rounded-xl border bg-white px-4 py-4">
       <h2 className="mb-2 font-medium">Phản chiếu AI (không bắt buộc)</h2>
       <p className="mb-3 text-slate-600">
-        Khi bật, ghi chú cảm xúc bạn viết sẽ được gửi tới một dịch vụ AI bên ngoài để tạo
-        phản chiếu. Tắt tính năng này sẽ xoá vĩnh viễn các phản chiếu đã lưu.
+        Khi bật, ghi chú cảm xúc bạn viết sẽ được gửi tới dịch vụ AI bên ngoài{" "}
+        <strong>{aiPublic.providerLabel}</strong> để tạo phản chiếu. Tắt tính năng này sẽ
+        xoá vĩnh viễn các phản chiếu đã lưu.
       </p>
 
       <label className="flex items-start gap-2">
