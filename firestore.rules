@@ -65,6 +65,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /cbtModules/{id} {
+      allow read:  if resource.data.status == "published" || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /cbtSessions/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      // Admin KHÔNG đọc được — nội dung học sinh viết về suy nghĩ tiêu cực của
+      // mình còn riêng tư hơn điểm số. Cố ý khác testAttempts.
+      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
