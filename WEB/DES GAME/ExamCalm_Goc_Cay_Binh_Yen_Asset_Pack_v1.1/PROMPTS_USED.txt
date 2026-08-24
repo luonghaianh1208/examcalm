@@ -1,0 +1,59 @@
+EXAMCALM — GÓC CÂY BÌNH YÊN
+TÓM TẮT PROMPT SẢN XUẤT ASSET
+
+Chế độ tạo: Built-in image generation, mỗi asset là một lượt tạo riêng.
+
+STYLE ANCHOR DÙNG CHUNG
+Use case: stylized-concept
+Asset type: transparent 2D game asset for ExamCalm mini-game “Góc Cây Bình Yên”
+Input images: Meo character design sheet as character/style/color reference; existing
+GrowCalm watering illustration or the latest tree stage as supporting game-art reference.
+Style/medium: polished hand-painted 2D storybook game art; warm brown linework,
+soft watercolor-like shading, rounded friendly forms, gentle pastel cream/mint/sage/
+teal/peach/lavender palette, premium but not overly childish.
+Composition/framing: one isolated asset centered on a square canvas, complete object
+visible, generous padding, clean silhouette readable at small UI size.
+Background: genuinely transparent alpha channel.
+Constraints: no text, no price badge, no frame, no unrelated character or scenery,
+no watermark, no checkerboard baked into pixels.
+
+TREE PROMPT SET
+1. Mầm nhỏ: tiny healthy sprout, exactly two mint leaves plus one emerging leaf,
+   small warm soil patch, no pot, no face.
+2. Cây non: same species, slender trunk, two branches, 7–9 leaves, no buds/flowers.
+3. Tán lá: stronger trunk, rounded leafy canopy, low branch/open sitting point for Meo.
+4. Ra nụ: same tree, fuller canopy, many closed peach-pink buds, gentle wind accents.
+5. Trưởng thành: same tree, open five-petal blossoms plus some buds and subtle sparkles.
+
+CARE ITEM PROMPT SET
+1. Giọt nước: large aqua droplet crystal with a tiny mint leaf motif inside.
+2. Nắng trong lọ: round cork jar containing a warm sunbeam and tiny sun spark.
+3. Đất dinh dưỡng: reusable mint cloth pouch filled with rich soil and seed sparkles.
+4. Chuông gió dịu: mint arch, cream/teal leaf chimes, small gold bell, peach ribbon.
+
+DECORATION PROMPT SET
+1. Cụm hoa nhỏ: peach/cream flowers and mint leaves on moss.
+2. Đá cuội: seven smooth pastel garden pebbles and a tiny moss tuft.
+3. Đèn lồng: rounded warm-wood lantern with frosted glass and pale-gold glow.
+4. Thảm Meo: oval quilted lavender/cream mat with mint edge and paw motif.
+5. Ghế gỗ nhỏ: rounded honey-wood bench with mint cushion and leaf carving.
+6. Bàn trà nhỏ: low wood table, mint teapot, cream cup and leaf coaster.
+7. Cụm nấm: five harmless rounded pastel mushrooms on moss.
+8. Hàng rào gỗ thấp: four rounded pickets with mint vine and peach blossoms.
+9. Dây đèn sao: seven warm-gold star bulbs on a muted-teal cord.
+10. Hồ nước nhỏ: shallow oval pond, smooth stones, lily pads and peach flower.
+11. Bảng gỗ trống: rounded blank garden sign with one blossom and leaf sprig.
+12. Gối mây: cream cloud cushion, lavender sides, mint piping, peach tassels.
+13. Cối xay gió mini: four pastel curved blades on a rounded wooden stake.
+14. Giỏ len của Meo: woven basket with mint, cream and peach yarn balls.
+15. Giàn hoa leo: rounded honey-wood arch with mint vines, blossoms and buds.
+
+BACKGROUND PROMPT SET
+1. Active Morning: vertical mobile garden nook, warm cream sky, mint shrubs,
+   open central moss/earth placement area, gentle morning light.
+2. Phông chiều dịu: vertical garden nook, cream-peach-lavender sunset gradient,
+   open central placement area and subtle warm motes.
+3. Sleeping Night: vertical garden nook, lavender-to-teal sky, crescent moon,
+   sparse stars and moonlit center; cozy, safe and never sad or abandoned.
+
+All backgrounds explicitly excluded the main tree, Meo, UI and movable catalog items.
