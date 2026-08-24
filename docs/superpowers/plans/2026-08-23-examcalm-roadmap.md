@@ -184,7 +184,7 @@ Những mục dưới đây **phải nằm trong Global Constraints của mọi 
 
 | # | Quy ước | Đã trả giá ở đâu |
 |---|---|---|
-| 1 | **Mọi** lời gọi Firestore/callable từ client — **kể cả hàm ĐỌC và XÓA**, không chỉ hàm ghi — phải `await ensureAuthReady()` trước | Phát hiện lại **7 lần**. Ban đầu tưởng chỉ ảnh hưởng hàm ghi; Task 23 đi bộ qua app mới lộ ra hàm đọc cũng dính: `/tien-trinh` và `/da-luu` **luôn** báo lỗi tải nếu học sinh vừa đăng nhập xong vào thẳng. Quy ước "chỉ hàm ghi" đã sai và làm sót 7 call site. |
+| 1 | **Mọi** lời gọi Firestore/callable từ client — **kể cả hàm ĐỌC và XÓA** — phải `await ensureAuthReady()` trước. **Khi viết plan mới, code mẫu PHẢI có sẵn dòng này ở mọi hàm chạm Firestore.** | Phát hiện lại **7 lần** ở Spec #1. Ở Spec #2, code mẫu trong plan lại quên nó ở hàm đọc **3 lần nữa** (Task 4, Task 7) — implementer tự phát hiện nhờ ràng buộc, nhưng lẽ ra plan không được sai ngay từ đầu. |
 | 2 | Không bao giờ `{...(d.data() as T)}` — liệt kê từng field tường minh | `Timestamp` lọt vào Client Component làm sập trang test |
 | 3 | Tải hỏng phải có trạng thái **riêng**, không gộp thành danh sách rỗng | 4 lần: MoodHistory, SavedResourceList, ProgressView, TestEditor |
 | 4 | Trang public đọc Firestore dùng `force-dynamic`, **không** `revalidate` | `npm run build` đòi có database, hỏng CI |
