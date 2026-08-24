@@ -71,13 +71,32 @@ function mapReflectionErrorMessage(err: unknown): string {
       // Tính năng đang tắt hoặc chưa cấu hình — trung tính, không đổ lỗi.
       return "Tính năng phản chiếu AI hiện chưa sẵn sàng, thử lại sau nhé.";
     case "permission-denied":
-      // Chưa bật đồng ý dùng AI — trỏ tới nơi bật, không trách học sinh.
-      return "Bạn cần bật tính năng AI trong phần Cài đặt riêng tư để dùng chức năng này.";
+      return mapPermissionDeniedMessage(err);
     case "internal":
       // Lỗi phía hệ thống — trấn an: nhật ký cảm xúc vẫn được lưu bình thường.
       return "Không thể tạo phản chiếu lúc này, nhưng nhật ký cảm xúc của bạn đã được lưu an toàn. Thử lại sau nhé.";
     default:
       return "Không thể thực hiện thao tác này lúc này, thử lại sau nhé.";
+  }
+}
+
+/**
+ * `permission-denied` gộp BA nguyên nhân khác nhau ở server (đối chiếu
+ * functions/src/ai/generateReflection.ts): email chưa xác thực, chưa bật
+ * đồng ý dùng AI, và mood log không thuộc về mình. Server gắn discriminator
+ * `details.reason` cho hai nguyên nhân đầu (Fix round 1, Finding 1) — nhánh
+ * thứ ba (ownership) CỐ Ý không kèm `details`, để không xác nhận với học sinh
+ * rằng nhật ký đó tồn tại và thuộc về người khác; nhánh đó rơi vào default
+ * bên dưới, không nhắc tới "cài đặt" (chỉ đúng cho ai_opt_in).
+ */
+function mapPermissionDeniedMessage(err: unknown): string {
+  switch (extractPermissionDeniedReason(err)) {
+    case "email_unverified":
+      return "Bạn cần xác thực email trước khi dùng tính năng này.";
+    case "ai_opt_in":
+      return "Bạn cần bật tính năng AI trong phần Cài đặt riêng tư để dùng chức năng này.";
+    default:
+      return "Bạn không thể thực hiện thao tác này, thử lại sau nhé.";
   }
 }
 
@@ -89,6 +108,17 @@ function extractFunctionsErrorCode(err: unknown): string | null {
   const code = (err as { code: unknown }).code;
   if (typeof code !== "string") return null;
   return code.startsWith("functions/") ? code.slice("functions/".length) : code;
+}
+
+// `details.reason` — discriminator ngắn do generateReflection.ts gắn vào
+// HttpsError cho permission-denied. Thiếu `details`, hình dạng sai, hoặc
+// `reason` không phải string đều trả về null (nhánh trung tính, an toàn).
+function extractPermissionDeniedReason(err: unknown): string | null {
+  if (typeof err !== "object" || err === null || !("details" in err)) return null;
+  const details = (err as { details: unknown }).details;
+  if (typeof details !== "object" || details === null || !("reason" in details)) return null;
+  const reason = (details as { reason: unknown }).reason;
+  return typeof reason === "string" ? reason : null;
 }
 
 /** Gọi callable `generateReflection` cho một moodLog. */

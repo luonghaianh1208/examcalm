@@ -121,14 +121,17 @@ describe("generateReflection", () => {
     ).rejects.toMatchObject({ code: "unauthenticated" });
   });
 
-  it("2. email chưa xác thực → permission-denied", async () => {
+  it("2. email chưa xác thực → permission-denied, details.reason = email_unverified (Fix round 1/T9 Finding 1: client cần phân biệt 3 nguyên nhân permission-denied)", async () => {
     await expect(
       runGenerateReflection(
         { uid: STUDENT_UID, emailVerified: false },
         { moodLogId: "m1" },
         makeDeps(),
       ),
-    ).rejects.toMatchObject({ code: "permission-denied" });
+    ).rejects.toMatchObject({
+      code: "permission-denied",
+      details: { reason: "email_unverified" },
+    });
   });
 
   it("3. killSwitch.moodReflection === true → failed-precondition, callChatCompletion KHÔNG được gọi", async () => {
@@ -155,7 +158,7 @@ describe("generateReflection", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
-  it("5. privacySettings.aiOptIn === false → permission-denied, callChatCompletion KHÔNG được gọi", async () => {
+  it("5. privacySettings.aiOptIn === false → permission-denied, details.reason = ai_opt_in, callChatCompletion KHÔNG được gọi", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, false);
     await setMoodLog("m1", STUDENT_UID);
@@ -163,7 +166,10 @@ describe("generateReflection", () => {
 
     await expect(
       runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps({ callChatCompletion: fake })),
-    ).rejects.toMatchObject({ code: "permission-denied" });
+    ).rejects.toMatchObject({
+      code: "permission-denied",
+      details: { reason: "ai_opt_in" },
+    });
     expect(fake).not.toHaveBeenCalled();
   });
 
@@ -194,14 +200,20 @@ describe("generateReflection", () => {
     ).rejects.toMatchObject({ code: "not-found" });
   });
 
-  it("8. mood log của người khác → permission-denied", async () => {
+  it("8. mood log của người khác → permission-denied, KHÔNG kèm details (Fix round 1/T9 Finding 1: phải không phân biệt được với từ chối chung, nếu không sẽ xác nhận document tồn tại và thuộc người khác)", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setMoodLog("m1", OTHER_UID);
 
-    await expect(
-      runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps()),
-    ).rejects.toMatchObject({ code: "permission-denied" });
+    let caught: unknown;
+    try {
+      await runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps());
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ code: "permission-denied" });
+    expect((caught as { details?: unknown }).details).toBeUndefined();
   });
 
   it("9. đường đi thuận lợi → ghi aiJournalOutputs với đủ trường, gồm providerLabel và model", async () => {

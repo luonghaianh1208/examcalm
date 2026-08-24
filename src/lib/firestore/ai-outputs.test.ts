@@ -65,6 +65,12 @@ function makeDoc(overrides: Record<string, unknown> = {}) {
     model: "gpt-4o-mini",
     userFeedback: null,
     createdAt: new MockTimestamp(new Date("2026-08-24T00:00:00Z")),
+    // Trường KHÔNG có trong AiJournalOutputRecord/aiJournalOutputSchema — cố ý để đây
+    // (Fix round 1, Finding 4). Nếu mapAiOutputDoc quay lại `{...data, id: d.id}`, trường
+    // này sẽ lọt vào kết quả và làm Object.keys(result).sort() lệch danh sách mong đợi bên
+    // dưới — nếu không có nó, fixture chỉ có đúng 12 field mô hình hoá nên spread tạo ra
+    // CÙNG một bộ khoá và guard không bắt được gì (guard xanh giả).
+    internalDebugNote: "không thuộc schema — mô phỏng field lạ trong document thật",
     ...overrides,
   };
   return {
@@ -101,10 +107,8 @@ describe("requestReflection", () => {
     expect(result).toEqual({ outputId: "out1" });
   });
 
-  async function captureMessage(code: string | Error): Promise<string> {
-    callGenerateReflectionMock.mockRejectedValue(
-      typeof code === "string" ? { code } : code,
-    );
+  async function captureMessage(rejection: unknown): Promise<string> {
+    callGenerateReflectionMock.mockRejectedValue(rejection);
     try {
       await requestReflection("m1");
       throw new Error("requestReflection lẽ ra phải throw nhưng không throw");
@@ -113,37 +117,77 @@ describe("requestReflection", () => {
     }
   }
 
-  it("resource-exhausted: thông điệp KHÔNG chứa từ 'lỗi', không phải mã thô", async () => {
-    const message = await captureMessage("functions/resource-exhausted");
+  it("resource-exhausted: thông điệp đúng nội dung 'hết lượt hôm nay', KHÔNG chứa từ 'lỗi', không phải mã thô", async () => {
+    // Fix round 1, Finding 2: bản gốc chỉ assert absence — một bug rơi về nhánh default
+    // ("Không thể thực hiện thao tác này...") vẫn KHÔNG chứa "lỗi" hay "resource-exhausted"
+    // nên test vẫn xanh dù mất đúng câu brief yêu cầu. Assertion dương ở dưới bắt được điều đó.
+    const message = await captureMessage({ code: "functions/resource-exhausted" });
+    expect(message).toContain("hết lượt phản chiếu AI");
+    expect(message).toContain("hôm nay");
     expect(message).not.toContain("lỗi");
     expect(message).not.toContain("resource-exhausted");
   });
 
   it("failed-precondition: thông điệp trung tính, không phơi mã lỗi thô", async () => {
-    const message = await captureMessage("functions/failed-precondition");
+    const message = await captureMessage({ code: "functions/failed-precondition" });
     expect(message).not.toContain("failed-precondition");
     expect(message).toMatch(/chưa sẵn sàng|đang tắt/);
   });
 
-  it("permission-denied: trỏ tới cài đặt, không trách học sinh", async () => {
-    const message = await captureMessage("functions/permission-denied");
-    expect(message).toMatch(/cài đặt|Cài đặt/);
-    expect(message).not.toContain("permission-denied");
+  describe("permission-denied — ba nguyên nhân server gộp vào một mã (Fix round 1, Finding 1)", () => {
+    it("details.reason = email_unverified → nhắc xác thực email, không nhắc cài đặt", async () => {
+      const message = await captureMessage({
+        code: "functions/permission-denied",
+        details: { reason: "email_unverified" },
+      });
+      expect(message).toMatch(/xác thực email/);
+      expect(message).not.toContain("permission-denied");
+      expect(message).not.toContain("email_unverified");
+    });
+
+    it("details.reason = ai_opt_in → trỏ tới Cài đặt riêng tư, không trách học sinh", async () => {
+      const message = await captureMessage({
+        code: "functions/permission-denied",
+        details: { reason: "ai_opt_in" },
+      });
+      expect(message).toMatch(/cài đặt|Cài đặt/);
+      expect(message).not.toContain("permission-denied");
+      expect(message).not.toContain("ai_opt_in");
+    });
+
+    it("không có details (vd mood log không thuộc về mình) → thông điệp trung tính, KHÔNG nhắc cài đặt hay email — không được xác nhận dữ liệu tồn tại", async () => {
+      const message = await captureMessage({ code: "functions/permission-denied" });
+      expect(message).not.toMatch(/cài đặt|Cài đặt/);
+      expect(message).not.toMatch(/xác thực email/);
+      expect(message).not.toContain("permission-denied");
+    });
+
+    it("details.reason lạ/không nhận diện được → rơi về nhánh trung tính, không throw runtime", async () => {
+      const message = await captureMessage({
+        code: "functions/permission-denied",
+        details: { reason: "something-unexpected" },
+      });
+      expect(message).not.toMatch(/cài đặt|Cài đặt/);
+      expect(message).not.toContain("something-unexpected");
+    });
   });
 
   it("internal: trấn an rằng nhật ký đã được lưu", async () => {
-    const message = await captureMessage("functions/internal");
+    const message = await captureMessage({ code: "functions/internal" });
     expect(message).toContain("lưu");
     expect(message).not.toContain("internal");
   });
 
   it("mã lỗi khác (vd unauthenticated) rơi vào thông điệp chung, không phơi mã hay tiếng Anh", async () => {
-    const message = await captureMessage("functions/unauthenticated");
+    const message = await captureMessage({ code: "functions/unauthenticated" });
     expect(message).not.toContain("unauthenticated");
   });
 
-  it("lỗi không có shape callable (vd network Error thô) vẫn ra thông điệp tiếng Việt an toàn", async () => {
+  it("lỗi không có shape callable (vd network Error thô) vẫn ra thông điệp tiếng Việt an toàn, đúng nội dung của nhánh mặc định", async () => {
+    // Fix round 1, Finding 3: bản gốc chỉ assert absence — một bug trả về chuỗi rỗng ("")
+    // cũng không chứa "Failed to fetch" nên test vẫn xanh. Assertion dương ở dưới bắt được điều đó.
     const message = await captureMessage(new Error("Failed to fetch"));
+    expect(message).toBe("Không thể thực hiện thao tác này lúc này, thử lại sau nhé.");
     expect(message).not.toContain("Failed to fetch");
   });
 });

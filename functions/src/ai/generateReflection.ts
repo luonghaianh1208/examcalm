@@ -156,7 +156,11 @@ export async function runGenerateReflection(
 
   // 2. Email chưa xác thực.
   if (!auth.emailVerified) {
-    throw new HttpsError("permission-denied", "Bạn cần xác thực email trước khi dùng tính năng này.");
+    throw new HttpsError(
+      "permission-denied",
+      "Bạn cần xác thực email trước khi dùng tính năng này.",
+      { reason: "email_unverified" },
+    );
   }
 
   const parsedInput = inputSchema.safeParse(data);
@@ -184,6 +188,7 @@ export async function runGenerateReflection(
     throw new HttpsError(
       "permission-denied",
       "Bạn cần bật đồng ý dùng tính năng AI trong phần cài đặt riêng tư trước.",
+      { reason: "ai_opt_in" },
     );
   }
 
@@ -197,6 +202,10 @@ export async function runGenerateReflection(
   }
   const moodLogData = moodLogSnap.data() as Record<string, unknown>;
   if (moodLogData.userId !== auth.uid) {
+    // CỐ Ý không kèm `details` — Fix round 1 (Task 9), Finding 1: nếu có discriminator riêng
+    // cho nhánh này, client sẽ biết "nhật ký này không phải của bạn", tức xác nhận document đó
+    // TỒN TẠI và thuộc về người khác. Phải giữ nhánh này không phân biệt được với một từ chối
+    // chung chung để không rò rỉ thông tin đó.
     throw new HttpsError("permission-denied", "Bạn không có quyền truy cập nhật ký này.");
   }
 
