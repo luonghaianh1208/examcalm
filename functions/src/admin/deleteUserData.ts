@@ -38,7 +38,10 @@ async function deleteQueryInBatches(
  */
 const DELETION_TARGET_HANDLERS: Record<
   string,
-  { resultKey: "attempts" | "answers" | "moods" | "favorites"; query: (targetUid: string) => FirebaseFirestore.Query }
+  {
+    resultKey: "attempts" | "answers" | "moods" | "cbtSessions" | "favorites";
+    query: (targetUid: string) => FirebaseFirestore.Query;
+  }
 > = {
   testAttempts: {
     resultKey: "attempts",
@@ -51,6 +54,10 @@ const DELETION_TARGET_HANDLERS: Record<
   moodLogs: {
     resultKey: "moods",
     query: (targetUid) => getFirestore().collection("moodLogs").where("userId", "==", targetUid),
+  },
+  cbtSessions: {
+    resultKey: "cbtSessions",
+    query: (targetUid) => getFirestore().collection("cbtSessions").where("userId", "==", targetUid),
   },
   "users/{uid}/favorites": {
     resultKey: "favorites",
@@ -95,6 +102,7 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
   const attempts = deleted.attempts ?? 0;
   const answers = deleted.answers ?? 0;
   const moods = deleted.moods ?? 0;
+  const cbtSessions = deleted.cbtSessions ?? 0;
   const favorites = deleted.favorites ?? 0;
 
   await db.collection("users").doc(targetUid).delete();
@@ -122,11 +130,11 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
     action: "deleteUserData",
     targetType: "user",
     targetId: targetUid,
-    before: { attempts, answers, moods, favorites },
+    before: { attempts, answers, moods, cbtSessions, favorites },
     after: authDeleteFailed ? { authDeleteFailed: true } : null,
   });
 
   return authDeleteFailed
-    ? { ok: true, deleted: { attempts, answers, moods, favorites }, authDeleteFailed: true }
-    : { ok: true, deleted: { attempts, answers, moods, favorites } };
+    ? { ok: true, deleted: { attempts, answers, moods, cbtSessions, favorites }, authDeleteFailed: true }
+    : { ok: true, deleted: { attempts, answers, moods, cbtSessions, favorites } };
 });
