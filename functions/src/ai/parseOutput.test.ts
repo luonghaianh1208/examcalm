@@ -78,4 +78,52 @@ describe("parseReflectionOutput", () => {
   it("case 6: chuỗi rỗng → null", () => {
     expect(parseReflectionOutput("")).toBeNull();
   });
+
+  // Fix round 1 — Finding 4 (Important): nhãn phải neo vào đầu dòng, không khớp giữa câu.
+  it("case 7: preamble chứa từ 'phản chiếu' giữa câu trước nhãn thật vẫn tách đúng bằng nhãn thật", () => {
+    const text = [
+      "Đây là một bài phản chiếu: hãy cùng xem xét.",
+      buildOutput("Nội dung phản chiếu thật.", "Câu chuyện mèo.", "Câu hỏi nhật ký."),
+    ].join("\n");
+
+    const result = parseReflectionOutput(text);
+
+    expect(result).toEqual({
+      reflectionText: "Nội dung phản chiếu thật.",
+      catStoryText: "Câu chuyện mèo.",
+      journalPrompt: "Câu hỏi nhật ký.",
+    });
+  });
+
+  it("case 8: nhãn bọc trong ** (markdown bold) vẫn nhận ra", () => {
+    const text = [
+      `**${REFLECTION_LABEL}**`,
+      "Nội dung phản chiếu.",
+      `**${CAT_STORY_LABEL}**`,
+      "Câu chuyện mèo.",
+      `**${JOURNAL_PROMPT_LABEL}**`,
+      "Câu hỏi nhật ký.",
+    ].join("\n");
+
+    const result = parseReflectionOutput(text);
+
+    expect(result).toEqual({
+      reflectionText: "Nội dung phản chiếu.",
+      catStoryText: "Câu chuyện mèo.",
+      journalPrompt: "Câu hỏi nhật ký.",
+    });
+  });
+
+  it("case 9: nhãn xuất hiện sai thứ tự → null", () => {
+    const text = [
+      CAT_STORY_LABEL,
+      "Câu chuyện mèo.",
+      REFLECTION_LABEL,
+      "Nội dung phản chiếu.",
+      JOURNAL_PROMPT_LABEL,
+      "Câu hỏi nhật ký.",
+    ].join("\n");
+
+    expect(parseReflectionOutput(text)).toBeNull();
+  });
 });

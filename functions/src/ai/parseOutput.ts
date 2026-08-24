@@ -21,29 +21,60 @@ export type ParsedReflectionOutput = {
   journalPrompt: string;
 };
 
-/** Tìm vị trí đầu tiên của `label` trong `text` kể từ `fromIndex`, không phân biệt hoa/thường. */
-function findLabelIndex(text: string, label: string, fromIndex: number): number {
-  return text.toLowerCase().indexOf(label.toLowerCase(), fromIndex);
+/** Escape các ký tự đặc biệt của regex trong một đoạn văn bản thuần. */
+function escapeRegExp(segment: string): string {
+  return segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Dựng regex khớp một nhãn, neo vào ĐẦU DÒNG (cho phép khoảng trắng/tab đầu dòng và cặp
+ * "**" markdown bold mà model hay chèn quanh nhãn), không khớp giữa câu. Đây là điều kiện
+ * bắt buộc: "phản chiếu" là một từ tiếng Việt thông thường, có thể xuất hiện tình cờ trong
+ * phần mở đầu (preamble) mà model viết thêm trước nhãn thật — nếu không neo vào đầu dòng,
+ * việc so khớp chuỗi con đơn giản sẽ bắt nhầm và làm hỏng toàn bộ phần tách.
+ */
+function buildLabelPattern(label: string): RegExp {
+  const escaped = escapeRegExp(label);
+  return new RegExp(`^[ \\t]*\\*{0,2}${escaped}\\*{0,2}`, "gim");
+}
+
+type LabelMatch = { index: number; end: number };
+
+/**
+ * Tìm lần khớp nhãn đầu tiên có vị trí bắt đầu >= `fromIndex` — dùng để buộc ba nhãn phải
+ * xuất hiện đúng thứ tự: nhãn sau không được tìm thấy ở vị trí nằm trước nội dung của nhãn
+ * trước đó.
+ */
+function findLabelFrom(text: string, label: string, fromIndex: number): LabelMatch | null {
+  const pattern = buildLabelPattern(label);
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index >= fromIndex) {
+      return { index: match.index, end: match.index + match[0].length };
+    }
+    if (match[0].length === 0) pattern.lastIndex += 1; // tránh vòng lặp vô hạn, phòng hờ
+  }
+  return null;
 }
 
 export function parseReflectionOutput(text: string): ParsedReflectionOutput | null {
-  const reflectionStart = findLabelIndex(text, REFLECTION_LABEL, 0);
-  if (reflectionStart === -1) return null;
-  const reflectionContentStart = reflectionStart + REFLECTION_LABEL.length;
+  const reflectionMatch = findLabelFrom(text, REFLECTION_LABEL, 0);
+  if (reflectionMatch === null) return null;
 
-  const catStoryStart = findLabelIndex(text, CAT_STORY_LABEL, reflectionContentStart);
-  if (catStoryStart === -1) return null;
-  const catStoryContentStart = catStoryStart + CAT_STORY_LABEL.length;
+  // Ba nhãn phải xuất hiện đúng thứ tự: mỗi lần tìm nhãn tiếp theo chỉ chấp nhận vị trí
+  // từ cuối nhãn trước trở đi — nhãn nằm trước đó (thứ tự sai) sẽ không được tìm thấy,
+  // trả về null thay vì tách sai.
+  const catStoryMatch = findLabelFrom(text, CAT_STORY_LABEL, reflectionMatch.end);
+  if (catStoryMatch === null) return null;
 
-  const journalPromptStart = findLabelIndex(text, JOURNAL_PROMPT_LABEL, catStoryContentStart);
-  if (journalPromptStart === -1) return null;
-  const journalPromptContentStart = journalPromptStart + JOURNAL_PROMPT_LABEL.length;
+  const journalPromptMatch = findLabelFrom(text, JOURNAL_PROMPT_LABEL, catStoryMatch.end);
+  if (journalPromptMatch === null) return null;
 
   // Văn bản thừa trước nhãn đầu tiên tự động bị bỏ qua vì reflectionText chỉ lấy từ sau
-  // reflectionContentStart trở đi, không bao giờ nhìn về phía trước reflectionStart.
-  const reflectionText = text.slice(reflectionContentStart, catStoryStart).trim();
-  const catStoryText = text.slice(catStoryContentStart, journalPromptStart).trim();
-  const journalPrompt = text.slice(journalPromptContentStart).trim();
+  // reflectionMatch.end trở đi, không bao giờ nhìn về phía trước reflectionMatch.index.
+  const reflectionText = text.slice(reflectionMatch.end, catStoryMatch.index).trim();
+  const catStoryText = text.slice(catStoryMatch.end, journalPromptMatch.index).trim();
+  const journalPrompt = text.slice(journalPromptMatch.end).trim();
 
   if (reflectionText === "" || catStoryText === "" || journalPrompt === "") return null;
 
