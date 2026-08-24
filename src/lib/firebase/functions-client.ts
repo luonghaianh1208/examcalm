@@ -94,3 +94,25 @@ export async function callGenerateReflection(
   const result = await fn({ moodLogId });
   return result.data;
 }
+
+/**
+ * Khớp response thật của Cloud Function `testAiConnection`
+ * (functions/src/ai/testConnection.ts): admin-only, gửi một prompt cố định ngắn để kiểm tra
+ * baseUrl/model/API key đã cắm đúng chưa. Trả về `ok: false` kèm `kind`/`message` đã được
+ * sanitise cho lỗi provider — KHÔNG BAO GIỜ raw response text, header, baseUrl hay API key.
+ */
+export type TestAiConnectionResult =
+  | { ok: true }
+  | { ok: false; kind: string; message: string };
+
+export async function callTestAiConnection(): Promise<TestAiConnectionResult> {
+  // Đóng race giống callSetUserRole/callDeleteUserData/callGenerateReflection ở trên — xem
+  // giải thích ensureAuthReady() ở client.ts.
+  await ensureAuthReady();
+  const fn = httpsCallable<Record<string, never>, TestAiConnectionResult>(
+    functionsInstance(),
+    "testAiConnection",
+  );
+  const result = await fn({});
+  return result.data;
+}

@@ -25,7 +25,11 @@ const AI_OUTPUT = {
 const USAGE = { userId: "u1", period: "2026-08", count: 3, updatedAt: new Date() };
 
 const AI_CONFIG = { baseUrl: "https://api.example.com", quota: 1000, rateLimitPerMin: 10 };
-const AI_PUBLIC = { providerName: "OpenAI" };
+// Field name và shape đúng ("providerLabel" + "enabled") khớp
+// src/lib/firestore/ai-public.ts (AiPublicConfig) — Task 12, Decision B: fixture cũ dùng
+// "providerName" (sai tên) và thiếu "enabled", không bị test này bắt vì Security Rules không
+// kiểm tra hình dạng document, nhưng nó ghi sai hợp đồng dữ liệu thật cho người đọc sau.
+const AI_PUBLIC = { providerLabel: "OpenAI", enabled: true };
 
 const PROMPT_TEMPLATE = { id: "pt1", text: "Hãy phản chiếu suy nghĩ sau...", version: 1 };
 

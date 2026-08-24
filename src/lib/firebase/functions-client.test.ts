@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { callDeleteUserData, callGenerateReflection } from "./functions-client";
+import { callDeleteUserData, callGenerateReflection, callTestAiConnection } from "./functions-client";
 import { ensureAuthReady } from "./client";
 import { httpsCallable } from "firebase/functions";
 
@@ -101,5 +101,41 @@ describe("callGenerateReflection", () => {
     await expect(callGenerateReflection("m1")).rejects.toEqual({
       code: "functions/resource-exhausted",
     });
+  });
+});
+
+describe("callTestAiConnection", () => {
+  it("gọi ensureAuthReady TRƯỚC khi gọi callable — đóng race lúc mới đăng nhập", async () => {
+    const order: string[] = [];
+    vi.mocked(ensureAuthReady).mockImplementation(async () => {
+      order.push("ensureAuthReady");
+    });
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => {
+      order.push("httpsCallable");
+      return { data: { ok: true } };
+    }));
+
+    await callTestAiConnection();
+
+    expect(order).toEqual(["ensureAuthReady", "httpsCallable"]);
+  });
+
+  it("gọi callable testAiConnection và trả về nguyên kết quả thành công", async () => {
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => ({ data: { ok: true } })));
+
+    const result = await callTestAiConnection();
+
+    expect(mockedHttpsCallable).toHaveBeenCalledWith(expect.anything(), "testAiConnection");
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("chuyển tiếp kết quả thất bại đã được sanitise, không throw", async () => {
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => ({
+      data: { ok: false, kind: "auth", message: "Xác thực với AI provider thất bại." },
+    })));
+
+    const result = await callTestAiConnection();
+
+    expect(result).toEqual({ ok: false, kind: "auth", message: "Xác thực với AI provider thất bại." });
   });
 });
