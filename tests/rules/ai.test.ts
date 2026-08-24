@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, beforeEach, describe, it } from "vitest";
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { createTestEnv, authedDb, adminDb, guestDb, seed } from "./helpers";
 
 let env: RulesTestEnvironment;
@@ -97,46 +97,98 @@ describe("aiJournalOutputs/{id}", () => {
 
   // --- Fix round 1 / Finding 1+2: hasOnly() phải khoá TOÀN BỘ field khác,
   // không chỉ 2 field từng bị pin riêng lẻ (userId, reflectionText). ---
+  //
+  // Fix round 2 / Finding A: mỗi test tampering dưới đây PHẢI đi kèm một
+  // userFeedback hợp lệ ("helpful"). Nếu không, request KHÔNG BAO GIỜ đi tới
+  // nhánh hasOnly() — nó đã bị chặn sớm bởi nhánh enum (vì fixture seed
+  // userFeedback: null, và field tampering không tự đặt userFeedback nên
+  // request.resource.data.userFeedback vẫn là null, không nằm trong
+  // ["helpful","not_helpful"]). Ghép thêm userFeedback hợp lệ để nhánh enum
+  // PASS, buộc hasOnly() là nhánh duy nhất còn lại có thể từ chối — đây chính
+  // là cách chứng minh hasOnly() thật sự "guard" chứ không phải test giả xanh.
 
-  it("update sửa catStoryText (nội dung AI-generated) bị từ chối", async () => {
+  it("update sửa catStoryText (nội dung AI-generated) bị từ chối dù kèm userFeedback hợp lệ", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
     await assertFails(
-      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { catStoryText: "câu chuyện giả mạo" }),
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), {
+        catStoryText: "câu chuyện giả mạo",
+        userFeedback: "helpful",
+      }),
     );
   });
 
-  it("update sửa journalPrompt (nội dung AI-generated) bị từ chối", async () => {
+  it("update sửa journalPrompt (nội dung AI-generated) bị từ chối dù kèm userFeedback hợp lệ", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
     await assertFails(
-      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { journalPrompt: "prompt giả mạo" }),
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), {
+        journalPrompt: "prompt giả mạo",
+        userFeedback: "helpful",
+      }),
     );
   });
 
-  it("update sửa promptTemplateId (dấu vết provenance) bị từ chối", async () => {
+  it("update sửa promptTemplateId (dấu vết provenance) bị từ chối dù kèm userFeedback hợp lệ", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
     await assertFails(
-      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { promptTemplateId: "pt-khac" }),
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), {
+        promptTemplateId: "pt-khac",
+        userFeedback: "helpful",
+      }),
     );
   });
 
-  it("update sửa createdAt (dấu vết provenance) bị từ chối", async () => {
+  it("update sửa createdAt (dấu vết provenance) bị từ chối dù kèm userFeedback hợp lệ", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
     await assertFails(
-      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { createdAt: new Date("2020-01-01") }),
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), {
+        createdAt: new Date("2020-01-01"),
+        userFeedback: "helpful",
+      }),
     );
   });
 
-  it("update thêm field lạ ngoài schema bị từ chối", async () => {
+  it("update thêm field lạ ngoài schema bị từ chối dù kèm userFeedback hợp lệ", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
     await assertFails(
-      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { hacked: true }),
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), {
+        hacked: true,
+        userFeedback: "helpful",
+      }),
     );
   });
 
-  it("update userFeedback giá trị ngoài enum (\"helpful\" | \"not_helpful\") bị từ chối", async () => {
+  it("update userFeedback giá trị ngoài enum (\"helpful\" | \"not_helpful\" | null) bị từ chối", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
     await assertFails(
       updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { userFeedback: "spam-giá-trị-lạ" }),
+    );
+  });
+
+  // --- Fix round 2 / Finding B: aiJournalOutputSchema (src/lib/types/ai.ts:79)
+  // khai báo userFeedback là "helpful" | "not_helpful" | null — null là trạng
+  // thái "chưa đánh giá" ban đầu do Cloud Function ghi. Học sinh phải rút lại
+  // đánh giá được (quay về null), không thì một khi đã bấm helpful/not_helpful
+  // thì kẹt vĩnh viễn giữa hai giá trị đó. ---
+
+  it("chủ sở hữu update được để RÚT LẠI đánh giá, đặt userFeedback về null", async () => {
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "aiJournalOutputs/o1"), { ...AI_OUTPUT, userFeedback: "helpful" });
+    });
+    await assertSucceeds(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { userFeedback: null }),
+    );
+  });
+
+  it("update xoá hẳn field userFeedback (deleteField) bị từ chối — phải ghi null tường minh", async () => {
+    // aiJournalOutputSchema chấp nhận null nhưng KHÔNG chấp nhận field vắng
+    // mặt hoàn toàn — client phải luôn ghi { userFeedback: null } tường minh
+    // để giữ document đúng shape schema (không phát sinh document thiếu field
+    // mà code đọc dữ liệu phải xử lý "undefined" như một case riêng).
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "aiJournalOutputs/o1"), { ...AI_OUTPUT, userFeedback: "helpful" });
+    });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { userFeedback: deleteField() }),
     );
   });
 

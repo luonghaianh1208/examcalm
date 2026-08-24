@@ -178,9 +178,11 @@ Khoá theo ngày để tự hết hạn về mặt logic, không cần job dọn
 ```js
 match /aiJournalOutputs/{id} {
   allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-  allow update: if isSignedIn() && resource.data.userId == request.auth.uid
-                && request.resource.data.userId == resource.data.userId
-                && request.resource.data.reflectionText == resource.data.reflectionText;
+  allow update: if isSignedIn()
+                && resource.data.userId == request.auth.uid
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["userFeedback"])
+                && (request.resource.data.userFeedback == null
+                    || request.resource.data.userFeedback in ["helpful", "not_helpful"]);
   allow create: if false;   // chỉ Cloud Function (Admin SDK)
 }
 // create ở lại function-only (Cloud Function ghi qua Admin SDK, bỏ qua rules);
@@ -193,7 +195,7 @@ match /promptTemplates/{id}{ allow read, write: if isAdmin(); }
 
 **Admin KHÔNG đọc được `aiJournalOutputs`** — cùng lý do không đọc được `moodLogs`: nó chứa phản chiếu về ghi chú riêng tư của học sinh.
 
-`update` chỉ mở đúng một khe: học sinh bấm "hữu ích / không hữu ích". Ràng buộc `reflectionText` không đổi để không ai sửa được nội dung AI đã sinh — cùng bài học với lỗ hổng đổi `userId` ở `moodLogs`.
+`update` chỉ mở đúng một khe: học sinh bấm "hữu ích / không hữu ích" (hoặc rút lại đánh giá, quay về `null`). Dùng `diff().affectedKeys().hasOnly([...])` để khoá TOÀN BỘ field khác trong một biểu thức — không chỉ pin `userId`/`reflectionText` riêng lẻ mà bỏ ngỏ các field AI-generated khác (`catStoryText`, `journalPrompt`) hay field provenance (`promptTemplateId`, `promptVersion`, `providerLabel`, `model`, `createdAt`). Bài học từ vòng review đầu: pin từng field theo kiểu lỗ hổng `userId` ở `moodLogs` không đủ — phải khoá toàn bộ diff. `userFeedback` chấp nhận cả `null` vì đó là trạng thái "chưa đánh giá" ban đầu trong `aiJournalOutputSchema` (`src/lib/types/ai.ts:79`) — thiếu nhánh này, học sinh bấm helpful/not_helpful một lần là kẹt vĩnh viễn, không rút lại được.
 
 ---
 

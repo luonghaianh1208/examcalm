@@ -94,10 +94,14 @@ service cloud.firestore {
       // providerLabel, model, createdAt, hay field lạ tự thêm vào). Nếu chỉ
       // pin từng field như bài học moodLogs.userId thì các field AI-generated
       // khác vẫn bị ghi đè được — bài học rút ra sau round review đầu.
+      // userFeedback chấp nhận cả null — đó là trạng thái "chưa đánh giá" ban
+      // đầu trong aiJournalOutputSchema, nên học sinh phải rút lại đánh giá
+      // được (quay về null), không thể kẹt vĩnh viễn giữa helpful/not_helpful.
       allow update: if isSignedIn()
                     && resource.data.userId == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["userFeedback"])
-                    && request.resource.data.userFeedback in ["helpful", "not_helpful"];
+                    && (request.resource.data.userFeedback == null
+                        || request.resource.data.userFeedback in ["helpful", "not_helpful"]);
     }
 
     // aiUsage: sổ đếm quota gọi AI. Học sinh đọc được thì không sao nhưng
