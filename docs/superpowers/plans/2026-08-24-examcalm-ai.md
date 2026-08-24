@@ -346,14 +346,22 @@ Thứ tự kiểm tra **bắt buộc theo đúng danh sách này** — mỗi bư
 3. **`killSwitch.moodReflection === true` → `failed-precondition`, và `callChatCompletion` KHÔNG được gọi.** Test này là bằng chứng kill switch hoạt động thật. Nó bắt buộc phải tồn tại — spec design §8 nêu đích danh.
 4. **`aiConfig.baseUrl` rỗng (chưa cấu hình) → `failed-precondition`, không gọi mạng.** Trạng thái mặc định của hệ thống là im lặng.
 5. **`privacySettings.aiOptIn === false` → `permission-denied`, và `callChatCompletion` KHÔNG được gọi.** Đây là lời hứa cốt lõi với học sinh; test phải chứng minh không một byte nào rời đi.
-6. Quota hết → `resource-exhausted`, không gọi mạng.
-7. `moodLogId` không tồn tại → `not-found`.
-8. **Mood log của người khác → `permission-denied`.** Callable chạy bằng Admin SDK nên Security Rules không bảo vệ nó; phải tự so `moodLog.userId === auth.uid`. Bỏ sót chỗ này là lỗ hổng đọc nhật ký người khác.
+6. `moodLogId` không tồn tại → `not-found`.
+7. **Mood log của người khác → `permission-denied`.** Callable chạy bằng Admin SDK nên Security Rules không bảo vệ nó; phải tự so `moodLog.userId === auth.uid`. Bỏ sót chỗ này là lỗ hổng đọc nhật ký người khác.
+8. Quota hết → `resource-exhausted`, không gọi mạng.
 9. Đường đi thuận lợi → ghi `aiJournalOutputs` với đủ trường, gồm `providerLabel` và `model` đã dùng.
 10. **`checkOutputSafety` trả `safe: false` → KHÔNG ghi `aiJournalOutputs`**, ném `internal` với thông điệp trung tính, và ghi một bản ghi vào `aiSafetyLog` cho admin xem.
 11. `parseReflectionOutput` trả `null` → không ghi, ném `internal`.
 12. `callChatCompletion` ném `AiProviderError` → callable ném `internal` với **thông điệp không lộ `baseUrl` và không lộ key**. Test khẳng định `baseUrl` không xuất hiện trong lỗi trả về client.
-13. **Quota chỉ bị trừ khi thực sự gọi model.** Test: kill switch bật → `aiUsage` không đổi.
+13. **Quota chỉ bị trừ khi một request đã thật sự được phát ra provider.**
+
+> **Sửa ngày 2026-08-24 — bản đầu của mục 13 sai.** Nó viết "chỉ bị trừ khi thực sự gọi model" nhưng thứ tự phía trên lại đặt quota **trên** not-found và ownership, nên bất biến đó không thể đạt được cho hai đường đó nếu không có rollback. Thứ tự đã được sửa: `consumeQuota` nằm ngay **trước** `callChatCompletion`.
+>
+> Quota đo **số lần thử có thể tốn tiền**. Not-found và ownership không bao giờ tới provider nên trừ là thuần gây hại — học sinh gửi ba `moodLogId` rác là tự khoá mình cả ngày. Lỗi provider, output không an toàn, và output không parse được đều đi sau một request đã phát ra và có thể đã bị tính tiền, nên vẫn trừ.
+>
+> Đánh đổi được chấp nhận có ý thức: provider hỏng vài phút có thể đốt hết lượt trong ngày của một học sinh mà em không nhận được gì. Chiều ngược lại — retry miễn phí vào một provider đang hỏng — là lỗ thủng chi phí trong một dự án mà chủ dự án tự trả tiền.
+
+Test: `aiUsage` **không đổi** khi `moodLogId` không tồn tại và khi mood log thuộc người khác; `aiUsage` **có** bị trừ khi lời gọi provider thất bại.
 
 - [ ] **Step 2: Chạy — xác nhận thất bại đúng lý do**
 - [ ] **Step 3: Viết code cho test pass**
