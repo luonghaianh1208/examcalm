@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listMyAttempts, type AttemptRecord } from "@/lib/firestore/attempts";
 import { listMyMoodLogs, type MoodRecord } from "@/lib/firestore/moods";
+import { listMyCbtSessions, type CbtSessionRecord } from "@/lib/firestore/cbt-sessions";
 import { summarizeMood, pairBeforeAfter } from "@/lib/progress";
 
 const dateFormatter = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" });
@@ -12,9 +13,11 @@ export function ProgressView({ uid }: { uid: string }) {
   const [attemptsFailed, setAttemptsFailed] = useState(false);
   const [moods, setMoods] = useState<MoodRecord[] | null>(null);
   const [moodsFailed, setMoodsFailed] = useState(false);
+  const [cbtSessions, setCbtSessions] = useState<CbtSessionRecord[] | null>(null);
+  const [cbtFailed, setCbtFailed] = useState(false);
 
-  // Hai section (lịch sử test, cảm xúc) độc lập với nhau: nếu một fetch lỗi,
-  // section kia vẫn hiển thị bình thường thay vì cả trang cùng báo lỗi —
+  // Ba section (lịch sử test, cảm xúc, CBT) độc lập với nhau: nếu một fetch lỗi,
+  // các section kia vẫn hiển thị bình thường thay vì cả trang cùng báo lỗi —
   // nên mỗi fetch giữ trạng thái lỗi riêng, không dùng chung một cờ.
   const loadAttempts = useCallback(() => {
     listMyAttempts(uid)
@@ -34,6 +37,15 @@ export function ProgressView({ uid }: { uid: string }) {
       .catch(() => setMoodsFailed(true));
   }, [uid]);
 
+  const loadCbt = useCallback(() => {
+    listMyCbtSessions(uid)
+      .then((result) => {
+        setCbtSessions(result);
+        setCbtFailed(false);
+      })
+      .catch(() => setCbtFailed(true));
+  }, [uid]);
+
   useEffect(() => {
     loadAttempts();
   }, [loadAttempts]);
@@ -41,6 +53,10 @@ export function ProgressView({ uid }: { uid: string }) {
   useEffect(() => {
     loadMoods();
   }, [loadMoods]);
+
+  useEffect(() => {
+    loadCbt();
+  }, [loadCbt]);
 
   const summary = moods === null ? null : summarizeMood(moods);
   const pairs = moods === null ? [] : pairBeforeAfter(moods);
@@ -98,6 +114,40 @@ export function ProgressView({ uid }: { uid: string }) {
           </ul>
         </section>
       )}
+
+      <section>
+        <h2 className="mb-3 text-lg font-medium">Bài tập CBT đã làm</h2>
+        {cbtFailed ? (
+          <div className="rounded-xl bg-amber-50 px-4 py-6 text-amber-900">
+            <p>
+              Chưa tải được lịch sử bài tập CBT lúc này — có thể do mạng chập chờn thôi.
+              Những gì bạn đã làm vẫn còn nguyên, không mất đâu.
+            </p>
+            <button
+              type="button"
+              onClick={loadCbt}
+              className="mt-3 rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-900"
+            >
+              Thử tải lại
+            </button>
+          </div>
+        ) : cbtSessions === null ? (
+          <div aria-busy="true" className="h-24 animate-pulse rounded-xl bg-slate-200" />
+        ) : cbtSessions.length === 0 ? (
+          <p className="rounded-xl bg-slate-100 px-4 py-6 text-slate-600">Bạn chưa làm bài tập nào.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {cbtSessions.map((s) => (
+              <li key={s.id} className="flex items-baseline justify-between rounded-xl bg-white px-4 py-3">
+                <span>{s.summary || "Không có ghi chú"}</span>
+                <span className="text-sm text-slate-500">
+                  {s.createdAt ? dateFormatter.format(s.createdAt) : "Đang đồng bộ…"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section>
         <h2 className="mb-3 text-lg font-medium">Lịch sử làm test</h2>

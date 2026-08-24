@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { ProgressView } from "./ProgressView";
 import { listMyAttempts } from "@/lib/firestore/attempts";
 import { listMyMoodLogs } from "@/lib/firestore/moods";
+import { listMyCbtSessions } from "@/lib/firestore/cbt-sessions";
 import type { AttemptRecord } from "@/lib/firestore/attempts";
 import type { MoodRecord } from "@/lib/firestore/moods";
 
@@ -12,9 +13,13 @@ vi.mock("@/lib/firestore/attempts", () => ({
 vi.mock("@/lib/firestore/moods", () => ({
   listMyMoodLogs: vi.fn(),
 }));
+vi.mock("@/lib/firestore/cbt-sessions", () => ({
+  listMyCbtSessions: vi.fn(),
+}));
 
 const mockedListMyAttempts = vi.mocked(listMyAttempts);
 const mockedListMyMoodLogs = vi.mocked(listMyMoodLogs);
+const mockedListMyCbtSessions = vi.mocked(listMyCbtSessions);
 
 const attempt: AttemptRecord = {
   id: "a1", userId: "u1", testId: "t1", testVersion: 1,
@@ -33,6 +38,12 @@ function mood(over: Partial<MoodRecord>): MoodRecord {
 beforeEach(() => {
   mockedListMyAttempts.mockReset();
   mockedListMyMoodLogs.mockReset();
+  mockedListMyCbtSessions.mockReset();
+  // Giá trị mặc định để các test chỉ quan tâm một mục (CBT) không cần khai
+  // báo lại hai mục còn lại; test nào cần hành vi khác tự ghi đè bên trong.
+  mockedListMyAttempts.mockResolvedValue([]);
+  mockedListMyMoodLogs.mockResolvedValue([]);
+  mockedListMyCbtSessions.mockResolvedValue([]);
 });
 
 describe("ProgressView", () => {
@@ -101,5 +112,20 @@ describe("ProgressView", () => {
     });
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/streak|chuỗi ngày|liên tiếp|cải thiện|hiệu quả/i);
+  });
+
+  it("hiện danh sách CBT đã làm", async () => {
+    mockedListMyCbtSessions.mockResolvedValueOnce([
+      { id: "s1", moduleId: "m1", moduleVersion: 1, answers: {}, summary: "Mình khắt khe quá", createdAt: new Date("2026-08-20") },
+    ]);
+    render(<ProgressView uid="u1" />);
+    expect(await screen.findByText(/mình khắt khe quá/i)).toBeInTheDocument();
+  });
+
+  it("tải CBT hỏng hiện lỗi riêng, không hiện như chưa làm bài nào", async () => {
+    mockedListMyCbtSessions.mockRejectedValueOnce(new Error("offline"));
+    render(<ProgressView uid="u1" />);
+    expect(await screen.findByText(/chưa tải được/i)).toBeInTheDocument();
+    expect(screen.queryByText(/chưa làm bài tập nào/i)).not.toBeInTheDocument();
   });
 });
