@@ -33,6 +33,18 @@ describe("aiConfigSchema", () => {
     expect(aiConfigSchema.safeParse(loopback).success).toBe(true);
   });
 
+  it("từ chối host giả dạng localhost/127.0.0.1 (lookalike host trên Internet)", () => {
+    // "localhost.evil.com" và "127.0.0.1.evil.com" là host Internet bình
+    // thường chỉ TÌNH CỜ bắt đầu bằng tên loopback — không phải máy nội bộ.
+    // Test này chốt hành vi hiện tại để một lần sửa regex sau này không
+    // âm thầm mở lỗ hổng bypass https.
+    const fakeLocalhost = { ...VALID_AI_CONFIG, baseUrl: "http://localhost.evil.com/v1" };
+    expect(aiConfigSchema.safeParse(fakeLocalhost).success).toBe(false);
+
+    const fakeLoopback = { ...VALID_AI_CONFIG, baseUrl: "http://127.0.0.1.evil.com/v1" };
+    expect(aiConfigSchema.safeParse(fakeLoopback).success).toBe(false);
+  });
+
   it("từ chối baseUrl không phải URL", () => {
     const bad = { ...VALID_AI_CONFIG, baseUrl: "khong-phai-url" };
     expect(aiConfigSchema.safeParse(bad).success).toBe(false);
@@ -93,6 +105,13 @@ describe("DEFAULT_AI_CONFIG", () => {
     expect(DEFAULT_AI_CONFIG.baseUrl).toBe("");
     expect(DEFAULT_AI_CONFIG.model).toBe("");
     expect(DEFAULT_AI_CONFIG.killSwitch.moodReflection).toBe(true);
+  });
+
+  it("tự khớp với aiConfigSchema của chính nó", () => {
+    // Đây là fix thật sự: hằng số mặc định phải luôn parse được bằng schema
+    // mà nó khai báo kiểu — nếu không, action "reset về mặc định" hay
+    // fallback "chưa cấu hình" ở task sau sẽ ném ZodError bất ngờ.
+    expect(aiConfigSchema.safeParse(DEFAULT_AI_CONFIG).success).toBe(true);
   });
 });
 

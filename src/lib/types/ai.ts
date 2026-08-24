@@ -8,18 +8,29 @@ const LOCAL_HTTP_BASE_URL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/;
 export const aiConfigSchema = z.object({
   // Tên provider hiển thị cho học sinh ở màn hình đồng ý — không phải giá trị bí mật.
   providerLabel: z.string(),
+  // "" là sentinel "chưa cấu hình" (giống model rỗng bên dưới) — DEFAULT_AI_CONFIG
+  // dùng giá trị này nên bản thân schema phải chấp nhận nó, không thì hằng số
+  // mặc định sẽ tự làm hỏng chính schema của nó khi có ai parse lại sau này.
   baseUrl: z
     .string()
-    .url()
-    .refine((url) => url.startsWith("https://") || LOCAL_HTTP_BASE_URL.test(url), {
-      message: "baseUrl phải dùng https:// (trừ http://localhost hoặc http://127.0.0.1)",
-    }),
+    .refine(
+      (url) =>
+        url === "" ||
+        (z.string().url().safeParse(url).success &&
+          (url.startsWith("https://") || LOCAL_HTTP_BASE_URL.test(url))),
+      {
+        message:
+          "baseUrl phải rỗng (chưa cấu hình) hoặc dùng https:// (trừ http://localhost hoặc http://127.0.0.1)",
+      },
+    ),
   model: z.string(),
   temperature: z.number().min(0).max(1),
   // Trần cứng 2000 token — phanh chi phí không sửa được từ Admin console.
   // Một phản chiếu 2–4 câu không cần hơn.
   maxTokens: z.number().int().min(0).max(2000),
-  // 0 nghĩa là tắt quota (không giới hạn theo ngày).
+  // CHÚ Ý CHIỀU: 0 nghĩa là KHÔNG học sinh nào được gọi AI trong ngày —
+  // KHÔNG PHẢI "không giới hạn". Khớp với DEFAULT_AI_CONFIG = 0 (hệ thống
+  // mặc định im lặng). Admin muốn nới quota thì nhập một số dương.
   quotaStudentPerDay: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().min(0),
   killSwitch: z.object({
