@@ -1,0 +1,152 @@
+import { describe, it, expect } from "vitest";
+import { aiConfigSchema as srcSchema, DEFAULT_AI_CONFIG as srcDefault } from "@/lib/types/ai";
+// functions/ không import được từ src/ ở RUNTIME (tsconfig + build tách biệt hoàn toàn cho
+// Cloud Functions, xem comment đầu functions/src/ai/config.ts) — nhưng đây là công cụ TEST chạy
+// trên máy phát triển, không phải mã chạy production của app Next.js hay của Cloud Function nào,
+// nên import chéo bằng đường dẫn tương đối ở ĐÂY là an toàn: nó không lọt vào bundle Next.js
+// (next build không đụng tới *.test.ts) và không lọt vào `functions/lib` (tsc của functions/
+// biên dịch riêng, không biết gì tới file này).
+import {
+  aiConfigSchema as functionsSchema,
+  DEFAULT_AI_CONFIG as functionsDefault,
+  AI_CONFIG_FIELD_KEYS,
+} from "../../../functions/src/ai/config";
+
+/**
+ * Task 13 (R2 — ruling của reviewer trước khi spec bắt đầu): `functions/src/ai/config.ts` là
+ * bản MIRROR THỦ CÔNG của `aiConfigSchema` (src/lib/types/ai.ts) — không có cách nào import
+ * chéo ở runtime, nên hai bản dễ lệch nhau theo thời gian nếu chỉ một bên được sửa. Test này
+ * canh giữ đúng bất biến đó.
+ *
+ * PHẠM VI — những gì test này BẮT ĐƯỢC:
+ *  1. Field bị thêm/xoá ở một trong hai bên (so trực tiếp tập tên field top-level).
+ *  2. Field lồng bị thêm/xoá bên trong `killSwitch` (so trực tiếp tập tên field của
+ *     `killSwitch.shape`).
+ *  3. RÀNG BUỘC bị lệch (vd: `maxTokens` được nới trần lên 3000 ở một bên, hay khoảng hợp lệ của
+ *     `temperature` bị đổi) — bằng cách chạy CÙNG một bộ giá trị "probe" (biên hợp lệ/không hợp
+ *     lệ đã biết) qua CẢ HAI schema và khẳng định hai bên LUÔN đồng ý (cùng accept hoặc cùng
+ *     reject). Nếu một bên đổi ràng buộc mà bên kia không đổi theo, ít nhất một probe sẽ lệch.
+ *  4. `DEFAULT_AI_CONFIG` lệch giá trị giữa hai bên (so sánh sâu toàn bộ object).
+ *  5. Field lồng MỚI được thêm dưới dạng BẮT BUỘC ở một bên (mọi probe dưới đây đều dùng
+ *     `killSwitch: { moodReflection: ... }` KHÔNG kèm field nào khác — nếu một bên thêm một field
+ *     con bắt buộc mới, TOÀN BỘ probe sẽ lệch ở bên đó vì thiếu field bắt buộc).
+ *
+ * PHẠM VI — những gì test này KHÔNG bắt được (nêu rõ theo yêu cầu task-13-brief.md):
+ *  - Một field lồng MỚI được thêm dưới dạng TÙY CHỌN (optional) chỉ ở một bên: probe tối thiểu ở
+ *    trên vẫn parse thành công ở cả hai bên (field tùy chọn không có cũng hợp lệ), nên không lệch
+ *    và không bị phát hiện.
+ *  - Field top-level MỚI được thêm dưới dạng tùy chọn ở một bên: tương tự, `Object.keys(shape)`
+ *    của test #1 SẼ bắt được (vì so tên field, không quan tâm required/optional) — nhưng nếu có
+ *    một cách thêm field mà không hiện trong `.shape` (không có trong thiết kế zod hiện tại) thì
+ *    sẽ lọt qua.
+ *  - Bất kỳ lệch nào KHÔNG thể hiện qua hành vi `safeParse`/`.shape` (vd: khác nhau về comment,
+ *    thứ tự khai báo, hay logic nằm ngoài schema — không có trường hợp nào như vậy hiện tại).
+ */
+
+const BASE_VALID: {
+  providerLabel: string;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  quotaStudentPerDay: number;
+  rateLimitPerMinute: number;
+  killSwitch: { moodReflection: boolean };
+} = {
+  providerLabel: "DeepSeek",
+  baseUrl: "https://api.deepseek.com/v1",
+  model: "deepseek-chat",
+  temperature: 0.7,
+  maxTokens: 500,
+  quotaStudentPerDay: 5,
+  rateLimitPerMinute: 3,
+  killSwitch: { moodReflection: true },
+};
+
+/** Mỗi probe là một override ĐÈ LÊN BASE_VALID cho đúng một field — cố tình chọn giá trị biên
+ *  (ngay tại/sát trần, sát 0, sai kiểu) vì đó là nơi một ràng buộc bị nới/siết sẽ lộ ra ngay lập
+ *  tức qua kết quả safeParse khác nhau giữa hai schema. */
+const PROBES: { label: string; override: Record<string, unknown> }[] = [
+  { label: "temperature = -0.01 (dưới biên)", override: { temperature: -0.01 } },
+  { label: "temperature = 0 (biên dưới hợp lệ)", override: { temperature: 0 } },
+  { label: "temperature = 1 (biên trên hợp lệ)", override: { temperature: 1 } },
+  { label: "temperature = 1.01 (trên biên)", override: { temperature: 1.01 } },
+
+  { label: "maxTokens = -1", override: { maxTokens: -1 } },
+  { label: "maxTokens = 0 (biên dưới hợp lệ)", override: { maxTokens: 0 } },
+  { label: "maxTokens = 2000 (trần cứng, hợp lệ)", override: { maxTokens: 2000 } },
+  { label: "maxTokens = 2001 (vượt trần cứng — bắt được nếu ai đó nới trần một bên)", override: { maxTokens: 2001 } },
+  { label: "maxTokens = 500.5 (không phải số nguyên)", override: { maxTokens: 500.5 } },
+
+  { label: "quotaStudentPerDay = -1", override: { quotaStudentPerDay: -1 } },
+  { label: "quotaStudentPerDay = 0 (hợp lệ, nghĩa là tạm khoá)", override: { quotaStudentPerDay: 0 } },
+  { label: "quotaStudentPerDay = 2.5 (không phải số nguyên)", override: { quotaStudentPerDay: 2.5 } },
+
+  { label: "rateLimitPerMinute = -1", override: { rateLimitPerMinute: -1 } },
+  { label: "rateLimitPerMinute = 0 (hợp lệ, nghĩa là không rate limit)", override: { rateLimitPerMinute: 0 } },
+
+  { label: "baseUrl rỗng (sentinel chưa cấu hình, hợp lệ)", override: { baseUrl: "" } },
+  { label: "baseUrl https hợp lệ", override: { baseUrl: "https://api.example.com/v1" } },
+  { label: "baseUrl http:// remote (không hợp lệ)", override: { baseUrl: "http://api.example.com/v1" } },
+  { label: "baseUrl http://localhost (hợp lệ, ngoại lệ Ollama)", override: { baseUrl: "http://localhost:11434/v1" } },
+  { label: "baseUrl http://127.0.0.1 (hợp lệ, ngoại lệ Ollama)", override: { baseUrl: "http://127.0.0.1:11434/v1" } },
+  { label: "baseUrl http://localhost.evil.com (lookalike host, không hợp lệ)", override: { baseUrl: "http://localhost.evil.com/v1" } },
+  { label: "baseUrl không phải URL", override: { baseUrl: "khong-phai-url" } },
+
+  { label: "killSwitch.moodReflection = true", override: { killSwitch: { moodReflection: true } } },
+  { label: "killSwitch.moodReflection = false", override: { killSwitch: { moodReflection: false } } },
+];
+
+describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/ai/config.ts", () => {
+  it("hai schema có ĐÚNG cùng tập field top-level", () => {
+    const srcFields = Object.keys(srcSchema.shape).sort();
+    const functionsFields = [...AI_CONFIG_FIELD_KEYS].sort();
+    expect(functionsFields).toEqual(srcFields);
+  });
+
+  it("hai schema có ĐÚNG cùng tập field lồng bên trong killSwitch", () => {
+    const srcKillSwitchFields = Object.keys(srcSchema.shape.killSwitch.shape).sort();
+    const functionsKillSwitchFields = Object.keys(functionsSchema.shape.killSwitch.shape).sort();
+    expect(functionsKillSwitchFields).toEqual(srcKillSwitchFields);
+  });
+
+  it("chấp nhận giống nhau trên một config hợp lệ đầy đủ, và parse ra CÙNG giá trị", () => {
+    const srcResult = srcSchema.safeParse(BASE_VALID);
+    const functionsResult = functionsSchema.safeParse(BASE_VALID);
+    expect(srcResult.success).toBe(true);
+    expect(functionsResult.success).toBe(true);
+    expect(functionsResult.success && functionsResult.data).toEqual(
+      srcResult.success && srcResult.data,
+    );
+  });
+
+  it.each(PROBES)("cùng quyết định accept/reject cho probe: $label", ({ override }) => {
+    const candidate = { ...BASE_VALID, ...override };
+    const srcResult = srcSchema.safeParse(candidate);
+    const functionsResult = functionsSchema.safeParse(candidate);
+    expect(functionsResult.success).toBe(srcResult.success);
+  });
+
+  // Sanity của chính bộ probe: nếu HAI schema cùng lệch khỏi ràng buộc gốc theo đúng cùng một
+  // hướng (vd: cả hai cùng bị đổi thành maxTokens tối đa 3000), so sánh accept/reject ở trên sẽ
+  // KHÔNG bắt được (cả hai vẫn "đồng ý" với nhau, chỉ là đồng ý sai). Khẳng định trực tiếp một
+  // vài giá trị KHÔNG hợp lệ này thực sự bị TỪ CHỐI ở phía src/ (đã có test riêng, xem
+  // src/lib/types/ai.test.ts) để những probe "phải reject" ở trên thực sự có ý nghĩa, không phải
+  // vô tình luôn pass vì cả hai bên đều chấp nhận mọi giá trị.
+  it("một vài probe 'phải reject' thực sự bị từ chối (không phải mọi giá trị đều được chấp nhận)", () => {
+    expect(srcSchema.safeParse({ ...BASE_VALID, maxTokens: 2001 }).success).toBe(false);
+    expect(srcSchema.safeParse({ ...BASE_VALID, temperature: 1.01 }).success).toBe(false);
+    expect(srcSchema.safeParse({ ...BASE_VALID, baseUrl: "http://api.example.com/v1" }).success).toBe(false);
+  });
+});
+
+describe("DEFAULT_AI_CONFIG — đồng bộ giá trị giữa hai bên", () => {
+  it("giống hệt nhau (deep equal)", () => {
+    expect(functionsDefault).toEqual(srcDefault);
+  });
+
+  it("cả hai đều tự parse được bằng chính schema của bên mình", () => {
+    expect(srcSchema.safeParse(srcDefault).success).toBe(true);
+    expect(functionsSchema.safeParse(functionsDefault).success).toBe(true);
+  });
+});
