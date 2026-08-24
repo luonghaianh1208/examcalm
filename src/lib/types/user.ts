@@ -6,6 +6,13 @@ export const researchConsentSchema = z.object({
   version: z.string().min(1),
 });
 
+// Tùy chọn (optional) để hồ sơ CŨ (tạo trước khi có onboarding) vẫn parse được —
+// chưa từng thấy welcome dialog/tour thì coi như welcomeSeenAt=null, hideTooltips=false.
+export const onboardingStateSchema = z.object({
+  welcomeSeenAt: z.date().nullable(),
+  hideTooltips: z.boolean(),
+});
+
 export const userProfileSchema = z.object({
   uid: z.string().min(1),
   role: z.enum(["student", "admin"]),
@@ -19,10 +26,12 @@ export const userProfileSchema = z.object({
   }),
   researchConsent: researchConsentSchema.nullable(),
   deletionRequestedAt: z.date().nullable(),
+  onboarding: onboardingStateSchema.optional(),
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
 export type ResearchConsent = z.infer<typeof researchConsentSchema>;
+export type OnboardingState = z.infer<typeof onboardingStateSchema>;
 
 export const DEFAULT_PRIVACY_SETTINGS = {
   aiOptIn: false,

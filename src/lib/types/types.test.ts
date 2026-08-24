@@ -34,6 +34,17 @@ describe("userProfileSchema", () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it("chấp nhận hồ sơ có trường onboarding", () => {
+    const r = userProfileSchema.safeParse({
+      uid: "u1", role: "student", nickname: "Mèo con", gradeLevel: "12",
+      school: "THPT Trần Phú", examGoals: [],
+      privacySettings: { aiOptIn: false, shareImageWithAI: false },
+      researchConsent: null, deletionRequestedAt: null,
+      onboarding: { welcomeSeenAt: new Date(), hideTooltips: true },
+    });
+    expect(r.success).toBe(true);
+  });
 });
 
 describe("moodLogSchema", () => {

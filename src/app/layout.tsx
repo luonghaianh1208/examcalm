@@ -5,6 +5,7 @@ import { MoodWidget } from "@/components/mascot/MoodWidget";
 import { FirebaseBootstrap } from "@/components/FirebaseBootstrap";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
+import { OnboardingController } from "@/components/onboarding/OnboardingController";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,6 +41,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <SiteFooter />
         <MoodWidget uid={user?.uid ?? null} canSave={Boolean(user?.emailVerified)} />
+        <OnboardingController user={user} />
       </body>
     </html>
   );

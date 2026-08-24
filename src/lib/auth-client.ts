@@ -25,7 +25,7 @@ export const signUpInputSchema = z.object({
 export type SignUpInput = z.infer<typeof signUpInputSchema>;
 
 /** Đổi ID token lấy session cookie để Server Component nhận diện được user. */
-async function establishSession(user: User): Promise<void> {
+export async function establishSession(user: User): Promise<void> {
   const idToken = await user.getIdToken(true);
   const res = await fetch("/api/session", {
     method: "POST",

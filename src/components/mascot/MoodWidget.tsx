@@ -32,6 +32,7 @@ export function MoodWidget({ uid, canSave }: Props) {
     <>
       <button
         type="button"
+        data-tour="mood"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="Mở nhật ký cảm xúc"

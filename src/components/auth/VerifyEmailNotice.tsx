@@ -1,11 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { resendVerificationEmail, authErrorMessage } from "@/lib/auth-client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { resendVerificationEmail, establishSession, authErrorMessage } from "@/lib/auth-client";
+import { getFirebaseAuth, ensureAuthReady } from "@/lib/firebase/client";
 
 export function VerifyEmailNotice() {
+  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function detectVerification() {
+      // Trang có thể mở lạnh (dán link, F5) — đợi Auth khôi phục currentUser từ
+      // persistence trước khi đọc nó, giống mọi lần ghi Firestore khác trong
+      // codebase (xem giải thích ensureAuthReady() ở client.ts).
+      await ensureAuthReady();
+      const user = getFirebaseAuth().currentUser;
+      if (!user || cancelled) return;
+
+      // reload() lấy trạng thái MỚI NHẤT từ Firebase — cần thiết vì học sinh có
+      // thể vừa xác thực ở MỘT trình duyệt/cửa sổ khác; user object ở cửa sổ
+      // này vẫn đang giữ cache cũ (emailVerified: false).
+      await user.reload();
+      if (cancelled || !user.emailVerified) return;
+
+      try {
+        // __session cookie đông cứng claims lúc mint — phải xin lại ID token
+        // (force-refresh, establishSession() đã làm việc này) và đổi lấy cookie
+        // mới thì Server Component mới nhận ra emailVerified: true.
+        await establishSession(user);
+        if (!cancelled) router.refresh();
+      } catch {
+        // Mint lại cookie thất bại: học sinh vẫn còn nút "Gửi lại email xác
+        // thực" và có thể tự tải lại trang sau — không được chặn UI ở đây.
+      }
+    }
+
+    void detectVerification();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function handleResend() {
     try {
