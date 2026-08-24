@@ -41,8 +41,15 @@ export function ReflectionCard({ moodLogId, uid, aiOptIn }: Props) {
   useEffect(() => {
     if (!aiOptIn) return;
     let cancelled = false;
+    // Reset TOÀN BỘ trạng thái của phản chiếu trước — không chỉ phase/error.
+    // Thiếu record/deleted/confirmingDelete ở đây từng khiến "Đã xoá phản
+    // chiếu này." đè lên phản chiếu MỚI khi cùng một instance nhận
+    // moodLogId khác sau khi đã xoá phản chiếu trước đó (Fix round 1).
     setPhase("loading");
     setErrorMessage(null);
+    setRecord(null);
+    setDeleted(false);
+    setConfirmingDelete(false);
 
     (async () => {
       try {

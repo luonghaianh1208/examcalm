@@ -167,4 +167,37 @@ describe("ReflectionCard", () => {
     expect(mockedDeleteOutput).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /xoá phản chiếu này/i })).toBeInTheDocument();
   });
+
+  // Fix round 1: effect chỉ reset phase/errorMessage khi moodLogId đổi, không
+  // reset record/deleted/confirmingDelete — nên nếu cùng một instance nhận
+  // moodLogId MỚI sau khi đã xoá phản chiếu cũ, "Đã xoá phản chiếu này." vẫn
+  // còn đè lên phản chiếu mới vừa tải xong. Test này rerender cùng instance
+  // với moodLogId khác sau một lần xoá và khẳng định không còn dấu vết cũ.
+  it("nhận moodLogId mới sau khi đã xoá phản chiếu cũ: hiện phản chiếu mới, không còn hiện 'đã xoá'", async () => {
+    const RECORD_2: AiJournalOutputRecord = {
+      ...RECORD,
+      id: "output-2",
+      moodLogId: "m2",
+      reflectionText: "Một ngày mới, một phản chiếu mới.",
+    };
+    mockedRequestReflection.mockImplementation(async (moodLogId: string) => ({
+      outputId: moodLogId === "m2" ? "output-2" : "output-1",
+    }));
+    mockedGetOutputForMoodLog.mockImplementation(async (_uid: string, moodLogId: string) =>
+      moodLogId === "m2" ? RECORD_2 : RECORD,
+    );
+
+    const user = userEvent.setup();
+    const { rerender } = render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    await screen.findByText(RECORD.reflectionText);
+    await user.click(screen.getByRole("button", { name: /xoá phản chiếu này/i }));
+    await user.click(screen.getByRole("button", { name: /xác nhận xoá/i }));
+    expect(await screen.findByText(/đã xoá phản chiếu này/i)).toBeInTheDocument();
+
+    rerender(<ReflectionCard moodLogId="m2" uid="u1" aiOptIn={true} />);
+
+    expect(await screen.findByText(RECORD_2.reflectionText)).toBeInTheDocument();
+    expect(screen.queryByText(/đã xoá phản chiếu này/i)).not.toBeInTheDocument();
+  });
 });
