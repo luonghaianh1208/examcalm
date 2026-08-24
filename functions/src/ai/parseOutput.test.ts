@@ -126,4 +126,25 @@ describe("parseReflectionOutput", () => {
 
     expect(parseReflectionOutput(text)).toBeNull();
   });
+
+  // Fix round 2 — nhãn ở dạng NFD (dấu tổ hợp tách rời) vẫn phải nhận ra, vì model có thể
+  // trả tiếng Việt ở dạng NFD trong khi hằng số nhãn trong source là NFC.
+  it("case 10: nhãn ở dạng NFD (byte khác nhưng cùng chữ hiển thị) vẫn tách đúng", () => {
+    const text = [
+      REFLECTION_LABEL.normalize("NFD"),
+      "Nội dung phản chiếu.",
+      CAT_STORY_LABEL.normalize("NFD"),
+      "Câu chuyện mèo.",
+      JOURNAL_PROMPT_LABEL.normalize("NFD"),
+      "Câu hỏi nhật ký.",
+    ].join("\n");
+
+    const result = parseReflectionOutput(text);
+
+    expect(result).toEqual({
+      reflectionText: "Nội dung phản chiếu.",
+      catStoryText: "Câu chuyện mèo.",
+      journalPrompt: "Câu hỏi nhật ký.",
+    });
+  });
 });

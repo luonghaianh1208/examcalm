@@ -34,7 +34,9 @@ function escapeRegExp(segment: string): string {
  * việc so khớp chuỗi con đơn giản sẽ bắt nhầm và làm hỏng toàn bộ phần tách.
  */
 function buildLabelPattern(label: string): RegExp {
-  const escaped = escapeRegExp(label);
+  // Chuẩn hoá NFC trước khi dựng pattern — đồng bộ với safetyFilter.ts, dù hằng số nhãn
+  // trong file này vốn đã là NFC, để hai module xử lý input NFC/NFD theo đúng một cách.
+  const escaped = escapeRegExp(label.normalize("NFC"));
   return new RegExp(`^[ \\t]*\\*{0,2}${escaped}\\*{0,2}`, "gim");
 }
 
@@ -58,23 +60,30 @@ function findLabelFrom(text: string, label: string, fromIndex: number): LabelMat
 }
 
 export function parseReflectionOutput(text: string): ParsedReflectionOutput | null {
-  const reflectionMatch = findLabelFrom(text, REFLECTION_LABEL, 0);
+  // Chuẩn hoá NFC trước khi so khớp — model có thể trả về tiếng Việt dạng NFD (dấu tổ
+  // hợp tách rời), cùng một chữ nhưng khác byte so với hằng số nhãn (vốn là NFC). Chuẩn
+  // hoá NGAY TỪ ĐẦU và dùng chuỗi đã chuẩn hoá cho cả so khớp lẫn cắt chuỗi (slice) —
+  // nếu chỉ chuẩn hoá bản sao riêng để so khớp mà vẫn cắt trên `text` gốc, độ dài chuỗi
+  // đổi sau NFC/NFD sẽ làm lệch vị trí index.
+  const normalizedText = text.normalize("NFC");
+
+  const reflectionMatch = findLabelFrom(normalizedText, REFLECTION_LABEL, 0);
   if (reflectionMatch === null) return null;
 
   // Ba nhãn phải xuất hiện đúng thứ tự: mỗi lần tìm nhãn tiếp theo chỉ chấp nhận vị trí
   // từ cuối nhãn trước trở đi — nhãn nằm trước đó (thứ tự sai) sẽ không được tìm thấy,
   // trả về null thay vì tách sai.
-  const catStoryMatch = findLabelFrom(text, CAT_STORY_LABEL, reflectionMatch.end);
+  const catStoryMatch = findLabelFrom(normalizedText, CAT_STORY_LABEL, reflectionMatch.end);
   if (catStoryMatch === null) return null;
 
-  const journalPromptMatch = findLabelFrom(text, JOURNAL_PROMPT_LABEL, catStoryMatch.end);
+  const journalPromptMatch = findLabelFrom(normalizedText, JOURNAL_PROMPT_LABEL, catStoryMatch.end);
   if (journalPromptMatch === null) return null;
 
   // Văn bản thừa trước nhãn đầu tiên tự động bị bỏ qua vì reflectionText chỉ lấy từ sau
   // reflectionMatch.end trở đi, không bao giờ nhìn về phía trước reflectionMatch.index.
-  const reflectionText = text.slice(reflectionMatch.end, catStoryMatch.index).trim();
-  const catStoryText = text.slice(catStoryMatch.end, journalPromptMatch.index).trim();
-  const journalPrompt = text.slice(journalPromptMatch.end).trim();
+  const reflectionText = normalizedText.slice(reflectionMatch.end, catStoryMatch.index).trim();
+  const catStoryText = normalizedText.slice(catStoryMatch.end, journalPromptMatch.index).trim();
+  const journalPrompt = normalizedText.slice(journalPromptMatch.end).trim();
 
   if (reflectionText === "" || catStoryText === "" || journalPrompt === "") return null;
 
