@@ -479,6 +479,55 @@ Chạy **toàn bộ** test app để chắc chắn Spec #1/#2 không gãy: `npx 
 
 ---
 
+### Task 11b: Nối `ReflectionCard` vào chỗ học sinh thật sự chạm được
+
+> **Thêm ngày 2026-08-24 — đây là lỗ hổng trong plan gốc, không phải phát sinh.** Task 11 dựng và test đầy đủ `ReflectionCard`, nhưng danh sách file của nó không gồm `MoodWidget.tsx` hay `CbtRunner.tsx`, và Task 12–14 cũng không. Kết quả: toàn bộ Spec #3 sẽ ship một tính năng **không học sinh nào chạm tới được**. Task này sửa điều đó.
+
+**Files:**
+- Modify: `src/components/mascot/MoodWidget.tsx`, `src/components/cbt/CbtRunner.tsx`, `src/components/ai/ReflectionCard.tsx`
+- Test: file test cạnh mỗi component
+
+**Interfaces:**
+- Consumes: Task 9, 10, 11
+- Produces: `ReflectionCard` hiển thị được sau khi ghi cảm xúc ở cả hai luồng
+
+Có hai vật cản, và cả hai đã được xác nhận bằng cách đọc code:
+
+**Cản 1 — chưa có đường dẫn `aiOptIn` tới hai component đó.** Tìm khắp repo, `privacySettings` chỉ xuất hiện ở `AiConsentSection.tsx`, `ho-so/page.tsx`, `auth-client.ts`, `types/user.ts`. Không có hook hay context nào đưa nó tới `MoodWidget` hay `CbtRunner`.
+
+**Cản 2 — cả hai caller tháo cây component ngay khi lưu xong.** `MoodWidget.handleSubmit` gọi `setOpen(false)` đồng bộ ngay sau khi lưu; `CbtRunner.handleMood` gọi `setPhase(...)` vô điều kiện. Cả hai unmount `MoodForm` đúng lúc `ReflectionCard` cần chỗ để render.
+
+- [ ] **Step 1: Viết test thất bại**
+
+**Quyết định thiết kế cho cản 1: `ReflectionCard` tự đọc cổng của chính nó.** Nhận `uid` và `moodLogId`, rồi tự đọc `privacySettings.aiOptIn` của uid đó và `systemConfig/aiPublic`. Nếu một trong hai tắt → render `null`, **không gọi callable**. Như vậy không phải kéo prop qua hai component không liên quan gì tới AI, và lời hứa cốt lõi vẫn nguyên: đọc document của chính học sinh không phải là gửi văn bản của em ra ngoài.
+
+Prop `aiOptIn` của Task 11 trở thành thừa — bỏ nó, và bỏ luôn việc `MoodForm` phải biết gì về AI ngoài `uid` + `moodLogId`.
+
+**Quyết định thiết kế cho cản 2:**
+- `MoodWidget`: **không** đóng panel khi lưu xong. Chuyển panel sang trạng thái "đã lưu" hiển thị lời xác nhận cộng `ReflectionCard`, kèm nút đóng tường minh. Học sinh tự đóng khi đọc xong.
+- `CbtRunner`: hiển thị `ReflectionCard` ở phase `done`, dùng `moodLogId` của lần ghi cảm xúc "sau".
+
+Test phải khẳng định:
+1. `aiOptIn` tắt → `MoodWidget` hoạt động **y hệt như trước**: lưu xong, không có gì thuộc về AI xuất hiện, callable không được gọi.
+2. `aiOptIn` bật + `aiPublic.enabled` bật → sau khi lưu, thẻ phản chiếu xuất hiện trong panel.
+3. Panel **không tự đóng** khi `aiOptIn` bật; nút đóng tường minh hoạt động.
+4. Tương tự cho `CbtRunner` ở phase `done`.
+5. **Ghi cảm xúc vẫn lưu được khi lớp AI hỏng hoàn toàn** — ràng buộc cứng, test ở mức tích hợp chứ không chỉ mức `ReflectionCard`.
+6. Test có sẵn của Spec #1 và #2 pass **không sửa một ký tự nào**. Nếu phải sửa, thiết kế sai — đổi thiết kế, không đổi test.
+
+- [ ] **Step 2–4:** như thường lệ
+- [ ] **Step 5: Kiểm tra thủ công**
+
+```bash
+npx vitest run
+npm run typecheck
+npm run build
+```
+
+- [ ] **Step 6: Commit**
+
+---
+
 ### Task 12: Admin console — cắm provider và soạn prompt
 
 **Files:**
