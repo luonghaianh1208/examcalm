@@ -180,11 +180,39 @@ describe("crisisAlerts/{id}", () => {
     await assertFails(deleteDoc(doc(adminDb(env), "crisisAlerts/a1")));
   });
 
-  it("admin update được CHỈ handledBy + handledAt", async () => {
+  // Fix round 1, Finding 1: nhánh delete chỉ có nửa admin, thiếu nửa học sinh
+  // — đối xứng với test create ở trên vốn đã kiểm cả hai persona. Quan trọng
+  // vì Task 10 (cascade xoá tài khoản) rất dễ copy-paste shape
+  // "allow delete: if isSignedIn() && resource.data.userId == request.auth.uid"
+  // dùng cho MỌI collection khác trong file này sang crisisAlerts — nếu vậy,
+  // học sinh tự xoá được cảnh báo về chính mình (xoá bằng chứng để thầy cô
+  // không bao giờ biết em đã gặp nguy) mà không test nào bắt được. ALERT.userId
+  // == "u1" ở đây CHÍNH LÀ uid đang xoá, để em thực sự là chủ thể của cảnh báo.
+  it("học sinh (kể cả chủ thể cảnh báo) KHÔNG delete được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(deleteDoc(doc(authedDb(env, "u1"), "crisisAlerts/a1")));
+  });
+
+  it("admin update được CHỈ handledBy + handledAt, tự nhận xử lý bằng đúng uid của mình", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
     await assertSucceeds(
       updateDoc(doc(adminDb(env), "crisisAlerts/a1"), {
         handledBy: "admin-1",
+        handledAt: new Date(),
+      }),
+    );
+  });
+
+  // Fix round 1, Finding 2: handledBy là bản ghi "ai đã nhận xử lý cảnh báo an
+  // toàn của một đứa trẻ" — không ràng buộc thì admin A có thể gán handledBy
+  // cho "admin-2" (đổ trách nhiệm cho đồng nghiệp) hoặc ngược lại. hasOnly()
+  // đã pass (đúng 2 field), isAdmin() đã pass — chỉ còn nhánh handledBy ==
+  // request.auth.uid có thể từ chối, nên test này thật sự isolate đúng nhánh.
+  it("admin KHÔNG gán handledBy cho người khác — chỉ được tự nhận xử lý bằng chính uid của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(
+      updateDoc(doc(adminDb(env), "crisisAlerts/a1"), {
+        handledBy: "admin-2",
         handledAt: new Date(),
       }),
     );

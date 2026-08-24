@@ -213,15 +213,22 @@ service cloud.firestore {
     // chat lúc đó rồi, đọc thêm bản ghi quản trị không cho thông tin gì mới,
     // còn một bản ghi đọc được sẽ lộ NGƯỠNG phát hiện cho em tìm cách né tránh
     // lần sau. Không ai create/delete được từ client — document chỉ do Cloud
-    // Function (Admin SDK) tạo khi phát hiện khủng hoảng. admin update CHỈ
-    // được đổi handledBy + handledAt — dùng diff().affectedKeys().hasOnly([...])
-    // để khoá TOÀN BỘ field còn lại (userId, severity, triggeredBy, createdAt)
+    // Function (Admin SDK) tạo khi phát hiện khủng hoảng; delete cố ý khoá
+    // luôn cho CHÍNH học sinh — đây là hồ sơ an toàn, không phải nội dung
+    // riêng tư của em, để em tự xoá được thì tương đương xoá bằng chứng nên
+    // thầy cô không bao giờ biết em đã gặp nguy. admin update CHỈ được đổi
+    // handledBy + handledAt — dùng diff().affectedKeys().hasOnly([...]) để
+    // khoá TOÀN BỘ field còn lại (userId, severity, triggeredBy, createdAt)
     // trong MỘT LẦN, không ghim từng field — bài học Critical của Spec #3
-    // Task 2 (ghim 2/11 field, bỏ ngỏ 9 field còn lại).
+    // Task 2 (ghim 2/11 field, bỏ ngỏ 9 field còn lại). handledBy còn phải
+    // khớp đúng uid của admin đang ghi — hồ sơ này chỉ có giá trị nếu ghi
+    // đúng AI thật sự đã nhận xử lý; không ràng buộc thì một admin có thể gán
+    // handledBy cho đồng nghiệp khác (đổ trách nhiệm) hoặc ngược lại.
     match /crisisAlerts/{id} {
       allow read: if isAdmin();
       allow update: if isAdmin()
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["handledBy", "handledAt"]);
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["handledBy", "handledAt"])
+                    && request.resource.data.handledBy == request.auth.uid;
       allow create, delete: if false;
     }
 

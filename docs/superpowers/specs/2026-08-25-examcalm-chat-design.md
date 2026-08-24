@@ -138,7 +138,8 @@ match /crisisAlerts/{id} {
   allow read:   if isAdmin();
   allow update: if isAdmin()
                 && request.resource.data.diff(resource.data)
-                     .affectedKeys().hasOnly(["handledBy", "handledAt"]);
+                     .affectedKeys().hasOnly(["handledBy", "handledAt"])
+                && request.resource.data.handledBy == request.auth.uid;
   allow create, delete: if false;
 }
 ```
