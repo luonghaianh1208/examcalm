@@ -5,12 +5,18 @@ import { createTestEnv, authedDb, adminDb, guestDb, seed } from "./helpers";
 
 let env: RulesTestEnvironment;
 
+// Khớp field-by-field với aiJournalOutputSchema (src/lib/types/ai.ts:69-81) —
+// fixture sai khớp schema là chính lý do lỗ hổng round 1 (chỉ pin 2/11 field)
+// không bị test bắt được.
 const AI_OUTPUT = {
   userId: "u1",
-  sourceType: "moodLog",
-  sourceId: "m1",
+  moodLogId: "m1",
   reflectionText: "Bạn đã rất cố gắng hôm nay.",
+  catStoryText: "Chú mèo nhỏ đã vượt qua một ngày dài.",
+  journalPrompt: "Hôm nay điều gì khiến bạn thấy nhẹ nhõm hơn?",
   promptTemplateId: "pt1",
+  promptVersion: 1,
+  providerLabel: "OpenAI",
   model: "gpt-4o-mini",
   userFeedback: null,
   createdAt: new Date(),
@@ -87,6 +93,72 @@ describe("aiJournalOutputs/{id}", () => {
     await assertFails(
       updateDoc(doc(authedDb(env, "u2"), "aiJournalOutputs/o1"), { userId: "u1" }),
     );
+  });
+
+  // --- Fix round 1 / Finding 1+2: hasOnly() phải khoá TOÀN BỘ field khác,
+  // không chỉ 2 field từng bị pin riêng lẻ (userId, reflectionText). ---
+
+  it("update sửa catStoryText (nội dung AI-generated) bị từ chối", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { catStoryText: "câu chuyện giả mạo" }),
+    );
+  });
+
+  it("update sửa journalPrompt (nội dung AI-generated) bị từ chối", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { journalPrompt: "prompt giả mạo" }),
+    );
+  });
+
+  it("update sửa promptTemplateId (dấu vết provenance) bị từ chối", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { promptTemplateId: "pt-khac" }),
+    );
+  });
+
+  it("update sửa createdAt (dấu vết provenance) bị từ chối", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { createdAt: new Date("2020-01-01") }),
+    );
+  });
+
+  it("update thêm field lạ ngoài schema bị từ chối", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { hacked: true }),
+    );
+  });
+
+  it("update userFeedback giá trị ngoài enum (\"helpful\" | \"not_helpful\") bị từ chối", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "aiJournalOutputs/o1"), { userFeedback: "spam-giá-trị-lạ" }),
+    );
+  });
+
+  // --- Finding 4: isolation cho update/delete, tương tự moodLogs/cbtSessions ---
+
+  it("user khác KHÔNG update được userFeedback của output không phải của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u2"), "aiJournalOutputs/o1"), { userFeedback: "helpful" }),
+    );
+  });
+
+  it("user khác KHÔNG xoá được output không phải của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    await assertFails(deleteDoc(doc(authedDb(env, "u2"), "aiJournalOutputs/o1")));
+  });
+
+  it("ADMIN CŨNG KHÔNG update, KHÔNG xoá được output của học sinh", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "aiJournalOutputs/o1"), AI_OUTPUT); });
+    const db = adminDb(env);
+    await assertFails(updateDoc(doc(db, "aiJournalOutputs/o1"), { userFeedback: "helpful" }));
+    await assertFails(deleteDoc(doc(db, "aiJournalOutputs/o1")));
   });
 });
 

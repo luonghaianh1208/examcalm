@@ -177,12 +177,14 @@ Khoá theo ngày để tự hết hạn về mặt logic, không cần job dọn
 
 ```js
 match /aiJournalOutputs/{id} {
-  allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
+  allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
   allow update: if isSignedIn() && resource.data.userId == request.auth.uid
                 && request.resource.data.userId == resource.data.userId
                 && request.resource.data.reflectionText == resource.data.reflectionText;
-  allow create, delete: if false;   // chỉ Cloud Function (Admin SDK)
+  allow create: if false;   // chỉ Cloud Function (Admin SDK)
 }
+// create ở lại function-only (Cloud Function ghi qua Admin SDK, bỏ qua rules);
+// delete thuộc về học sinh — §7.6 cam kết "học sinh xoá được từng phản chiếu".
 
 match /aiUsage/{id}        { allow read, write: if false; }   // chỉ Cloud Function
 match /systemConfig/{id}   { allow read, write: if isAdmin(); }

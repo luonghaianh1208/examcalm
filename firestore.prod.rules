@@ -90,14 +90,17 @@ service cloud.firestore {
     match /aiJournalOutputs/{id} {
       allow create: if false;
       allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      // update chỉ để học sinh gắn phản hồi (userFeedback) của mình — không
-      // được sửa nội dung phản chiếu (reflectionText) hay đổi userId để "cấy"
-      // output vào tài khoản khác (bài học từ lỗ hổng moodLogs.userId ở trên:
-      // phải so request.resource.data với resource.data, không chỉ kiểm quyền).
+      // update chỉ để học sinh gắn phản hồi (userFeedback) của mình. Dùng
+      // diff().affectedKeys().hasOnly([...]) để KHOÁ TOÀN BỘ field khác trong
+      // một lần — không chỉ pin userId/reflectionText mà bỏ ngỏ các field còn
+      // lại (catStoryText, journalPrompt, promptTemplateId, promptVersion,
+      // providerLabel, model, createdAt, hay field lạ tự thêm vào). Nếu chỉ
+      // pin từng field như bài học moodLogs.userId thì các field AI-generated
+      // khác vẫn bị ghi đè được — bài học rút ra sau round review đầu.
       allow update: if isSignedIn()
                     && resource.data.userId == request.auth.uid
-                    && request.resource.data.userId == resource.data.userId
-                    && request.resource.data.reflectionText == resource.data.reflectionText;
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["userFeedback"])
+                    && request.resource.data.userFeedback in ["helpful", "not_helpful"];
     }
 
     // aiUsage: sổ đếm quota gọi AI. Học sinh đọc được thì không sao nhưng
@@ -107,11 +110,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // systemConfig/aiPublic: đặt TRƯỚC khối chung bên dưới. Ngoại lệ DUY NHẤT
-    // trong systemConfig cho học sinh đọc — chỉ chứa tên nhà cung cấp AI để
-    // hiển thị ở màn hình xin đồng ý (consent) trước khi bật tính năng AI. Các
-    // id khác (vd. aiConfig chứa baseUrl, quota, rate limit) vẫn khoá admin-only
-    // ở khối /systemConfig/{id} bên dưới.
+    // systemConfig/aiPublic: Firestore đánh giá MỌI khối match khớp path và
+    // hợp (OR) các quyền lại — thứ tự khai báo không ảnh hưởng hành vi. Khối
+    // hẹp này chỉ nới quyền đọc cho đúng một document id (aiPublic, chứa tên
+    // nhà cung cấp AI để hiển thị ở màn hình xin đồng ý trước khi bật tính
+    // năng AI); mọi id khác (vd. aiConfig chứa baseUrl, quota, rate limit)
+    // không khớp path này nên chỉ chịu rule admin-only ở khối chung bên dưới.
     match /systemConfig/aiPublic {
       allow read: if isSignedIn();
       allow write: if isAdmin();
