@@ -108,6 +108,25 @@ dung ổn. Sửa lại một bản ĐANG published sẽ bị hệ thống chặn
 
 ---
 
+## ⚠️ Một hạn chế đã biết: đổi provider KHÔNG hỏi lại học sinh
+
+Hệ thống lưu **rằng** một học sinh đã đồng ý, nhưng **không lưu em đã đồng ý với nhà cung cấp nào**.
+
+Nghĩa là: nếu bạn đổi `baseUrl` sang một nhà cung cấp khác, những học sinh đã bật AI từ trước **vẫn ở trạng thái đã đồng ý**. Ghi chú của các em bắt đầu được gửi sang công ty mới ngay lần check-in kế tiếp, dù các em chưa từng nhìn thấy tên công ty đó. Màn hình Hồ sơ có hiện tên mới, nhưng không có gì buộc các em phải đọc lại.
+
+Đây là hạn chế của thiết kế hiện tại, không phải lỗi — nhưng nó có nghĩa là **đổi provider là một quyết định cần thông báo, không phải một thao tác cấu hình**.
+
+**Nếu bạn đổi provider sau khi đã cho học sinh dùng, hãy làm theo thứ tự này:**
+
+1. Tắt tính năng trước (bỏ tick "Bật tính năng phản chiếu AI cho học sinh", bấm Lưu).
+2. Báo cho học sinh biết sắp đổi sang nhà cung cấp nào, và rằng các em có thể tắt AI cùng xoá toàn bộ phản chiếu cũ trong trang Hồ sơ — **khi tính năng đang tắt, đường tắt-và-xoá vẫn dùng được**, đúng để phục vụ tình huống này.
+3. Làm lại **mục 1 và mục 2** của danh sách này với nhà cung cấp mới (đọc điều khoản, xác nhận đã tắt lưu dữ liệu để huấn luyện).
+4. Đổi `baseUrl`, `model`, và `providerLabel`, rồi mới bật lại.
+
+Bỏ qua bước 2 là điều duy nhất trong toàn bộ tài liệu này có thể khiến bạn gửi bài viết riêng tư của một học sinh tới một công ty mà em ấy chưa từng đồng ý — hãy đừng bỏ qua.
+
+---
+
 ## Tick xong cả 8 mục?
 
 Quay lại [docs/ai-provider-setup.md](./ai-provider-setup.md) mục 5 để điền `baseUrl` +
