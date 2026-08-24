@@ -144,6 +144,40 @@ Dashboard thật của PRD, khác với trang Tiến trình đơn giản của S
 
 ---
 
+### Spec #7 — Góc Cây Bình Yên (game hoá) — CHỜ, chưa lên lịch
+
+**Nguồn:** `WEB/DES GAME/ExamCalm_Goc_Cay_Binh_Yen_Asset_Pack_v1.1/` (60 file PNG, kèm
+`ASSET_MANIFEST.csv`) và `WEB/Mini-GDD_Goc_Cay_Binh_Yen_v1.0.docx`. Asset đã có đủ:
+5 giai đoạn cây, 4 vật phẩm chăm sóc, 15 đồ trang trí, 3 nền, 14 icon UI, 9 hiệu ứng.
+
+> `WEB/` nằm ngoài git (54MB) — asset gốc chỉ có trên máy anh Hải Anh. Khi làm spec này
+> phải nén như đã làm với mascot ở Spec #1: PNG gốc ~1MB/file, nén WebP còn 5–8KB.
+
+**Cơ chế theo Mini-GDD:** Điểm Mầm (tiền tệ) + Growth XP (tiến độ cây). Tưới nước +5 XP,
+nắng trong lọ +10, đất dinh dưỡng +18, chuông gió +12. Cây lên bậc ở mốc 30/80/160/280 XP.
+Có cửa hàng và kho đồ.
+
+**KHÔNG có trong PRD v3.0.** Đây là hướng mở rộng do designer đề xuất, không phải yêu cầu gốc.
+
+**Xung đột thiết kế phải giải trước khi code — đây là lý do spec này bị hoãn:**
+
+Nguyên tắc §3.9 của spec nền tảng cấm mọi cơ chế gây áp lực: không streak, không đếm ngày
+liên tiếp, không "bạn đã bỏ lỡ". Một cái cây cần chăm sóc là cơ chế gây áp lực **rất mạnh** —
+mạnh hơn streak, vì nó gắn cảm giác tội lỗi vào một sinh vật sống. Học sinh nghỉ ba hôm rồi
+quay lại thấy cây héo sẽ nhận đúng thông điệp mà sản phẩm này tồn tại để chống lại.
+
+**Ràng buộc bắt buộc nếu làm:**
+- Cây KHÔNG BAO GIỜ héo, chết, hay lùi bậc. Không vào chăm thì nó đứng yên chờ, thế thôi.
+- Không thông báo đẩy, không nhắc nhở, không đếm ngày.
+- Growth XP chỉ tăng, không bao giờ giảm.
+- Không so sánh cây giữa các học sinh, không bảng xếp hạng.
+- Ngôn ngữ khi quay lại sau thời gian dài phải là chào đón, không phải trách móc.
+
+**Chưa chốt:** kiếm Điểm Mầm bằng cách nào. Nếu gắn vào "làm bài test" hay "ghi nhật ký"
+thì vô tình biến việc tự chăm sóc sức khỏe tinh thần thành nhiệm vụ farming — cần cân nhắc kỹ.
+
+---
+
 ## 4. Quy ước kỹ thuật rút ra từ Spec #1
 
 Những mục dưới đây **phải nằm trong Global Constraints của mọi spec sau**. Mỗi cái đều là một lỗi thật đã tốn ít nhất một vòng sửa trong Spec #1.
