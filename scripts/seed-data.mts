@@ -93,6 +93,55 @@ export const SAMPLE_TEST = {
   updatedBy: SEED_ACTOR,
 };
 
+export const SAMPLE_CBT_ID = "nhin-lai-suy-nghi-lo-thi-v1";
+
+/**
+ * Bài CBT (Cognitive Behavioral Therapy) mẫu — bài tập tự nhận thức ngắn dẫn
+ * học sinh nhìn lại MỘT suy nghĩ tiêu cực về kỳ thi từ một góc khác.
+ *
+ * `isSampleContent: true` vì đây là nội dung tâm lý thuộc PRD §13 TBD, CHƯA
+ * qua thẩm định của chuyên gia tâm lý — cùng lý do và cùng cách xử lý với
+ * SAMPLE_TEST phía trên: rule production cấm publish nội dung mang cờ này,
+ * nên `seed-prod.mts` ghi module này ở trạng thái `draft`.
+ */
+export const SAMPLE_CBT = {
+  title: "Nhìn lại một suy nghĩ đang làm bạn lo",
+  version: 1,
+  isSampleContent: true,
+  disclaimer:
+    "Đây là bài tập tự nhận thức, không phải trị liệu và không thay thế chuyên gia tâm lý. " +
+    "Nếu bạn thấy quá tải, hãy nói với người lớn mà bạn tin tưởng.",
+  intro:
+    "Bài này mất khoảng 5 phút. Không có câu trả lời đúng hay sai, và bạn dừng lúc nào cũng được.",
+  steps: [
+    {
+      id: "s1",
+      prompt: "Suy nghĩ nào về kỳ thi đang lặp lại trong đầu bạn?",
+      hint: "Viết đúng câu bạn nghĩ, không cần sửa cho hay.",
+    },
+    {
+      id: "s2",
+      prompt: "Điều gì khiến bạn tin suy nghĩ đó là đúng?",
+      hint: "",
+    },
+    {
+      id: "s3",
+      prompt: "Có điều gì cho thấy nó không hoàn toàn đúng không?",
+      hint: "Kể cả một chi tiết nhỏ cũng được.",
+    },
+    {
+      id: "s4",
+      prompt: "Nếu một người bạn nói câu đó với bạn, bạn sẽ đáp lại thế nào?",
+      hint: "",
+    },
+  ],
+  closingText:
+    "Nhận ra một suy nghĩ không có nghĩa là nó biến mất. Nhưng nhìn thẳng vào nó một lần " +
+    "thường làm nó bớt nặng hơn.",
+  suggestedResourceSlugs: [],
+  updatedBy: SEED_ACTOR,
+};
+
 export const SAMPLE_RESOURCES = [
   {
     title: "Kỹ thuật thở 4-7-8",

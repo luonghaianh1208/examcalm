@@ -35,7 +35,9 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { SAMPLE_TEST, SAMPLE_TEST_ID, SAMPLE_RESOURCES, SEED_ACTOR } from "./seed-data.mjs";
+import {
+  SAMPLE_TEST, SAMPLE_TEST_ID, SAMPLE_CBT, SAMPLE_CBT_ID, SAMPLE_RESOURCES, SEED_ACTOR,
+} from "./seed-data.mjs";
 
 const apiKey = process.env.EXAMCALM_API_KEY;
 const email = process.env.EXAMCALM_ADMIN_EMAIL;
@@ -76,6 +78,20 @@ await setDoc(doc(db, "testDefinitions", SAMPLE_TEST_ID), {
   updatedAt: serverTimestamp(),
 });
 console.log(`Đã ghi bài test "${SAMPLE_TEST.title}" — trạng thái ${testStatus.toUpperCase()}.`);
+
+// Cùng luật suy ra trạng thái từ cờ như bài test phía trên: module CBT mẫu
+// chưa qua thẩm định chuyên môn nên KHÔNG được publish trên production.
+const cbtStatus = SAMPLE_CBT.isSampleContent ? "draft" : "published";
+await setDoc(doc(db, "cbtModules", SAMPLE_CBT_ID), {
+  ...SAMPLE_CBT,
+  status: cbtStatus,
+  updatedBy: cred.user.uid,
+  updatedAt: serverTimestamp(),
+});
+console.log(`Đã ghi bài CBT "${SAMPLE_CBT.title}" — trạng thái ${cbtStatus.toUpperCase()}.`);
+if (cbtStatus === "draft") {
+  console.log("Bài CBT là DRAFT — học sinh CHƯA thấy, chờ chuyên gia tâm lý thẩm định.");
+}
 
 for (const resource of SAMPLE_RESOURCES) {
   await setDoc(doc(db, "resources", resource.slug), {

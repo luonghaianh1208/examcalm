@@ -12,6 +12,7 @@ describe("SiteHeader", () => {
 
     expect(screen.getByRole("link", { name: /đăng nhập/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /đăng ký/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /bài tập/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /tiến trình/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /quản trị/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /hồ sơ/i })).not.toBeInTheDocument();

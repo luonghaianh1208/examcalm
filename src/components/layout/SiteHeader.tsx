@@ -29,6 +29,7 @@ export function SiteHeader({ user }: Props) {
 
         <nav aria-label="Chính" className="flex flex-wrap items-center gap-4">
           <Link href="/test" data-tour="test">Bài test</Link>
+          <Link href="/cbt">Bài tập</Link>
           <Link href="/thu-vien" data-tour="library">Thư viện</Link>
           {user && <Link href="/tien-trinh" data-tour="progress">Tiến trình</Link>}
           {user?.role === "admin" && <Link href="/admin">Quản trị</Link>}

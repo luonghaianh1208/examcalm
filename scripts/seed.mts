@@ -27,7 +27,9 @@
  */
 import { initializeApp, cert, applicationDefault } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { SAMPLE_TEST, SAMPLE_TEST_ID, SAMPLE_RESOURCES, SEED_ACTOR } from "./seed-data.mjs";
+import {
+  SAMPLE_TEST, SAMPLE_TEST_ID, SAMPLE_CBT, SAMPLE_CBT_ID, SAMPLE_RESOURCES, SEED_ACTOR,
+} from "./seed-data.mjs";
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 initializeApp({
@@ -45,6 +47,15 @@ await db.collection("testDefinitions").doc(SAMPLE_TEST_ID).set({
   updatedAt: FieldValue.serverTimestamp(),
 });
 
+// Dev/Emulator: publish luôn để xem được ngay — xem giải thích ở bài test phía
+// trên. Production dùng seed-prod.mts, nơi module bị ghi draft vì rule cấm
+// publish nội dung mẫu.
+await db.collection("cbtModules").doc(SAMPLE_CBT_ID).set({
+  ...SAMPLE_CBT,
+  status: "published",
+  updatedAt: FieldValue.serverTimestamp(),
+});
+
 for (const resource of SAMPLE_RESOURCES) {
   await db.collection("resources").doc(resource.slug).set({
     ...resource,
@@ -55,5 +66,5 @@ for (const resource of SAMPLE_RESOURCES) {
   });
 }
 
-console.log(`Đã nạp 1 bài test mẫu và ${SAMPLE_RESOURCES.length} tài nguyên mẫu.`);
-console.log("Lưu ý: bài test có isSampleContent = true và sẽ hiển thị banner cảnh báo.");
+console.log(`Đã nạp 1 bài test mẫu, 1 bài CBT mẫu và ${SAMPLE_RESOURCES.length} tài nguyên mẫu.`);
+console.log("Lưu ý: bài test và bài CBT có isSampleContent = true và sẽ hiển thị banner cảnh báo.");
