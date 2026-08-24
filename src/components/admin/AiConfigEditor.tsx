@@ -20,6 +20,9 @@ type ConfigFormState = {
   temperature: string;
   maxTokens: string;
   quotaStudentPerDay: string;
+  // Chưa có ô nhập riêng trên UI (task-1-brief.md chỉ yêu cầu thêm field vào schema, chưa tới
+  // UI) — giữ pass-through qua form state để lưu cấu hình không làm rớt field bắt buộc này.
+  chatQuotaPerDay: string;
   rateLimitPerMinute: string;
   /** true = tính năng ĐANG BẬT cho học sinh — NGƯỢC với killSwitch.moodReflection (true =
    *  tắt). Form giữ chiều tích cực để không ai phải tự đảo chiều trong đầu lúc đọc UI. */
@@ -34,6 +37,7 @@ function toFormState(config: AiConfig): ConfigFormState {
     temperature: String(config.temperature),
     maxTokens: String(config.maxTokens),
     quotaStudentPerDay: String(config.quotaStudentPerDay),
+    chatQuotaPerDay: String(config.chatQuotaPerDay),
     rateLimitPerMinute: String(config.rateLimitPerMinute),
     featureEnabled: !config.killSwitch.moodReflection,
   };
@@ -96,6 +100,7 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
       temperature: Number(form.temperature),
       maxTokens: Number(form.maxTokens),
       quotaStudentPerDay: Number(form.quotaStudentPerDay),
+      chatQuotaPerDay: Number(form.chatQuotaPerDay),
       rateLimitPerMinute: Number(form.rateLimitPerMinute),
       killSwitch: { moodReflection: !form.featureEnabled },
     };

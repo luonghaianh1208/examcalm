@@ -56,6 +56,7 @@ export async function runSaveAiConfig(
     temperature: next.temperature,
     maxTokens: next.maxTokens,
     quotaStudentPerDay: next.quotaStudentPerDay,
+    chatQuotaPerDay: next.chatQuotaPerDay,
     rateLimitPerMinute: next.rateLimitPerMinute,
     killSwitch: next.killSwitch,
     updatedBy: auth!.uid,

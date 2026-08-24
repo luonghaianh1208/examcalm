@@ -40,6 +40,14 @@ export const aiConfigSchema = z.object({
   //   DEFAULT_AI_CONFIG (hệ thống mặc định im lặng). Admin muốn nới quota thì
   //   nhập một số dương.
   quotaStudentPerDay: z.number().int().min(0),
+  // chatQuotaPerDay ĐI THEO CÙNG quy ước với quotaStudentPerDay ở trên, KHÔNG PHẢI quy ước
+  // ngược của rateLimitPerMinute bên dưới: đây cũng là một NGÂN SÁCH CHI PHÍ (đếm tin nhắn
+  // chat của học sinh trong ngày, dùng lại consumeQuota với khoá khác — design spec §6), nên
+  // 0 nghĩa là KHÔNG học sinh nào được gửi tin chat trong ngày. Khác quotaStudentPerDay ở chỗ
+  // mặc định KHÔNG im lặng (xem DEFAULT_AI_CONFIG bên dưới) vì baseUrl rỗng và killSwitch bật
+  // đã tự tắt toàn bộ tính năng AI rồi — chatQuotaPerDay chỉ cần sẵn một ngân sách hợp lý cho
+  // thời điểm admin bật tính năng, không cần đóng vai một guard độc lập thứ hai.
+  chatQuotaPerDay: z.number().int().min(0),
   // - rateLimitPerMinute chỉ là PHANH CHỐNG BURST trong một ngày, KHÔNG PHẢI
   //   ngân sách — nó không quyết định ngân sách của ngày, quotaStudentPerDay
   //   mới quyết định. Vì vậy 0 ở đây nghĩa là KHÔNG áp rate limit (bỏ qua hoàn
@@ -68,6 +76,10 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   temperature: 0.7,
   maxTokens: 500,
   quotaStudentPerDay: 0,
+  // 30, đề xuất của design spec §6 — không cần im lặng như quotaStudentPerDay vì baseUrl
+  // rỗng + killSwitch bật đã tắt toàn bộ tính năng AI; giá trị này chỉ có tác dụng sau khi
+  // admin bật tính năng.
+  chatQuotaPerDay: 30,
   // 3, không phải 0 — 0 ở field này nghĩa là "không rate limit" (xem chú
   // thích ở aiConfigSchema), và một mặc định hệ thống cho một tính năng brake
   // chi phí không nên là "không giới hạn burst". quotaStudentPerDay = 0 đã

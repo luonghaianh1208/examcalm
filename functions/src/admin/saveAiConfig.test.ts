@@ -47,6 +47,7 @@ const VALID_CONFIG: AiConfig = {
   temperature: 0.7,
   maxTokens: 500,
   quotaStudentPerDay: 5,
+  chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
   killSwitch: { moodReflection: false },
 };

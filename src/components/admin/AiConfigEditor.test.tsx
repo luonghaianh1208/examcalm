@@ -43,6 +43,7 @@ const CONFIGURED: AiConfig = {
   temperature: 0.7,
   maxTokens: 500,
   quotaStudentPerDay: 10,
+  chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
   killSwitch: { moodReflection: false },
 };

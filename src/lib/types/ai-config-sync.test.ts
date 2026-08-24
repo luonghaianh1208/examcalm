@@ -50,6 +50,7 @@ const BASE_VALID: {
   temperature: number;
   maxTokens: number;
   quotaStudentPerDay: number;
+  chatQuotaPerDay: number;
   rateLimitPerMinute: number;
   killSwitch: { moodReflection: boolean };
 } = {
@@ -59,6 +60,7 @@ const BASE_VALID: {
   temperature: 0.7,
   maxTokens: 500,
   quotaStudentPerDay: 5,
+  chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
   killSwitch: { moodReflection: true },
 };
@@ -84,6 +86,10 @@ const PROBES: { label: string; override: Record<string, unknown> }[] = [
   { label: "quotaStudentPerDay = -1", override: { quotaStudentPerDay: -1 } },
   { label: "quotaStudentPerDay = 0 (hợp lệ, nghĩa là tạm khoá)", override: { quotaStudentPerDay: 0 } },
   { label: "quotaStudentPerDay = 2.5 (không phải số nguyên)", override: { quotaStudentPerDay: 2.5 } },
+
+  { label: "chatQuotaPerDay = -1", override: { chatQuotaPerDay: -1 } },
+  { label: "chatQuotaPerDay = 0 (hợp lệ, nghĩa là tạm khoá, cùng quy ước quotaStudentPerDay)", override: { chatQuotaPerDay: 0 } },
+  { label: "chatQuotaPerDay = 2.5 (không phải số nguyên)", override: { chatQuotaPerDay: 2.5 } },
 
   { label: "rateLimitPerMinute = -1", override: { rateLimitPerMinute: -1 } },
   { label: "rateLimitPerMinute = 0 (hợp lệ, nghĩa là không rate limit)", override: { rateLimitPerMinute: 0 } },
@@ -141,6 +147,7 @@ describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/
     expect(srcSchema.safeParse({ ...BASE_VALID, maxTokens: 0 }).success).toBe(false);
     expect(srcSchema.safeParse({ ...BASE_VALID, temperature: 1.01 }).success).toBe(false);
     expect(srcSchema.safeParse({ ...BASE_VALID, baseUrl: "http://api.example.com/v1" }).success).toBe(false);
+    expect(srcSchema.safeParse({ ...BASE_VALID, chatQuotaPerDay: -1 }).success).toBe(false);
   });
 
   // M12 (final whole-branch review): test #1 ở trên so AI_CONFIG_FIELD_KEYS với

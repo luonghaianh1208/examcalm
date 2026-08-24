@@ -38,6 +38,11 @@ export const aiConfigSchema = z.object({
   // - quotaStudentPerDay = 0  → KHÔNG học sinh nào được gọi AI trong ngày (ngân sách cạn).
   // - rateLimitPerMinute = 0  → KHÔNG áp rate limit (phanh burst tắt), NGƯỢC LẠI quy ước trên.
   quotaStudentPerDay: z.number().int().min(0),
+  // chatQuotaPerDay đi theo CÙNG quy ước với quotaStudentPerDay (ngân sách chi phí, đếm tin
+  // chat/ngày, dùng lại consumeQuota với khoá khác — design spec §6): 0 = không tin chat nào
+  // được gửi trong ngày. Mặc định KHÔNG im lặng như quotaStudentPerDay — xem
+  // src/lib/types/ai.ts để biết lý do đầy đủ.
+  chatQuotaPerDay: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().min(0),
   killSwitch: z.object({
     // true = tính năng ĐANG TẮT. false = tính năng đang bật — đọc ngược field này là lỗi
@@ -79,6 +84,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   temperature: 0.7,
   maxTokens: 500,
   quotaStudentPerDay: 0,
+  chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
   // Mặc định hệ thống là im lặng: kill switch true = tính năng đang tắt.
   killSwitch: { moodReflection: true },

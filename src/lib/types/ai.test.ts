@@ -13,6 +13,7 @@ const VALID_AI_CONFIG = {
   temperature: 0.7,
   maxTokens: 500,
   quotaStudentPerDay: 5,
+  chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
   killSwitch: { moodReflection: true },
 };
@@ -59,6 +60,19 @@ describe("aiConfigSchema", () => {
     ).toBe(false);
     expect(
       aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, quotaStudentPerDay: 1.5 }).success,
+    ).toBe(false);
+  });
+
+  it("chatQuotaPerDay phải là số nguyên >= 0, 0 hợp lệ nghĩa là tắt (cùng quy ước với " +
+    "quotaStudentPerDay — xem comment ở aiConfigSchema)", () => {
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatQuotaPerDay: 0 }).success,
+    ).toBe(true);
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatQuotaPerDay: -1 }).success,
+    ).toBe(false);
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatQuotaPerDay: 2.5 }).success,
     ).toBe(false);
   });
 
@@ -117,6 +131,12 @@ describe("DEFAULT_AI_CONFIG", () => {
   it("rateLimitPerMinute mặc định > 0 — 0 ở field này nghĩa là KHÔNG rate limit " +
     "(ngược chiều với quotaStudentPerDay), nên một mặc định hệ thống không được để 0", () => {
     expect(DEFAULT_AI_CONFIG.rateLimitPerMinute).toBeGreaterThan(0);
+  });
+
+  it("chatQuotaPerDay mặc định là 30 (design spec §6 — đề xuất mặc định, không phải im lặng " +
+    "như quotaStudentPerDay: baseUrl rỗng và killSwitch bật đã tắt toàn bộ tính năng, " +
+    "chatQuotaPerDay chỉ cần sẵn một ngân sách hợp lý cho lúc admin bật tính năng)", () => {
+    expect(DEFAULT_AI_CONFIG.chatQuotaPerDay).toBe(30);
   });
 
   it("tự khớp với aiConfigSchema của chính nó", () => {
