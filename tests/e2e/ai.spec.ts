@@ -205,14 +205,27 @@ test.describe("AI — đã cấu hình và bật (đường đi thuận)", () =>
     await expect(page.getByText(/nội dung do ai tạo/i)).toBeVisible();
     await expect(region.getByText(/đang tạo phản chiếu/i)).toBeVisible();
 
-    // Không khẳng định đúng nguyên văn câu lỗi — mã lỗi client nhận được khi kết nối callable
-    // thất bại phụ thuộc chi tiết nội bộ Firebase JS SDK (không kiểm chứng được ở suite này,
-    // xem giới hạn ghi ở đầu file). Khẳng định điều CHẮC CHẮN đúng: thẻ rời trạng thái đang tải,
-    // hiện một trạng thái lỗi trung tính (role="status", không rỗng) — KHÔNG BAO GIỜ hiện nội
-    // dung THÀNH CÔNG (phản chiếu/nút đánh giá) vì không model nào thực sự được gọi.
+    // Finding 3 / re-review vòng cuối (final whole-branch review): assertion trước đó ("status
+    // không rỗng") không phân biệt được hai đường khác nhau trong ReflectionCard.tsx — (1)
+    // requestReflection() THẬT SỰ được gọi và callable thất bại (đường đang muốn chứng minh),
+    // và (2) ai đó lỡ xoá lượt gọi requestReflection() khỏi component: getOutputForMoodLog()
+    // vẫn chạy, không tìm thấy aiJournalOutputs nào (suite này không seed collection đó), và
+    // component RƠI VÀO NHÁNH "vừa tạo xong mà đọc lại không thấy" — cũng ra phase="error" với
+    // status không rỗng, khiến cả 4 assertion cũ vẫn xanh dù lượt gọi đã bị xoá.
+    //
+    // Hai nhánh đó tạo ra HAI CÂU CHỮ KHÁC NHAU — không phải đoán: đã verify trực tiếp bằng cách
+    // chạy chính test này với một assertion cố tình sai để đọc text thật từ diff của Playwright.
+    // Đường (1) — callable thật sự được gọi, thất bại vì Functions Emulator không chạy trong
+    // suite này (xem giới hạn ghi ở đầu file) — luôn đi qua nhánh "internal" của
+    // mapReflectionErrorMessage() (src/lib/firestore/ai-outputs.ts), sinh đúng câu dưới đây.
+    // Đường (2) — lượt gọi bị xoá — sẽ sinh câu "Không thể tải phản chiếu lúc này, thử lại sau
+    // nhé." (nhánh !output ở ReflectionCard.tsx) thay vì câu chứa "tạo". Khẳng định đúng câu chữ
+    // của đường (1) để xoá requestReflection() khỏi component thật sự làm test này đỏ.
     const status = region.getByRole("status");
     await expect(status).toBeVisible({ timeout: 15_000 });
-    await expect(status).not.toBeEmpty();
     await expect(region.getByRole("button", { name: /hữu ích/i })).toHaveCount(0);
+    await expect(status).toHaveText(
+      "Không thể tạo phản chiếu lúc này, nhưng nhật ký cảm xúc của bạn đã được lưu an toàn. Thử lại sau nhé.",
+    );
   });
 });

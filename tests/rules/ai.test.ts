@@ -241,8 +241,13 @@ describe("systemConfig/{id}", () => {
     await assertSucceeds(getDoc(doc(adminDb(env), "systemConfig/aiConfig")));
   });
 
-  it("Admin ghi được config thường", async () => {
-    await assertSucceeds(setDoc(doc(adminDb(env), "systemConfig/aiConfig"), AI_CONFIG));
+  // Residual 1 (re-review vòng cuối, final whole-branch review): trước fix, admin ghi được
+  // systemConfig/aiConfig thẳng từ client — đường đó bỏ qua callable saveAiConfig() (Cloud
+  // Function, fix I5) nên KHÔNG để lại auditLogs nào, và làm hở chiều còn lại của I4 (aiConfig
+  // tự đổi rời khỏi aiPublic mà không bị chặn). saveAiConfig() dùng Admin SDK nên không cần
+  // client ghi trực tiếp document này nữa — khoá hẳn.
+  it("Admin KHÔNG ghi được systemConfig/aiConfig từ client nữa — chỉ Cloud Function saveAiConfig (Admin SDK) mới ghi được (Residual 1)", async () => {
+    await assertFails(setDoc(doc(adminDb(env), "systemConfig/aiConfig"), AI_CONFIG));
   });
 
   it("Student KHÔNG đọc được config thường", async () => {

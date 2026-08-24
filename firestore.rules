@@ -142,13 +142,28 @@ service cloud.firestore {
             : "");
     }
 
+    // Residual 1 (re-review vòng cuối, final whole-branch review): I5 (audit log cho
+    // saveAiConfig) chỉ có ý nghĩa nếu Cloud Function saveAiConfig (Admin SDK) là đường DUY
+    // NHẤT ghi được document này. Trước fix, khối wildcard bên dưới vẫn cho admin setDoc()
+    // thẳng aiConfig từ client (DevTools) — đổi baseUrl trỏ về server riêng của admin đó, nhận
+    // nguyên văn ghi chú của mọi học sinh đã opt-in, và KHÔNG để lại một dòng auditLogs nào.
+    // Đường đó cũng làm hở một chiều còn lại của I4: rule cũ chỉ khoá aiPublic lệch khỏi
+    // aiConfig, không khoá chiều ngược — aiConfig có thể tự đổi rời khỏi aiPublic. Từ khi
+    // saveAiConfig() đã là callable dùng Admin SDK (bỏ qua rules), không còn đường hợp lệ nào
+    // cần client ghi trực tiếp document này nữa — khoá hẳn allow write: if false. Đọc vẫn admin-
+    // only (AiConfigEditor.tsx đọc trực tiếp qua getAiConfig() để hiện form).
+    match /systemConfig/aiConfig {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // I4 fix, phần 2: Firestore hợp (OR) MỌI khối match khớp cùng path — khối wildcard này
-    // cũng khớp path "systemConfig/aiPublic", nên nếu không loại trừ tường minh, quyền admin
-    // ghi tuỳ ý ở đây sẽ ĐÈ LÊN ràng buộc providerLabel khớp aiConfig ở khối hẹp phía trên (hai
-    // khối OR lại — cái LỎNG hơn thắng), khiến ràng buộc đó vô tác dụng dù đọc code tưởng đã
-    // chặn. "aiPublic" phải đi qua đúng khối hẹp ở trên.
+    // cũng khớp path "systemConfig/aiPublic" VÀ "systemConfig/aiConfig", nên nếu không loại trừ
+    // tường minh cả hai, quyền admin ghi tuỳ ý ở đây sẽ ĐÈ LÊN ràng buộc/khoá ở hai khối hẹp
+    // phía trên (Firestore OR mọi khối khớp cùng path — khối LỎNG hơn thắng), khiến cả hai vô
+    // tác dụng dù đọc code tưởng đã chặn.
     match /systemConfig/{id} {
-      allow read, write: if isAdmin() && id != "aiPublic";
+      allow read, write: if isAdmin() && id != "aiPublic" && id != "aiConfig";
     }
 
     match /promptTemplates/{id} {
