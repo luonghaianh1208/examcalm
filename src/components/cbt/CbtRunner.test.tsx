@@ -5,11 +5,29 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const saveCbtSession = vi.fn(async () => {});
 const saveMoodLog = vi.fn(async () => "mood-id");
 
+// Task 11b: CbtRunner giờ render ReflectionCard thật ở phase "done" — nên
+// phải mock các module Firestore/callable ở tầng lá mà ReflectionCard dùng,
+// đúng cách mọi test khác trong repo mock Firestore (xem ai-public.test.ts).
+// Mặc định gate đóng (aiOptIn tắt) để mọi test SẴN CÓ ở dưới giữ nguyên hành
+// vi cũ — không có test nào trong số đó chạm các mock mới này.
+const requestReflection = vi.fn();
+const getOutputForMoodLog = vi.fn();
+const getAiOptIn = vi.fn(async () => false);
+const getAiPublicConfig = vi.fn(async () => ({ providerLabel: "", enabled: false }));
+
 vi.mock("@/lib/firestore/cbt-sessions", () => ({
   newSessionRef: () => ({ id: "sess-1", path: "cbtSessions/sess-1" }),
   saveCbtSession,
 }));
 vi.mock("@/lib/firestore/moods", () => ({ saveMoodLog }));
+vi.mock("@/lib/firestore/ai-outputs", () => ({
+  requestReflection,
+  getOutputForMoodLog,
+  setOutputFeedback: vi.fn(),
+  deleteOutput: vi.fn(),
+}));
+vi.mock("@/lib/firestore/ai-optin", () => ({ getAiOptIn }));
+vi.mock("@/lib/firestore/ai-public", () => ({ getAiPublicConfig }));
 
 const { CbtRunner } = await import("@/components/cbt/CbtRunner");
 
@@ -21,6 +39,16 @@ const MODULE = {
 };
 
 beforeEach(() => { saveCbtSession.mockClear(); saveMoodLog.mockClear(); });
+
+// Beforeeach RIÊNG cho các mock mới của Task 11b — tách khỏi beforeEach gốc ở
+// trên để không sửa một ký tự nào của nó (xem task-11b-brief.md, ràng buộc
+// "mọi test có sẵn phải pass không sửa một ký tự nào").
+beforeEach(() => {
+  requestReflection.mockClear();
+  getOutputForMoodLog.mockClear();
+  getAiOptIn.mockClear();
+  getAiPublicConfig.mockClear();
+});
 
 describe("CbtRunner", () => {
   it("luôn hiện disclaimer", () => {
@@ -148,5 +176,72 @@ describe("CbtRunner", () => {
 
     await user.click(screen.getByRole("button", { name: /bỏ qua/i }));
     expect(container.textContent).not.toMatch(forbidden); // done
+  });
+
+  // --- Task 11b: nối ReflectionCard vào CbtRunner (task-11b-brief.md) ---
+
+  // Đưa CbtRunner tới phase "done" bằng đường LƯU cảm xúc "sau" thật (không
+  // phải "bỏ qua") — chỉ đường này mới có moodLogId để ReflectionCard dùng.
+  async function reachDoneBySavingAfterMood(user: ReturnType<typeof userEvent.setup>) {
+    render(<CbtRunner module={MODULE} uid="u1" canSave />);
+    await user.click(screen.getByRole("button", { name: /bắt đầu/i }));
+    await user.click(screen.getByRole("button", { name: /bỏ qua/i }));
+    await user.type(screen.getByLabelText("Bạn đang nghĩ gì?"), "a");
+    await user.click(screen.getByRole("button", { name: /tiếp tục/i }));
+    await user.click(screen.getByRole("button", { name: /hoàn thành/i }));
+    await user.click(screen.getByRole("button", { name: /lưu và xem lời kết/i }));
+  }
+
+  it("aiOptIn tắt: phase done không có nội dung AI, không gọi requestReflection", async () => {
+    const user = userEvent.setup();
+    await reachDoneBySavingAfterMood(user);
+
+    expect(await screen.findByText(/cảm ơn bạn/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nội dung do ai tạo/i)).not.toBeInTheDocument();
+    expect(requestReflection).not.toHaveBeenCalled();
+  });
+
+  it("aiOptIn bật + aiPublic bật: phase done hiện thẻ phản chiếu dùng moodLogId của cảm xúc sau", async () => {
+    getAiOptIn.mockResolvedValueOnce(true);
+    getAiPublicConfig.mockResolvedValueOnce({ providerLabel: "DeepSeek", enabled: true });
+    requestReflection.mockResolvedValueOnce({ outputId: "output-1" });
+    getOutputForMoodLog.mockResolvedValueOnce({
+      id: "output-1",
+      userId: "u1",
+      moodLogId: "mood-id",
+      reflectionText: "Bạn đã hoàn thành bài tập rất tốt.",
+      catStoryText: "Chú mèo mỉm cười.",
+      journalPrompt: "Bạn muốn ghi nhớ điều gì từ hôm nay?",
+      promptTemplateId: "tpl-1",
+      promptVersion: 1,
+      providerLabel: "DeepSeek",
+      model: "deepseek-chat",
+      userFeedback: null,
+      createdAt: null,
+    });
+
+    const user = userEvent.setup();
+    await reachDoneBySavingAfterMood(user);
+
+    expect(await screen.findByText("Bạn đã hoàn thành bài tập rất tốt.")).toBeInTheDocument();
+    expect(requestReflection).toHaveBeenCalledWith("mood-id");
+  });
+
+  // Ràng buộc cứng nhất của task: bài làm và cảm xúc vẫn lưu được khi lớp AI
+  // hỏng hoàn toàn. Test ở mức tích hợp — mount CbtRunner thật, chỉ mock các
+  // module Firestore/callable ở tầng lá, không mock ReflectionCard.
+  it("AI layer hỏng hoàn toàn: vẫn hiện lời kết, không có gì gợi ý mất bài hay mất cảm xúc", async () => {
+    getAiOptIn.mockResolvedValueOnce(true);
+    getAiPublicConfig.mockResolvedValueOnce({ providerLabel: "DeepSeek", enabled: true });
+    requestReflection.mockRejectedValueOnce(new Error("Không thể kết nối AI."));
+
+    const user = userEvent.setup();
+    await reachDoneBySavingAfterMood(user);
+
+    expect(await screen.findByText(/cảm ơn bạn/i)).toBeInTheDocument();
+    expect(saveMoodLog).toHaveBeenCalledWith("u1", expect.objectContaining({ context: "after" }));
+    expect(
+      screen.queryByText(/chưa lưu|không lưu được|lưu thất bại|mất dữ liệu|mất bài/i),
+    ).not.toBeInTheDocument();
   });
 });

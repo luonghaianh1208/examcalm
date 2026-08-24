@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { MoodForm } from "@/components/mood/MoodForm";
 import { SampleContentBanner } from "@/components/test/SampleContentBanner";
+import { ReflectionCard } from "@/components/ai/ReflectionCard";
 import { newSessionRef, saveCbtSession } from "@/lib/firestore/cbt-sessions";
 import { saveMoodLog, type MoodInput } from "@/lib/firestore/moods";
 import type { CbtModuleListItem } from "@/lib/firebase/queries-public";
@@ -23,6 +24,10 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [summary, setSummary] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
+  // Id của mood log "sau" — dùng để ReflectionCard biết phản chiếu nào thuộc
+  // về nó ở phase "done" (Task 11b). Chỉ set được khi mood "sau" lưu thành
+  // công; bỏ qua bước đó hoặc lưu lỗi thì vẫn null, ReflectionCard không render.
+  const [afterMoodLogId, setAfterMoodLogId] = useState<string | null>(null);
 
   function start() {
     setSession(newSessionRef());
@@ -33,7 +38,8 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
     if (!uid) return;
     // Cảm xúc không lưu được thì vẫn cho đi tiếp — bài tập quan trọng hơn.
     try {
-      await saveMoodLog(uid, input);
+      const id = await saveMoodLog(uid, input);
+      if (phase === "after") setAfterMoodLogId(id);
     } catch {
       // Nuốt có chủ đích: xem design spec §9.
     }
@@ -166,6 +172,7 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
               Bài của bạn đang chờ đồng bộ. Khi có mạng lại, nó sẽ tự lưu.
             </p>
           )}
+          {uid && afterMoodLogId && <ReflectionCard moodLogId={afterMoodLogId} uid={uid} />}
           {mod.suggestedResourceSlugs.length > 0 && (
             <nav className="flex flex-col gap-2">
               <h2 className="font-medium text-slate-900">Có thể bạn muốn đọc thêm</h2>

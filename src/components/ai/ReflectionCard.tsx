@@ -8,30 +8,36 @@ import {
   deleteOutput,
   type AiJournalOutputRecord,
 } from "@/lib/firestore/ai-outputs";
+import { getAiOptIn } from "@/lib/firestore/ai-optin";
+import { getAiPublicConfig } from "@/lib/firestore/ai-public";
 
 type Props = {
   /** Id của mood log vừa lưu — phản chiếu này thuộc về nó. */
   moodLogId: string;
   /** uid của học sinh — cần để đọc/ghi đúng phản chiếu của chính mình. */
   uid: string;
-  /**
-   * Học sinh đã tự bật tính năng AI chưa. `false` → không render gì, không
-   * gọi callable — im lặng tuyệt đối, không phải trạng thái "tắt" hay lời mời.
-   */
-  aiOptIn: boolean;
 };
 
+// "checking": chưa biết cổng mở hay đóng. "closed": aiOptIn tắt hoặc aiPublic
+// chưa khả dụng — im lặng tuyệt đối. "open": đủ điều kiện gọi callable.
+type Gate = "checking" | "closed" | "open";
 type Phase = "loading" | "success" | "error";
 
 /**
- * Hiện phản chiếu của mèo sau khi học sinh ghi một mood log. `requestReflection`
- * chỉ trả về `{ outputId }` (xem functions-client.ts) nên phải đọc tiếp
- * `getOutputForMoodLog` để lấy nội dung thật. Mọi lỗi từ `requestReflection`
- * đã được Task 9 dịch sẵn sang tiếng Việt thân thiện (kể cả thông điệp hết
- * quota) — component này CHỈ hiển thị nguyên văn `err.message`, không tự viết
- * lại câu chữ hay tự phân loại lỗi.
+ * Hiện phản chiếu của mèo sau khi học sinh ghi một mood log. Tự đọc cổng của
+ * chính mình (Task 11b, quyết định 1): privacySettings.aiOptIn của uid này và
+ * systemConfig/aiPublic. Nếu một trong hai nói không -> render null, KHÔNG
+ * gọi callable. Nhờ vậy MoodWidget/CbtRunner không cần biết gì về AI, chỉ cần
+ * truyền moodLogId + uid.
+ *
+ * `requestReflection` chỉ trả về `{ outputId }` (xem functions-client.ts) nên
+ * phải đọc tiếp `getOutputForMoodLog` để lấy nội dung thật. Mọi lỗi từ
+ * `requestReflection` đã được Task 9 dịch sẵn sang tiếng Việt thân thiện (kể
+ * cả thông điệp hết quota) — component này CHỈ hiển thị nguyên văn
+ * `err.message`, không tự viết lại câu chữ hay tự phân loại lỗi.
  */
-export function ReflectionCard({ moodLogId, uid, aiOptIn }: Props) {
+export function ReflectionCard({ moodLogId, uid }: Props) {
+  const [gate, setGate] = useState<Gate>("checking");
   const [phase, setPhase] = useState<Phase>("loading");
   const [record, setRecord] = useState<AiJournalOutputRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,7 +45,20 @@ export function ReflectionCard({ moodLogId, uid, aiOptIn }: Props) {
   const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
-    if (!aiOptIn) return;
+    let cancelled = false;
+    setGate("checking");
+    (async () => {
+      const [optIn, aiPublic] = await Promise.all([getAiOptIn(uid), getAiPublicConfig()]);
+      if (cancelled) return;
+      setGate(optIn && aiPublic.enabled ? "open" : "closed");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  useEffect(() => {
+    if (gate !== "open") return;
     let cancelled = false;
     // Reset TOÀN BỘ trạng thái của phản chiếu trước — không chỉ phase/error.
     // Thiếu record/deleted/confirmingDelete ở đây từng khiến "Đã xoá phản
@@ -77,10 +96,10 @@ export function ReflectionCard({ moodLogId, uid, aiOptIn }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [aiOptIn, moodLogId, uid]);
+  }, [gate, moodLogId, uid]);
 
-  // Im lặng tuyệt đối khi chưa bật — không phải trạng thái rỗng, không upsell.
-  if (!aiOptIn) return null;
+  // Im lặng tuyệt đối khi cổng chưa mở — không phải trạng thái rỗng, không upsell.
+  if (gate !== "open") return null;
 
   async function handleFeedback(value: "helpful" | "not_helpful") {
     if (!record) return;

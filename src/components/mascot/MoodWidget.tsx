@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CatMascot } from "./CatMascot";
 import { MoodForm } from "@/components/mood/MoodForm";
 import { saveMoodLog, type MoodInput } from "@/lib/firestore/moods";
+import { ReflectionCard } from "@/components/ai/ReflectionCard";
 
 type Props = {
   uid: string | null;
@@ -21,19 +22,45 @@ type Props = {
  */
 export function MoodWidget({ uid, canSave }: Props) {
   const [open, setOpen] = useState(false);
+  // Id của mood log vừa lưu — khác null nghĩa là panel đang ở trạng thái "đã
+  // lưu" (Task 11b, quyết định 2): không tự đóng panel nữa, chỗ này cho
+  // ReflectionCard render (nó tự đọc cổng aiOptIn của chính mình, im lặng nếu
+  // học sinh chưa bật).
+  const [savedMoodLogId, setSavedMoodLogId] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   async function handleSubmit(input: MoodInput) {
     if (!uid || !canSave) return;
-    await saveMoodLog(uid, input);
-    setOpen(false);
+    const id = await saveMoodLog(uid, input);
+    setSavedMoodLogId(id);
   }
+
+  function handleToggle() {
+    if (open) {
+      setOpen(false);
+      setSavedMoodLogId(null);
+    } else {
+      setOpen(true);
+    }
+  }
+
+  function handleClose() {
+    setOpen(false);
+    setSavedMoodLogId(null);
+  }
+
+  useEffect(() => {
+    // Nút "Lưu" vừa biến mất khỏi DOM khi chuyển sang trạng thái "đã lưu" —
+    // đưa focus sang nút đóng để bàn phím/trình đọc màn hình có điểm neo mới.
+    if (savedMoodLogId) closeButtonRef.current?.focus();
+  }, [savedMoodLogId]);
 
   return (
     <>
       <button
         type="button"
         data-tour="mood"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
         aria-expanded={open}
         aria-label="Mở nhật ký cảm xúc"
         className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 rounded-full bg-white p-2 shadow-lg motion-safe:transition-transform motion-safe:hover:scale-105"
@@ -47,7 +74,22 @@ export function MoodWidget({ uid, canSave }: Props) {
           className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 shadow-xl"
         >
           {canSave ? (
-            <MoodForm onSubmit={handleSubmit} />
+            savedMoodLogId ? (
+              <div className="flex flex-col gap-3">
+                <p role="status" className="text-slate-700">Đã lưu vào nhật ký cảm xúc của bạn.</p>
+                {uid && <ReflectionCard moodLogId={savedMoodLogId} uid={uid} />}
+                <button
+                  type="button"
+                  ref={closeButtonRef}
+                  onClick={handleClose}
+                  className="self-start rounded-lg border px-3 py-1 text-sm"
+                >
+                  Đóng
+                </button>
+              </div>
+            ) : (
+              <MoodForm onSubmit={handleSubmit} />
+            )
           ) : uid ? (
             <div className="flex flex-col gap-3">
               <p>Xác thực email xong là bạn ghi được vào nhật ký cảm xúc ngay.</p>

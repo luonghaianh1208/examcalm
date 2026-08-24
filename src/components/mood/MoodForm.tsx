@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { MOOD_ICONS, type MoodContext, type MoodIcon } from "@/lib/types/mood";
 import type { MoodInput } from "@/lib/firestore/moods";
-import { ReflectionCard } from "@/components/ai/ReflectionCard";
 
 const ICON_LABELS: Record<MoodIcon, string> = {
   very_low: "Rất mệt",
@@ -14,12 +13,7 @@ const ICON_LABELS: Record<MoodIcon, string> = {
 };
 
 type Props = {
-  /**
-   * Có thể trả về id của mood log vừa lưu (như `saveMoodLog`) — dùng để hiện
-   * `ReflectionCard` khi `aiOptIn` bật. Nơi gọi vẫn trả `Promise<void>` như
-   * cũ (không đổi gì) nếu không cần tính năng này.
-   */
-  onSubmit: (input: MoodInput) => Promise<void | string>;
+  onSubmit: (input: MoodInput) => Promise<void>;
   context?: MoodContext;
   linkedActivityRef?: string | null;
   /**
@@ -28,14 +22,6 @@ type Props = {
    * truyền nhãn phù hợp với ngữ cảnh đó thay vì dùng mặc định.
    */
   submitLabel?: string;
-  /**
-   * Học sinh đã tự bật phản chiếu AI chưa. Mặc định `false` — giữ nguyên
-   * hành vi cũ của Spec #1/#2 (không hiện gì thêm sau khi lưu). Chỉ có tác
-   * dụng khi `onSubmit` thực sự trả về id (chuỗi) của mood log vừa lưu.
-   */
-  aiOptIn?: boolean;
-  /** uid của học sinh — cần để ReflectionCard đọc/ghi đúng phản chiếu của mình. */
-  uid?: string | null;
 };
 
 export function MoodForm({
@@ -43,8 +29,6 @@ export function MoodForm({
   context = "standalone",
   linkedActivityRef = null,
   submitLabel = "Lưu vào nhật ký",
-  aiOptIn = false,
-  uid = null,
 }: Props) {
   const [moodScore, setMoodScore] = useState(5);
   const [moodIcon, setMoodIcon] = useState<MoodIcon>("neutral");
@@ -52,14 +36,13 @@ export function MoodForm({
   const [tags, setTags] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedMoodLogId, setSavedMoodLogId] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setError(null);
     try {
-      const result = await onSubmit({
+      await onSubmit({
         moodScore,
         moodIcon,
         note: note.trim(),
@@ -69,7 +52,6 @@ export function MoodForm({
       });
       setNote("");
       setTags("");
-      if (typeof result === "string") setSavedMoodLogId(result);
     } catch {
       setError("Chưa lưu được. Mình sẽ thử lại khi có mạng.");
     } finally {
@@ -125,10 +107,6 @@ export function MoodForm({
       <button type="submit" disabled={pending} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-60">
         {pending ? "Đang lưu…" : submitLabel}
       </button>
-
-      {aiOptIn && uid && savedMoodLogId && (
-        <ReflectionCard moodLogId={savedMoodLogId} uid={uid} aiOptIn={aiOptIn} />
-      )}
     </form>
   );
 }
