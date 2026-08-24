@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { callDeleteUserData } from "./functions-client";
+import { callDeleteUserData, callGenerateReflection } from "./functions-client";
 import { ensureAuthReady } from "./client";
 import { httpsCallable } from "firebase/functions";
 
@@ -62,5 +62,44 @@ describe("callDeleteUserData", () => {
     const result = await callDeleteUserData("u1");
 
     expect(result.authDeleteFailed).toBe(true);
+  });
+});
+
+describe("callGenerateReflection", () => {
+  it("gọi ensureAuthReady TRƯỚC khi gọi callable — đóng race lúc mới đăng nhập", async () => {
+    const order: string[] = [];
+    vi.mocked(ensureAuthReady).mockImplementation(async () => {
+      order.push("ensureAuthReady");
+    });
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => {
+      order.push("httpsCallable");
+      return { data: { outputId: "out1" } };
+    }));
+
+    await callGenerateReflection("m1");
+
+    expect(order).toEqual(["ensureAuthReady", "httpsCallable"]);
+  });
+
+  it("gọi callable generateReflection với đúng moodLogId và trả về nguyên kết quả", async () => {
+    mockedHttpsCallable.mockReturnValue(mockCallable(async (payload) => {
+      expect(payload).toEqual({ moodLogId: "m9" });
+      return { data: { outputId: "out9" } };
+    }));
+
+    const result = await callGenerateReflection("m9");
+
+    expect(mockedHttpsCallable).toHaveBeenCalledWith(expect.anything(), "generateReflection");
+    expect(result).toEqual({ outputId: "out9" });
+  });
+
+  it("không nuốt lỗi callable — để nguyên cho caller (ai-outputs.ts) tự dịch sang tiếng Việt", async () => {
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => {
+      throw { code: "functions/resource-exhausted" };
+    }));
+
+    await expect(callGenerateReflection("m1")).rejects.toEqual({
+      code: "functions/resource-exhausted",
+    });
   });
 });

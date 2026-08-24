@@ -69,3 +69,28 @@ export async function callDeleteUserData(targetUid: string): Promise<DeleteUserD
   const result = await fn({ targetUid });
   return result.data;
 }
+
+/**
+ * Khớp response thật của Cloud Function `generateReflection`
+ * (functions/src/ai/generateReflection.ts): trả về id của document vừa tạo ở
+ * aiJournalOutputs. Callable ném HttpsError cho mọi lỗi (kill switch, chưa
+ * cấu hình, chưa bật đồng ý AI, hết quota, lỗi model...) — hàm này CỐ Ý không
+ * bọc lỗi thành tiếng Việt, để nguyên mã lỗi callable cho caller
+ * (src/lib/firestore/ai-outputs.ts) tự dịch, cùng lý do functions-client.ts
+ * chỉ là lớp gọi callable mỏng, không chứa quyết định UX.
+ */
+export type GenerateReflectionResult = { outputId: string };
+
+export async function callGenerateReflection(
+  moodLogId: string,
+): Promise<GenerateReflectionResult> {
+  // Đóng race giống callSetUserRole/callDeleteUserData ở trên — xem giải
+  // thích ensureAuthReady() ở client.ts.
+  await ensureAuthReady();
+  const fn = httpsCallable<{ moodLogId: string }, GenerateReflectionResult>(
+    functionsInstance(),
+    "generateReflection",
+  );
+  const result = await fn({ moodLogId });
+  return result.data;
+}
