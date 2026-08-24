@@ -76,8 +76,11 @@ hai cách nhanh hơn nhiều:
 
 - **Nhanh nhất — công tắc kill switch:** vào `/admin/ai`, bỏ tick ô **"Bật tính năng phản
   chiếu AI cho học sinh"**, bấm **"Lưu cấu hình"**. Có hiệu lực gần như ngay lập tức (không
-  cần deploy) — mọi lượt gọi AI mới sẽ bị chặn, nhật ký cảm xúc của học sinh vẫn lưu bình
-  thường, không mất gì.
+  cần deploy) — mọi lượt **phản chiếu AI** (tính năng học sinh dùng, tốn quota) mới sẽ bị
+  chặn, nhật ký cảm xúc của học sinh vẫn lưu bình thường, không mất gì. Riêng nút **"Thử kết
+  nối"** ở mục 6 (chỉ admin dùng để kiểm tra cấu hình, không tốn quota học sinh) KHÔNG bị kill
+  switch chặn — đây là điều có chủ đích, để admin vẫn thử được cấu hình trong lúc tính năng
+  đang tắt cho học sinh.
 - **Nếu nghi ngờ chính API key đã bị lộ/lạm dụng:** vào thẳng dashboard của provider, **thu
   hồi (revoke) API key đó tại đó** — cách này chặn được cả những request không đi qua
   ExamCalm (vd: key bị dùng ở nơi khác). Sau đó tạo key mới và làm lại theo mục 3.

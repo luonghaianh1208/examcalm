@@ -192,7 +192,27 @@ test.describe("AI — đã cấu hình và bật (đường đi thuận)", () =>
     await page.getByRole("button", { name: /mở nhật ký cảm xúc/i }).click();
     await saveMoodEntry(page);
 
-    await expect(page.getByRole("region", { name: /phản chiếu từ mèo/i })).toBeVisible();
+    // M11 (final whole-branch review): assertion cũ chỉ kiểm tra label "Nội dung do AI tạo" và
+    // vùng region luôn HIỆN — cả hai render KHÔNG điều kiện ngay khi gate="open"
+    // (ReflectionCard.tsx), bất kể requestReflection() có thực sự được gọi hay không. Xoá thẳng
+    // lượt gọi callable khỏi component vẫn để test này xanh. Khẳng định thêm việc thẻ THẬT SỰ đi
+    // qua trạng thái đang tải rồi rơi vào trạng thái lỗi (Functions Emulator không chạy trong
+    // suite này — xem giới hạn ghi ở đầu file — nên lượt gọi callable thật sự THẤT BẠI), với
+    // đúng câu chữ lỗi trung tính do mapReflectionErrorMessage() sinh ra, để xoá lượt gọi đó làm
+    // test đỏ thay vì âm thầm xanh.
+    const region = page.getByRole("region", { name: /phản chiếu từ mèo/i });
+    await expect(region).toBeVisible();
     await expect(page.getByText(/nội dung do ai tạo/i)).toBeVisible();
+    await expect(region.getByText(/đang tạo phản chiếu/i)).toBeVisible();
+
+    // Không khẳng định đúng nguyên văn câu lỗi — mã lỗi client nhận được khi kết nối callable
+    // thất bại phụ thuộc chi tiết nội bộ Firebase JS SDK (không kiểm chứng được ở suite này,
+    // xem giới hạn ghi ở đầu file). Khẳng định điều CHẮC CHẮN đúng: thẻ rời trạng thái đang tải,
+    // hiện một trạng thái lỗi trung tính (role="status", không rỗng) — KHÔNG BAO GIỜ hiện nội
+    // dung THÀNH CÔNG (phản chiếu/nút đánh giá) vì không model nào thực sự được gọi.
+    const status = region.getByRole("status");
+    await expect(status).toBeVisible({ timeout: 15_000 });
+    await expect(status).not.toBeEmpty();
+    await expect(region.getByRole("button", { name: /hữu ích/i })).toHaveCount(0);
   });
 });
