@@ -1,0 +1,244 @@
+import { beforeAll, afterAll, beforeEach, describe, it } from "vitest";
+import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { createTestEnv, authedDb, adminDb, guestDb, seed } from "./helpers";
+
+let env: RulesTestEnvironment;
+
+// Khớp mô hình dữ liệu ở design spec §4 (chatSessions/chatMessages) và §3.4
+// (crisisAlerts) — Spec #4, 2026-08-25-examcalm-chat-design.md.
+const SESSION = {
+  userId: "u1",
+  startedAt: new Date(),
+  lastMessageAt: new Date(),
+  messageCount: 1,
+};
+
+const MESSAGE = {
+  userId: "u1", // trùng lặp có chủ đích (design §4) — rule kiểm không cần get() cha
+  sessionId: "s1",
+  role: "user",
+  text: "Em thấy lo lắng quá",
+  isCrisisResponse: false,
+  createdAt: new Date(),
+};
+
+const ALERT = {
+  userId: "u1",
+  severity: "concern",
+  triggeredBy: "keyword",
+  createdAt: new Date(),
+  handledBy: null,
+  handledAt: null,
+};
+
+beforeAll(async () => { env = await createTestEnv(); });
+afterAll(async () => { await env.cleanup(); });
+beforeEach(async () => { await env.clearFirestore(); });
+
+describe("chatSessions/{id}", () => {
+  it("chủ sở hữu (verified) tạo được phiên chat của mình", async () => {
+    await assertSucceeds(setDoc(doc(authedDb(env, "u1"), "chatSessions/s1"), SESSION));
+  });
+
+  it("chưa verify email KHÔNG tạo được", async () => {
+    await assertFails(
+      setDoc(doc(authedDb(env, "u1", { email_verified: false }), "chatSessions/s1"), SESSION),
+    );
+  });
+
+  it("userId không khớp uid của chính mình KHÔNG tạo được", async () => {
+    await assertFails(
+      setDoc(doc(authedDb(env, "u1"), "chatSessions/s1"), { ...SESSION, userId: "u2" }),
+    );
+  });
+
+  it("Guest KHÔNG tạo được", async () => {
+    await assertFails(setDoc(doc(guestDb(env), "chatSessions/s1"), SESSION));
+  });
+
+  it("chủ sở hữu đọc được phiên của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertSucceeds(getDoc(doc(authedDb(env, "u1"), "chatSessions/s1")));
+  });
+
+  it("người khác KHÔNG đọc được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertFails(getDoc(doc(authedDb(env, "u2"), "chatSessions/s1")));
+  });
+
+  it("ADMIN CŨNG KHÔNG đọc được — nội dung chat nhạy cảm hơn cả moodLogs/cbtSessions", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertFails(getDoc(doc(adminDb(env), "chatSessions/s1")));
+  });
+
+  it("chủ sở hữu xoá được phiên của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertSucceeds(deleteDoc(doc(authedDb(env, "u1"), "chatSessions/s1")));
+  });
+
+  it("người khác KHÔNG xoá được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertFails(deleteDoc(doc(authedDb(env, "u2"), "chatSessions/s1")));
+  });
+
+  it("update bị từ chối kể cả chính chủ — chỉ Cloud Function mới cập nhật lastMessageAt/messageCount", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "chatSessions/s1"), { messageCount: 2 }),
+    );
+  });
+
+  it("ADMIN CŨNG KHÔNG update được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatSessions/s1"), SESSION); });
+    await assertFails(
+      updateDoc(doc(adminDb(env), "chatSessions/s1"), { messageCount: 2 }),
+    );
+  });
+});
+
+describe("chatMessages/{id}", () => {
+  it("chủ sở hữu đọc được tin nhắn của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatMessages/m1"), MESSAGE); });
+    await assertSucceeds(getDoc(doc(authedDb(env, "u1"), "chatMessages/m1")));
+  });
+
+  it("người khác KHÔNG đọc được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatMessages/m1"), MESSAGE); });
+    await assertFails(getDoc(doc(authedDb(env, "u2"), "chatMessages/m1")));
+  });
+
+  it("ADMIN CŨNG KHÔNG đọc được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatMessages/m1"), MESSAGE); });
+    await assertFails(getDoc(doc(adminDb(env), "chatMessages/m1")));
+  });
+
+  it("chủ sở hữu xoá được tin nhắn của mình", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatMessages/m1"), MESSAGE); });
+    await assertSucceeds(deleteDoc(doc(authedDb(env, "u1"), "chatMessages/m1")));
+  });
+
+  it("người khác KHÔNG xoá được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatMessages/m1"), MESSAGE); });
+    await assertFails(deleteDoc(doc(authedDb(env, "u2"), "chatMessages/m1")));
+  });
+
+  // Rule quan trọng nhất của cả spec: MỌI tin nhắn phải đi qua Cloud Function
+  // callable (nơi chạy lớp phát hiện khủng hoảng) trước khi vào Firestore. Test
+  // này ký gửi ĐÚNG uid chủ sở hữu với document ĐÚNG hình dạng schema — nếu rule
+  // vẫn từ chối thì chắc chắn bị chặn bởi "allow create: if false", không phải
+  // vì userId lệch hay thiếu field nào khác (bài học: test không được fail vì lý
+  // do sai).
+  it("create BỊ TỪ CHỐI kể cả chính chủ với document đúng hình dạng — mọi tin nhắn phải qua callable", async () => {
+    await assertFails(setDoc(doc(authedDb(env, "u1"), "chatMessages/m1"), MESSAGE));
+  });
+
+  it("Guest cũng KHÔNG tạo được", async () => {
+    await assertFails(setDoc(doc(guestDb(env), "chatMessages/m1"), MESSAGE));
+  });
+
+  it("admin cũng KHÔNG tạo được", async () => {
+    await assertFails(setDoc(doc(adminDb(env), "chatMessages/m1"), MESSAGE));
+  });
+
+  it("update bị từ chối kể cả chính chủ — tin nhắn không được sửa sau khi gửi", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "chatMessages/m1"), MESSAGE); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "chatMessages/m1"), { text: "nội dung sửa lại" }),
+    );
+  });
+});
+
+describe("crisisAlerts/{id}", () => {
+  it("admin đọc được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertSucceeds(getDoc(doc(adminDb(env), "crisisAlerts/a1")));
+  });
+
+  // Ruling C4 (design §3.4/§5): học sinh KHÔNG đọc được cảnh báo, KỂ CẢ cảnh
+  // báo về chính mình — em đã được báo trực tiếp trong đoạn chat lúc đó rồi,
+  // và một bản ghi đọc được sẽ lộ ngưỡng phát hiện cho em né tránh lần sau.
+  // ALERT.userId == "u1" ở đây CHÍNH LÀ uid đang đọc, để chứng minh rule không
+  // hề có ngoại lệ "đọc được cảnh báo của chính mình".
+  it("học sinh KHÔNG đọc được cảnh báo về CHÍNH MÌNH (ruling C4)", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(getDoc(doc(authedDb(env, "u1"), "crisisAlerts/a1")));
+  });
+
+  it("học sinh khác cũng KHÔNG đọc được", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(getDoc(doc(authedDb(env, "u2"), "crisisAlerts/a1")));
+  });
+
+  it("KHÔNG ai create được từ client — kể cả admin, chỉ Cloud Function (Admin SDK) mới tạo", async () => {
+    await assertFails(setDoc(doc(adminDb(env), "crisisAlerts/a1"), ALERT));
+    await assertFails(setDoc(doc(authedDb(env, "u1"), "crisisAlerts/a1"), ALERT));
+  });
+
+  it("KHÔNG ai delete được — kể cả admin", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(deleteDoc(doc(adminDb(env), "crisisAlerts/a1")));
+  });
+
+  it("admin update được CHỈ handledBy + handledAt", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertSucceeds(
+      updateDoc(doc(adminDb(env), "crisisAlerts/a1"), {
+        handledBy: "admin-1",
+        handledAt: new Date(),
+      }),
+    );
+  });
+
+  // Bài học Critical Spec #3 Task 2: hasOnly() phải khoá TOÀN BỘ field khác,
+  // không chỉ pin riêng lẻ. Mỗi test tampering dưới đây kèm THEO handledBy +
+  // handledAt hợp lệ, để buộc hasOnly() là nhánh DUY NHẤT còn có thể từ chối —
+  // nếu không, test có thể fail vì lý do khác (thiếu handledBy/handledAt) và
+  // không thật sự chứng minh hasOnly() có tác dụng.
+  it("admin update severity bị từ chối dù kèm handledBy/handledAt hợp lệ", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(
+      updateDoc(doc(adminDb(env), "crisisAlerts/a1"), {
+        severity: "urgent",
+        handledBy: "admin-1",
+        handledAt: new Date(),
+      }),
+    );
+  });
+
+  it("admin update userId bị từ chối dù kèm handledBy/handledAt hợp lệ", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(
+      updateDoc(doc(adminDb(env), "crisisAlerts/a1"), {
+        userId: "u2",
+        handledBy: "admin-1",
+        handledAt: new Date(),
+      }),
+    );
+  });
+
+  it("admin update thêm field lạ bị từ chối dù kèm handledBy/handledAt hợp lệ", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(
+      updateDoc(doc(adminDb(env), "crisisAlerts/a1"), {
+        hacked: true,
+        handledBy: "admin-1",
+        handledAt: new Date(),
+      }),
+    );
+  });
+
+  // Isolate nhánh isAdmin(): học sinh cố update ĐÚNG field hasOnly cho phép
+  // (handledBy/handledAt) — nếu rule chỉ có hasOnly() mà thiếu isAdmin(), test
+  // này sẽ (sai) succeed. Dùng đúng field hợp lệ để chứng minh cái chặn ở đây
+  // là isAdmin(), không phải hasOnly().
+  it("học sinh (kể cả chủ sở hữu) KHÔNG update được dù đúng field handledBy/handledAt", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "crisisAlerts/a1"), ALERT); });
+    await assertFails(
+      updateDoc(doc(authedDb(env, "u1"), "crisisAlerts/a1"), {
+        handledBy: "u1",
+        handledAt: new Date(),
+      }),
+    );
+  });
+});

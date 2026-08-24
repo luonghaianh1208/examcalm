@@ -184,6 +184,47 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // chatSessions: phiên chat của học sinh với AI (Spec #4, design §4/§5).
+    // Học sinh tạo/đọc/xoá được phiên của mình; admin KHÔNG đọc được — nội
+    // dung chat viết trực tiếp bằng lời, nhạy cảm hơn cả moodLogs/cbtSessions.
+    // update bị khoá tuyệt đối từ client — chỉ Cloud Function (Admin SDK) mới
+    // cập nhật lastMessageAt/messageCount khi có tin nhắn mới.
+    match /chatSessions/{id} {
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // chatMessages: từng tin nhắn trong phiên chat. Admin KHÔNG đọc được,
+    // cùng lý do chatSessions. create BỊ TỪ CHỐI KỂ CẢ CHÍNH CHỦ — ràng buộc
+    // quan trọng nhất của cả spec: MỌI tin nhắn phải đi qua Cloud Function
+    // callable, nơi chạy lớp phát hiện khủng hoảng (từ khoá + model) TRƯỚC khi
+    // ghi vào Firestore. Nếu client ghi trực tiếp được, tin nhắn có thể lọt
+    // qua bộ phát hiện đó hoàn toàn. update cũng khoá vì tin nhắn không được
+    // sửa sau khi gửi.
+    match /chatMessages/{id} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if false;
+    }
+
+    // crisisAlerts: hồ sơ cảnh báo khi phát hiện dấu hiệu khủng hoảng, để
+    // admin can thiệp. Học sinh KHÔNG đọc được — KỂ CẢ cảnh báo về chính mình
+    // (ruling C4, design §3.4/§5): em đã được báo trực tiếp ngay trong đoạn
+    // chat lúc đó rồi, đọc thêm bản ghi quản trị không cho thông tin gì mới,
+    // còn một bản ghi đọc được sẽ lộ NGƯỠNG phát hiện cho em tìm cách né tránh
+    // lần sau. Không ai create/delete được từ client — document chỉ do Cloud
+    // Function (Admin SDK) tạo khi phát hiện khủng hoảng. admin update CHỈ
+    // được đổi handledBy + handledAt — dùng diff().affectedKeys().hasOnly([...])
+    // để khoá TOÀN BỘ field còn lại (userId, severity, triggeredBy, createdAt)
+    // trong MỘT LẦN, không ghim từng field — bài học Critical của Spec #3
+    // Task 2 (ghim 2/11 field, bỏ ngỏ 9 field còn lại).
+    match /crisisAlerts/{id} {
+      allow read: if isAdmin();
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["handledBy", "handledAt"]);
+      allow create, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
