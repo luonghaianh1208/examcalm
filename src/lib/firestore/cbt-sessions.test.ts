@@ -3,7 +3,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 const ensureAuthReady = vi.fn(async () => {});
-const setDocMock = vi.fn(async (_ref: unknown, _data: unknown) => {});
+const setDocMock = vi.fn<(ref: unknown, data: unknown) => Promise<void>>(async () => {});
+const getDocsMock = vi.fn(async () => ({ docs: [] }));
 
 vi.mock("@/lib/firebase/client", () => ({
   getDb: () => ({}),
@@ -14,7 +15,7 @@ vi.mock("firebase/firestore", () => ({
   collection: () => ({}),
   doc: () => ({ id: "generated-id", path: "cbtSessions/generated-id" }),
   setDoc: setDocMock,
-  getDocs: async () => ({ docs: [] }),
+  getDocs: getDocsMock,
   query: () => ({}),
   where: () => ({}),
   orderBy: () => ({}),
@@ -23,9 +24,15 @@ vi.mock("firebase/firestore", () => ({
   Timestamp: class {},
 }));
 
-const { newSessionRef, saveCbtSession } = await import("@/lib/firestore/cbt-sessions");
+const { newSessionRef, saveCbtSession, listMyCbtSessions } = await import(
+  "@/lib/firestore/cbt-sessions"
+);
 
-beforeEach(() => { ensureAuthReady.mockClear(); setDocMock.mockClear(); });
+beforeEach(() => {
+  ensureAuthReady.mockClear();
+  setDocMock.mockClear();
+  getDocsMock.mockClear();
+});
 
 describe("newSessionRef", () => {
   it("trả về id và path dùng được cho linkedActivityRef", () => {
@@ -54,5 +61,14 @@ describe("saveCbtSession", () => {
   it("từ chối answers vượt quá giới hạn schema", async () => {
     const bad = { ...INPUT, answers: { s1: "x".repeat(2001) } };
     await expect(saveCbtSession("u1", "s1", bad)).rejects.toThrow();
+  });
+});
+
+describe("listMyCbtSessions", () => {
+  it("gọi ensureAuthReady TRƯỚC khi đọc", async () => {
+    await listMyCbtSessions("u1");
+    expect(ensureAuthReady.mock.invocationCallOrder[0]).toBeLessThan(
+      getDocsMock.mock.invocationCallOrder[0]!,
+    );
   });
 });
