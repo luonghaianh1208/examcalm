@@ -110,7 +110,15 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
 
   if (aiPublic === null) return null;
 
-  if (!aiPublic.enabled) {
+  // I2 (final whole-branch review): trước fix, panel "chưa khả dụng" hiện ra bất cứ khi nào
+  // kill switch tắt — KỂ CẢ khi học sinh đã bật aiOptIn trước đó. Hậu quả: một khi admin tắt
+  // kill switch (vd runbook khẩn cấp, docs/ai-provider-setup.md), học sinh đã opt-in không còn
+  // cách nào tắt aiOptIn hay xoá các phản chiếu cũ — đúng lúc có lý do chính đáng nhất để làm
+  // vậy, và trái lời hứa ngay trong hộp thoại bật ("tắt bất cứ lúc nào"). Đường RÚT LUI (tắt +
+  // xoá) phải luôn mở bất kể kill switch; chỉ đường BẬT mới phụ thuộc aiPublic.enabled.
+  const showWithdrawOnly = !aiPublic.enabled && aiOptIn;
+
+  if (!aiPublic.enabled && !aiOptIn) {
     return (
       <section className="rounded-xl border bg-white px-4 py-4">
         <h2 className="mb-2 font-medium">Phản chiếu AI (không bắt buộc)</h2>
@@ -125,11 +133,21 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
   return (
     <section className="rounded-xl border bg-white px-4 py-4">
       <h2 className="mb-2 font-medium">Phản chiếu AI (không bắt buộc)</h2>
-      <p className="mb-3 text-slate-600">
-        Khi bật, ghi chú cảm xúc bạn viết sẽ được gửi tới dịch vụ AI bên ngoài{" "}
-        <strong>{aiPublic.providerLabel}</strong> để tạo phản chiếu. Tắt tính năng này sẽ
-        xoá vĩnh viễn các phản chiếu đã lưu.
-      </p>
+      {showWithdrawOnly ? (
+        // aiPublic không còn xác nhận provider nào lúc này (kill switch tắt) — KHÔNG tự nêu
+        // tên một provider ở đây, tránh nói sai nếu provider đã đổi trong lúc tính năng tắt
+        // (R5, spec §3.3: màn hình đồng ý không được nói sai tên nơi nhận dữ liệu).
+        <p className="mb-3 text-slate-600">
+          Quản trị viên đã tạm khoá tính năng này — bạn không thể bật lại lúc này. Bạn vẫn có
+          thể tắt và xoá vĩnh viễn các phản chiếu AI đã lưu bất cứ lúc nào.
+        </p>
+      ) : (
+        <p className="mb-3 text-slate-600">
+          Khi bật, ghi chú cảm xúc bạn viết sẽ được gửi tới dịch vụ AI bên ngoài{" "}
+          <strong>{aiPublic.providerLabel}</strong> để tạo phản chiếu. Tắt tính năng này sẽ
+          xoá vĩnh viễn các phản chiếu đã lưu.
+        </p>
+      )}
 
       <label className="flex items-start gap-2">
         <input

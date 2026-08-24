@@ -199,6 +199,44 @@ describe("AiConsentSection", () => {
     expect(screen.getByRole("checkbox")).toBeChecked();
   });
 
+  // I2 (final whole-branch review): trước fix, !aiPublic.enabled LUÔN rơi vào panel "chưa khả
+  // dụng" — bất kể aiOptIn. Một học sinh đã bật AI mà admin sau đó tắt kill switch (vd runbook
+  // khẩn cấp ở docs/ai-provider-setup.md) sẽ KHÔNG còn cách nào tắt aiOptIn hay xoá các phản
+  // chiếu đã lưu — đúng lúc có lý do chính đáng nhất để muốn xoá. Hai test dưới đây khoá lại:
+  // đường rút lui phải LUÔN mở, bất kể trạng thái kill switch.
+  it("I2: kill switch TẮT nhưng aiOptIn đã BẬT -> vẫn hiện được checkbox và luồng tắt/xoá, không rơi vào 'chưa khả dụng'", async () => {
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+
+    expect(screen.queryByText(/chưa khả dụng/i)).not.toBeInTheDocument();
+    const checkbox = await screen.findByRole("checkbox");
+    expect(checkbox).toBeChecked();
+
+    await user.click(checkbox);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/xoá/i);
+    await user.click(screen.getByRole("button", { name: /tắt/i }));
+
+    // Sau khi tắt thành công, aiOptIn về false VÀ kill switch vẫn tắt -> tính năng giờ THẬT SỰ
+    // "chưa khả dụng" (không còn đường bật lẫn đường tắt nào để hiện) — khác `not.toBeChecked()`
+    // như luồng tắt bình thường, vì ở đây không còn checkbox nào để kiểm tra nữa.
+    await waitFor(() => expect(mockedDeleteAllMyOutputs).toHaveBeenCalledWith("u1"));
+    expect(await screen.findByText(/chưa khả dụng/i)).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("I2 (provider-change exposure): kill switch TẮT, aiOptIn BẬT -> KHÔNG bịa/giữ lại tên provider cũ khi aiPublic không còn xác nhận nó", async () => {
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+
+    await screen.findByRole("checkbox");
+    // Panel vẫn hiện (đường rút lui mở), nhưng vì aiPublic không xác nhận provider nào (bị
+    // admin tắt), màn hình KHÔNG được tự nói tên một provider — tránh nêu sai tên nhà cung cấp
+    // nếu provider đã đổi trong lúc tính năng tắt (R5, spec §3.3).
+    expect(screen.queryByText(/DeepSeek/)).not.toBeInTheDocument();
+  });
+
   it("ghi hỏng khi bật (đối chứng): hiện lỗi lưu, KHÔNG gọi deleteAllMyOutputs", async () => {
     mockedUpdateDoc.mockRejectedValue(new Error("permission-denied"));
     const user = userEvent.setup();

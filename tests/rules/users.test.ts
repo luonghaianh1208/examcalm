@@ -86,6 +86,36 @@ describe("users/{uid}", () => {
     await assertSucceeds(updateDoc(doc(adminDb(env), "users/u1"), { role: "admin" }));
   });
 
+  // I3 (final whole-branch review): admin ghi được users/{uid} toàn phần là vô hại ở Spec #1
+  // (không ai đọc privacySettings.aiOptIn), nhưng Spec #3 biến field này thành cái công tắc
+  // cho phép gửi bài viết sức khoẻ tinh thần của một học sinh vị thành niên tới bên thứ ba —
+  // admin viết thẳng privacySettings.aiOptIn = true từ Console là bật tính năng AI cho học sinh
+  // đó mà không qua bất kỳ hộp thoại đồng ý nào (AiConsentSection.tsx).
+  it("admin KHÔNG sửa được privacySettings (I3 — không được tự ý bật/tắt aiOptIn hộ học sinh)", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
+    await assertFails(
+      updateDoc(doc(adminDb(env), "users/u1"), {
+        privacySettings: { aiOptIn: true, shareImageWithAI: false },
+      }),
+    );
+  });
+
+  it("admin vẫn sửa được field khác khi privacySettings giữ nguyên (đối chứng I3)", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
+    await assertSucceeds(
+      updateDoc(doc(adminDb(env), "users/u1"), { nickname: "Mèo lớn", role: "admin" }),
+    );
+  });
+
+  it("chủ sở hữu vẫn tự sửa được privacySettings.aiOptIn của chính mình (đối chứng I3)", async () => {
+    await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
+    await assertSucceeds(
+      updateDoc(doc(authedDb(env, "u1"), "users/u1"), {
+        "privacySettings.aiOptIn": true,
+      }),
+    );
+  });
+
   it("KHÔNG ai xóa được doc users trực tiếp (phải qua Cloud Function)", async () => {
     await seed(env, async (db) => { await setDoc(doc(db, "users/u1"), PROFILE); });
     await assertFails(deleteDoc(doc(authedDb(env, "u1"), "users/u1")));

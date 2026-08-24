@@ -10,8 +10,14 @@ service cloud.firestore {
     match /users/{uid} {
       allow read:   if isOwner(uid) || isAdmin();
       allow create: if isOwner(uid) && request.resource.data.role == "student";
+      // I3 (final whole-branch review): admin ghi được users/{uid} toàn phần từng vô hại ở
+      // Spec #1 (không ai đọc privacySettings.aiOptIn), nhưng Spec #3 biến field này thành công
+      // tắc cho phép gửi bài viết cảm xúc của một học sinh vị thành niên tới bên thứ ba — admin
+      // KHÔNG được tự ý đổi privacySettings hộ học sinh (chỉ chủ sở hữu mới được, qua nhánh
+      // isOwner ở trên/AiConsentSection.tsx). request.resource.data là document SAU khi ghi,
+      // nên một update không đụng tới privacySettings tự động thoả điều kiện == (giữ nguyên).
       allow update: if (isOwner(uid) && request.resource.data.role == resource.data.role)
-                    || isAdmin();
+                    || (isAdmin() && request.resource.data.privacySettings == resource.data.privacySettings);
       allow delete: if false;
     }
 
