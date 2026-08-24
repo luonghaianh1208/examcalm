@@ -67,4 +67,5 @@ for (const resource of SAMPLE_RESOURCES) {
 }
 
 console.log(`Đã nạp 1 bài test mẫu, 1 bài CBT mẫu và ${SAMPLE_RESOURCES.length} tài nguyên mẫu.`);
-console.log("Lưu ý: bài test và bài CBT có isSampleContent = true và sẽ hiển thị banner cảnh báo.");
+console.log("Lưu ý: bài CBT có isSampleContent = true nên hiển thị banner cảnh báo.");
+console.log("Bài test là GAD-7 (thang đo thật, isSampleContent = false) nên KHÔNG có banner.");
