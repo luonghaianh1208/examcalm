@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { addDoc, getDoc, getDocs, Timestamp, updateDoc } from "firebase/firestore";
+import { addDoc, getDoc, getDocs, orderBy, Timestamp, updateDoc } from "firebase/firestore";
 import { ensureAuthReady } from "@/lib/firebase/client";
 import { DEFAULT_AI_CONFIG, type AiConfig } from "@/lib/types/ai";
 import {
   getAiConfig, saveAiConfig, isAiEnabled,
   listPromptTemplates, saveDraftPromptTemplate, publishPromptTemplate, unpublishPromptTemplate,
+  EDIT_PUBLISHED_TEMPLATE_ERROR,
 } from "./admin-ai";
 
 // Mock đúng tại ranh giới mà admin-ai.ts phụ thuộc vào — cùng phong cách admin-resources.test.ts.
@@ -24,6 +25,7 @@ vi.mock("firebase/firestore", () => ({
   getDocs: vi.fn(),
   query: vi.fn((...args: unknown[]) => args),
   where: vi.fn(),
+  orderBy: vi.fn((...args: unknown[]) => ["ORDER_BY", ...args]),
   addDoc: vi.fn(),
   updateDoc: vi.fn(),
   serverTimestamp: vi.fn(() => "SERVER_TS"),
@@ -218,6 +220,37 @@ describe("listPromptTemplates", () => {
     const result = await listPromptTemplates();
     expect(result[0]?.updatedAt).toEqual(at);
   });
+
+  // Fix round 1, Finding 7: trước đây không có orderBy, Firestore trả về theo thứ tự auto-ID —
+  // v3 có thể hiện dưới v1 trong danh sách admin bấm "Đăng" từ đó.
+  it("sắp theo version giảm dần — gọi orderBy('version', 'desc')", async () => {
+    mockedGetDocs.mockResolvedValue(fakeQuerySnap([]));
+
+    await listPromptTemplates();
+
+    expect(vi.mocked(orderBy)).toHaveBeenCalledWith("version", "desc");
+  });
+
+  // Fix round 1, Finding 6: document lệch hình dạng (field thiếu/sai kiểu) không được làm
+  // name/version trở thành undefined — rơi vào where("name","==",undefined) ở
+  // publishPromptTemplate() hay value={undefined} trên textarea của AiConfigEditor.tsx.
+  it("document lệch hình dạng -> fallback an toàn, KHÔNG undefined", async () => {
+    mockedGetDocs.mockResolvedValue(
+      fakeQuerySnap([{
+        id: "pt-bad",
+        data: { version: "not-a-number", status: "linh-tinh" },
+      }]),
+    );
+
+    const result = await listPromptTemplates();
+
+    expect(result[0]).toMatchObject({
+      id: "pt-bad", name: "", version: 1, status: "draft",
+      systemPrompt: "", userTemplate: "", updatedBy: "",
+    });
+    expect(result[0]?.name).not.toBeUndefined();
+    expect(result[0]?.version).not.toBeUndefined();
+  });
 });
 
 describe("saveDraftPromptTemplate", () => {
@@ -235,7 +268,9 @@ describe("saveDraftPromptTemplate", () => {
     expect(payload.status).toBe("draft");
   });
 
-  it("sửa bản đã có -> gọi updateDoc, KHÔNG đổi status", async () => {
+  it("sửa bản đang DRAFT -> gọi updateDoc, KHÔNG đổi status", async () => {
+    mockedGetDoc.mockResolvedValue(fakeDocSnap({ status: "draft" }));
+
     await saveDraftPromptTemplate(
       "pt1",
       { name: "mood_reflection", version: 2, systemPrompt: "sp2", userTemplate: "ut2" },
@@ -246,6 +281,23 @@ describe("saveDraftPromptTemplate", () => {
     const payload = mockedUpdateDoc.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
     expect(payload.status).toBeUndefined();
     expect(payload.name).toBe("mood_reflection");
+  });
+
+  // Fix round 1, Finding 5 (ruling của reviewer): sửa trực tiếp một bản ĐANG PUBLISHED phải bị
+  // chặn — prompt này gửi kèm bài viết cảm xúc riêng tư của học sinh, đổi nội dung mà không qua
+  // bước gỡ đăng (và rà soát lại) là né tránh go-live checklist.
+  it("sửa một bản ĐANG PUBLISHED -> bị chặn, KHÔNG gọi updateDoc", async () => {
+    mockedGetDoc.mockResolvedValue(fakeDocSnap({ status: "published" }));
+
+    await expect(
+      saveDraftPromptTemplate(
+        "pt1",
+        { name: "mood_reflection", version: 2, systemPrompt: "sp2", userTemplate: "ut2" },
+        "admin-1",
+      ),
+    ).rejects.toThrow(EDIT_PUBLISHED_TEMPLATE_ERROR);
+
+    expect(mockedUpdateDoc).not.toHaveBeenCalled();
   });
 });
 

@@ -49,13 +49,18 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
   // ---- Cấu hình AI ----
   const [configLoadFailed, setConfigLoadFailed] = useState(false);
   const [form, setForm] = useState<ConfigFormState | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
-  const [configMessage, setConfigMessage] = useState<string | null>(null);
+  // Bản đã LƯU (từ lần load hoặc lần lưu thành công gần nhất) — tách khỏi `form` (đang gõ dở)
+  // để biết form có đang "dirty" hay không. Fix round 1, Finding 1 + 2: thiếu bản tham chiếu
+  // này, dòng trạng thái kill switch và nút "Thử kết nối" chỉ có thể nói về `form` hiện tại —
+  // tức nói về một cấu hình CHƯA TỪNG được ghi xuống Firestore.
+  const [savedForm, setSavedForm] = useState<ConfigFormState | null>(null);
 
   const loadConfig = useCallback(() => {
     getAiConfig()
       .then((result) => {
-        setForm(toFormState(result));
+        const nextForm = toFormState(result);
+        setForm(nextForm);
+        setSavedForm(nextForm);
         setConfigLoadFailed(false);
       })
       .catch(() => setConfigLoadFailed(true));
@@ -64,6 +69,16 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  // true khi form đang gõ dở khác với bản đã lưu — theo TẤT CẢ field, không chỉ kill switch,
+  // vì "Thử kết nối" (Finding 2) cần biết dirty theo baseUrl/model, không riêng kill switch.
+  const isConfigDirty = form !== null && savedForm !== null && JSON.stringify(form) !== JSON.stringify(savedForm);
+  // true khi RIÊNG công tắc bật/tắt tính năng khác bản đã lưu — Finding 1 chỉ cần biết đúng
+  // field này để quyết định dòng trạng thái nói "đang" (khớp bản lưu) hay "sẽ" (chưa lưu).
+  const isFeatureToggleDirty = form !== null && savedForm !== null && form.featureEnabled !== savedForm.featureEnabled;
+
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configMessage, setConfigMessage] = useState<string | null>(null);
 
   function updateForm<K extends keyof ConfigFormState>(key: K, value: ConfigFormState[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -93,8 +108,18 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
 
     try {
       await saveAiConfig(parsed.data, adminUid);
-      setForm(toFormState(parsed.data));
-      setConfigMessage("Đã lưu cấu hình.");
+      const nextForm = toFormState(parsed.data);
+      setForm(nextForm);
+      setSavedForm(nextForm);
+      // Fix round 1, Finding 8: saveAiConfig() republish providerLabel vào aiPublic, thứ
+      // AiConsentSection.tsx đọc để nói với học sinh ghi chú của các em đi tới đâu. Một dòng
+      // "Đã lưu cấu hình." trung tính không đủ để một admin nhận ra họ VỪA đổi tên công ty
+      // được nêu trên màn hình đồng ý của một tính năng liên quan tới trẻ vị thành niên.
+      setConfigMessage(
+        parsed.data.providerLabel
+          ? `Đã lưu cấu hình. Màn hình đồng ý AI của học sinh giờ sẽ ghi nhà cung cấp là "${parsed.data.providerLabel}".`
+          : "Đã lưu cấu hình.",
+      );
     } catch {
       setConfigError("Không lưu được cấu hình. Kiểm tra lại quyền quản trị của bạn.");
     }
@@ -169,8 +194,11 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
       setEditingTemplateId(id);
       setTemplateMessage("Đã lưu bản nháp.");
       loadTemplates();
-    } catch {
-      setTemplateError("Không lưu được. Kiểm tra lại quyền quản trị của bạn.");
+    } catch (err) {
+      // Dùng err.message khi có — Fix round 1, Finding 5: saveDraftPromptTemplate() chặn sửa
+      // trực tiếp một bản ĐANG PUBLISHED với một thông báo cụ thể (EDIT_PUBLISHED_TEMPLATE_ERROR),
+      // nuốt lỗi bằng một câu chung chung sẽ khiến admin không hiểu vì sao thao tác bị từ chối.
+      setTemplateError(err instanceof Error ? err.message : "Không lưu được. Kiểm tra lại quyền quản trị của bạn.");
     }
   }
 
@@ -313,7 +341,12 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
                 <span>Bật tính năng phản chiếu AI cho học sinh</span>
               </label>
               <p className="mt-1 text-sm font-medium">
-                {form.featureEnabled ? "Đang bật cho học sinh" : "Đang tắt"}
+                {isFeatureToggleDirty
+                  // Fix round 1, Finding 1: nói ở thì TƯƠNG LAI khi chưa lưu — nói "Đang tắt" ở
+                  // thì hiện tại cho một thay đổi chưa lưu là khẳng định SAI: killSwitch thật
+                  // trên Firestore chưa đổi, học sinh vẫn đang dùng đúng như trước khi admin bấm.
+                  ? (form.featureEnabled ? "Sẽ bật sau khi lưu" : "Sẽ tắt sau khi lưu")
+                  : (form.featureEnabled ? "Đang bật cho học sinh" : "Đang tắt")}
               </p>
             </div>
 
@@ -341,13 +374,23 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
               </button>
               <button
                 type="button"
-                disabled={testPending}
+                disabled={testPending || isConfigDirty}
                 onClick={() => void handleTestConnection()}
                 className="rounded-lg border px-4 py-2 disabled:opacity-50"
               >
                 {testPending ? "Đang thử..." : "Thử kết nối"}
               </button>
             </div>
+
+            {/* Fix round 1, Finding 2: "Thử kết nối" gọi callable đọc systemConfig/aiConfig ĐÃ
+                LƯU trên Firestore, không phải các ô đang gõ dở ở trên — nếu không nói rõ, admin
+                đang đổi provider dễ đọc nhầm kết quả của provider CŨ thành đã xác nhận cho
+                provider MỚI chưa từng được lưu. Disable nút trong lúc dirty để không thể bấm
+                nhầm vào đúng lúc dễ hiểu sai nhất. */}
+            <p className="text-sm text-slate-500">
+              Thử kết nối kiểm tra cấu hình ĐÃ LƯU, không phải các thay đổi chưa lưu ở trên.
+              {isConfigDirty && " Còn thay đổi chưa lưu — lưu cấu hình trước khi thử kết nối."}
+            </p>
 
             {testError && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{testError}</p>}
             {testMessage && <p role="status" className="rounded-lg bg-teal-50 px-3 py-2 text-teal-800">{testMessage}</p>}

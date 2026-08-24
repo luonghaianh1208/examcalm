@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, Timestamp, updateDoc,
+  addDoc, collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, updateDoc,
   where, writeBatch,
 } from "firebase/firestore";
 import { z } from "zod";
@@ -84,32 +84,65 @@ export const promptTemplateDraftSchema = promptTemplateSchema.pick({
 });
 export type PromptTemplateDraft = z.infer<typeof promptTemplateDraftSchema>;
 
-/** Liệt kê tường minh — xem giải thích ở toResourceRecord() trong admin-resources.ts:
- *  updatedAt đọc về từ SDK là Firestore `Timestamp` (một class instance), phải chuyển sang
- *  Date tường minh trước khi đưa ra khỏi module này. */
-function toPromptTemplateRecord(id: string, data: PromptTemplate): PromptTemplateRecord {
-  const updatedAt = data.updatedAt;
+/**
+ * Liệt kê PHÒNG THỦ từng field (kiểm tra kiểu runtime, fallback an toàn) thay vì ép kiểu thẳng
+ * `d.data() as PromptTemplate` — Fix round 1, Finding 6: `getAiConfig()` ở trên safeParse qua
+ * zod, nhưng `promptTemplateSchema` khai báo `updatedAt: z.date()` trong khi Firestore luôn trả
+ * về `Timestamp` (không phải `Date`), nên parse thẳng document qua đúng schema đó sẽ luôn rớt ở
+ * field này — không dùng lại được y nguyên cách getAiConfig() làm. Tự kiểm tra runtime từng
+ * field còn lại (cùng phong cách `safeNumber`/`sanitizeFreeText` ở
+ * functions/src/ai/buildPrompt.ts, và `safePromptVersion` ở
+ * functions/src/ai/generateReflection.ts — cùng fallback version mặc định 1) để một document
+ * lệch hình dạng không làm `name`/`version` trở thành `undefined`, rơi vào
+ * `where("name", "==", undefined)` ở publishPromptTemplate() bên dưới hay `value={undefined}`
+ * trên textarea của AiConfigEditor.tsx (React cảnh báo uncontrolled input).
+ */
+function toPromptTemplateRecord(id: string, data: Record<string, unknown>): PromptTemplateRecord {
+  const updatedAtValue = data.updatedAt;
   return {
     id,
-    name: data.name,
-    version: data.version,
-    status: data.status,
-    systemPrompt: data.systemPrompt,
-    userTemplate: data.userTemplate,
-    updatedBy: data.updatedBy,
-    updatedAt: updatedAt instanceof Timestamp ? updatedAt.toDate() : updatedAt,
+    name: typeof data.name === "string" ? data.name : "",
+    version: typeof data.version === "number" && Number.isInteger(data.version) ? data.version : 1,
+    status: data.status === "published" ? "published" : "draft",
+    systemPrompt: typeof data.systemPrompt === "string" ? data.systemPrompt : "",
+    userTemplate: typeof data.userTemplate === "string" ? data.userTemplate : "",
+    updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : "",
+    updatedAt: updatedAtValue instanceof Timestamp ? updatedAtValue.toDate() : new Date(0),
   };
 }
 
+/** Sắp theo `version` giảm dần — Fix round 1, Finding 7: trước đây không có `orderBy` nên
+ *  Firestore trả về theo thứ tự auto-ID, khiến bản v3 có thể hiện DƯỚI bản v1 trong danh sách
+ *  admin bấm "Đăng" từ đó. */
 export async function listPromptTemplates(): Promise<PromptTemplateRecord[]> {
   await ensureAuthReady();
-  const snap = await getDocs(collection(getDb(), "promptTemplates"));
-  return snap.docs.map((d) => toPromptTemplateRecord(d.id, d.data() as PromptTemplate));
+  const snap = await getDocs(
+    query(collection(getDb(), "promptTemplates"), orderBy("version", "desc")),
+  );
+  return snap.docs.map((d) => toPromptTemplateRecord(d.id, d.data()));
 }
 
-/** Lưu bản NHÁP — publish luôn ở trạng thái draft khi vừa tạo; publishPromptTemplate() bên
- *  dưới mới là bước đăng. Sửa một bản đã publish qua hàm này KHÔNG tự hạ nó về draft — dùng
- *  unpublishPromptTemplate() nếu cần gỡ đăng trước khi sửa nội dung đang phục vụ học sinh. */
+/** Thông báo khi cố sửa trực tiếp một bản ĐANG PUBLISHED — export để component hiển thị lại
+ *  đúng chuỗi này (so sánh, không đoán lại nội dung message). */
+export const EDIT_PUBLISHED_TEMPLATE_ERROR =
+  "Không thể sửa trực tiếp một prompt ĐANG PUBLISHED. Hãy gỡ đăng trước, rồi mới sửa nội dung.";
+
+/**
+ * Lưu bản NHÁP — publish luôn ở trạng thái draft khi vừa tạo; publishPromptTemplate() bên dưới
+ * mới là bước đăng.
+ *
+ * Fix round 1, Finding 5 (ruling của reviewer): sửa một bản ĐANG PUBLISHED qua hàm này bị CHẶN
+ * — không tự hạ về draft rồi lưu, mà từ chối hẳn. Lý do: prompt này được gửi kèm bài viết cảm
+ * xúc riêng tư của học sinh, và go-live checklist yêu cầu một nhà tâm lý học đọc qua nội dung
+ * TRƯỚC khi publish. Cho phép sửa thẳng một bản published sẽ âm thầm đổi nội dung đang phục vụ
+ * học sinh mà không đi qua bước rà soát đó. unpublishPromptTemplate() đã có sẵn — một cú click
+ * gỡ đăng chính là thời điểm admin nhận ra mình đang đổi thứ học sinh nhìn thấy.
+ *
+ * Kiểm tra rồi mới ghi (check-then-act, không transaction) — chấp nhận được: đây là một rào
+ * chắn quy trình cho MỘT admin đơn lẻ đang biên tập, không phải một bất biến chống hai admin
+ * ghi đồng thời (khác publishPromptTemplate() bên dưới, nơi đích thực có nhiều admin có thể
+ * publish cùng lúc).
+ */
 export async function saveDraftPromptTemplate(
   templateId: string | null,
   draft: PromptTemplateDraft,
@@ -120,6 +153,10 @@ export async function saveDraftPromptTemplate(
   const payload = { ...draft, updatedBy: adminUid, updatedAt: serverTimestamp() };
 
   if (templateId) {
+    const current = await getDoc(doc(db, "promptTemplates", templateId));
+    if (current.data()?.status === "published") {
+      throw new Error(EDIT_PUBLISHED_TEMPLATE_ERROR);
+    }
     await updateDoc(doc(db, "promptTemplates", templateId), payload);
     return templateId;
   }
@@ -128,13 +165,27 @@ export async function saveDraftPromptTemplate(
 }
 
 /**
- * Publish một prompt template. ATOMIC trong MỘT writeBatch: publish bản này VÀ gỡ đăng mọi
- * bản KHÁC cùng `name` đang published — task-12-brief.md: "Do not let two templates with the
- * same name both be published — enforce it in the write path." generateReflection
- * (functions/src/ai/generateReflection.ts) đã tự chọn version cao nhất nếu lỡ có hai bản cùng
- * published, nhưng để hai bản "published" cùng tên tồn tại đồng thời vẫn là trạng thái mơ hồ
- * cho admin đọc lại danh sách — enforce ở đây để tại mọi thời điểm chỉ có tối đa một bản
- * published cho mỗi `name`.
+ * Publish một prompt template, và gỡ đăng mọi bản KHÁC cùng `name` đang published — trong CÙNG
+ * một writeBatch — task-12-brief.md: "Do not let two templates with the same name both be
+ * published — enforce it in the write path."
+ *
+ * Fix round 1, Finding 4: comment bản trước ghi "tại mọi thời điểm chỉ có tối đa một bản
+ * published" — SAI, đây KHÔNG phải một bất biến tại-mọi-thời-điểm. `getDocs()` bên dưới đọc
+ * "ai đang published" nằm NGOÀI batch, và writeBatch không có precondition trên phần đọc đó —
+ * nó chỉ làm các LỆNH GHI atomic với NHAU, không làm cặp ĐỌC-RỒI-GHI atomic. Đã cân nhắc dùng
+ * `runTransaction()` để đóng hẳn cửa sổ này, nhưng KHÔNG khả thi với bản Firestore JS SDK đang
+ * dùng: `Transaction.get()` chỉ nhận một `DocumentReference` đơn lẻ, không nhận `Query` (xem
+ * @firebase/firestore/dist/firestore/src/api/transaction.d.ts) — không có cách đọc "mọi bản
+ * đang published cùng tên" (một tập hợp không biết trước số lượng/id) bằng transaction.get()
+ * của SDK này.
+ *
+ * Vì vậy: hai admin publish hai bản KHÁC NHAU cùng `name` gần như đồng thời — cả hai đều đọc
+ * trạng thái CŨ trước khi bất kỳ ai commit, cả hai batch đều commit thành công, có thể kết thúc
+ * với HAI bản published cùng tên. Đây là một cửa sổ race THU HẸP (rất hẹp — đòi hỏi hai admin
+ * bấm gần như cùng lúc trên cùng `name`), không phải đóng hoàn toàn. Chấp nhận được vì (1) đây
+ * là console admin nội bộ, đội quản trị nhỏ, và (2) generateReflection
+ * (functions/src/ai/generateReflection.ts) tự chọn version cao nhất trong số các bản published
+ * nếu lỡ có nhiều hơn một, nên hành vi phục vụ học sinh vẫn xác định được dù race này xảy ra.
  */
 export async function publishPromptTemplate(templateId: string, name: string): Promise<void> {
   await ensureAuthReady();

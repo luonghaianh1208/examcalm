@@ -168,13 +168,92 @@ describe("AiConfigEditor — kill switch (Decision D)", () => {
       );
     });
   });
+
+  // Fix round 1, Finding 1: bỏ tick công tắc nhưng CHƯA lưu — dòng trạng thái không được
+  // khẳng định thì HIỆN TẠI ("Đang tắt") cho một thay đổi chưa từng ghi xuống Firestore, vì
+  // killSwitch thật chưa đổi và học sinh vẫn đang dùng tính năng như cũ.
+  it("tắt công tắc nhưng CHƯA lưu -> hiện trạng thái TƯƠNG LAI ('Sẽ tắt sau khi lưu'), không khẳng định sai hiện tại", async () => {
+    await renderReady(CONFIGURED); // featureEnabled=true đã lưu
+
+    const toggle = screen.getByLabelText(/bật tính năng phản chiếu ai cho học sinh/i);
+    await userEvent.click(toggle); // bỏ tick -> dirty, muốn tắt
+
+    expect(screen.getByText(/sẽ tắt sau khi lưu/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^đang tắt$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/đang bật cho học sinh/i)).not.toBeInTheDocument();
+    expect(mockedSaveAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("bật công tắc nhưng CHƯA lưu -> hiện trạng thái TƯƠNG LAI ('Sẽ bật sau khi lưu')", async () => {
+    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true } }); // đã lưu: tắt
+
+    const toggle = screen.getByLabelText(/bật tính năng phản chiếu ai cho học sinh/i);
+    await userEvent.click(toggle); // tick -> dirty, muốn bật
+
+    expect(screen.getByText(/sẽ bật sau khi lưu/i)).toBeInTheDocument();
+    expect(screen.queryByText(/đang bật cho học sinh/i)).not.toBeInTheDocument();
+  });
+
+  it("sau khi lưu thành công -> trạng thái tương lai biến mất, hiện đúng trạng thái đã lưu", async () => {
+    mockedSaveAiConfig.mockResolvedValue(undefined);
+    await renderReady(CONFIGURED); // featureEnabled=true đã lưu
+
+    const toggle = screen.getByLabelText(/bật tính năng phản chiếu ai cho học sinh/i);
+    await userEvent.click(toggle); // bỏ tick -> dirty
+    expect(screen.getByText(/sẽ tắt sau khi lưu/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/^đang tắt$/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/sẽ tắt sau khi lưu/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("AiConfigEditor — thông báo lưu nêu tên nhà cung cấp (Fix round 1, Finding 8)", () => {
+  it("lưu thành công -> thông báo nêu đúng providerLabel sẽ hiện trên màn hình đồng ý học sinh", async () => {
+    mockedSaveAiConfig.mockResolvedValue(undefined);
+    await renderReady(CONFIGURED);
+
+    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(/openai/i);
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(/màn hình đồng ý/i);
+  });
 });
 
 describe("AiConfigEditor — API key KHÔNG nhập ở trang này (Decision C)", () => {
-  it("không có input/textarea/select nào có name/id/placeholder/aria-label chứa key|secret|token", async () => {
+  // Fix round 1, Finding 3: bản trước chỉ soi name/id/placeholder/aria-label — KHÔNG một input
+  // nào trong component này đặt các attribute đó (chúng được gắn nhãn theo khuôn cả codebase:
+  // `<label><span>Base URL</span><input/></label>`), nên 47/48 phép so sánh so một chuỗi rỗng
+  // với pattern và luôn xanh vô nghĩa. Một `<label><span>API key</span><input/></label>` tương
+  // lai lọt qua đúng bài test được thiết kế để chặn nó. Soi thêm "tên truy cập" thật của input
+  // (labels/label bao quanh) — đây mới là thứ Decision C gọi là "label".
+  function accessibleNameOf(el: Element): string {
+    const withLabels = el as { labels?: NodeListOf<HTMLLabelElement> };
+    const fromLabelsProp = withLabels.labels
+      ? Array.from(withLabels.labels).map((l) => l.textContent ?? "").join(" ")
+      : "";
+    const fromClosestLabel = el.closest("label")?.textContent ?? "";
+    return `${fromLabelsProp} ${fromClosestLabel}`;
+  }
+
+  it("không có input/textarea/select nào có name/id/placeholder/aria-label/label chứa key|secret|token", async () => {
     await renderReady(CONFIGURED, [TEMPLATE_DRAFT]);
 
-    const suspiciousPattern = /key|secret|token/i;
+    // Attribute (name/id/placeholder/aria-label) không component nào trong app này từng đặt,
+    // nên không có xung đột hợp lệ — giữ pattern đầy đủ.
+    const suspiciousAttrPattern = /key|secret|token/i;
+    // Nhãn HIỂN THỊ (label text) có một cụm hợp lệ trong chính domain này: "token" như đơn vị
+    // đếm của LLM (vd. "Số token tối đa mỗi lượt") — không liên quan gì credential. Vẫn bắt
+    // "key"/"secret" nguyên vẹn (không có nghĩa hợp lệ nào trong form này), và vẫn bắt "token"
+    // khi đi kèm một từ gợi ý credential ngay trước nó (api/access/session/auth) — đúng cụm một
+    // admin thật sẽ gõ cho một ô nhập khoá thật ("API token", "access token"...).
+    const suspiciousLabelPattern = /key|secret|\b(api|access|session|auth)[\s-]*token\b/i;
+
     const fields = document.querySelectorAll("input, textarea, select");
     expect(fields.length).toBeGreaterThan(0);
     fields.forEach((el) => {
@@ -182,10 +261,12 @@ describe("AiConfigEditor — API key KHÔNG nhập ở trang này (Decision C)",
       const id = el.getAttribute("id") ?? "";
       const placeholder = el.getAttribute("placeholder") ?? "";
       const ariaLabel = el.getAttribute("aria-label") ?? "";
-      expect(name).not.toMatch(suspiciousPattern);
-      expect(id).not.toMatch(suspiciousPattern);
-      expect(placeholder).not.toMatch(suspiciousPattern);
-      expect(ariaLabel).not.toMatch(suspiciousPattern);
+      const labelText = accessibleNameOf(el);
+      expect(name).not.toMatch(suspiciousAttrPattern);
+      expect(id).not.toMatch(suspiciousAttrPattern);
+      expect(placeholder).not.toMatch(suspiciousAttrPattern);
+      expect(ariaLabel).not.toMatch(suspiciousAttrPattern);
+      expect(labelText).not.toMatch(suspiciousLabelPattern);
     });
   });
 
@@ -232,6 +313,28 @@ describe("AiConfigEditor — Thử kết nối (Decision E)", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
+  });
+
+  // Fix round 1, Finding 2: callable kiểm tra cấu hình ĐÃ LƯU trên Firestore, không phải các ô
+  // đang gõ dở — admin đổi provider rồi bấm "Thử kết nối" trước khi lưu sẽ nhận kết quả của
+  // provider CŨ mà tưởng là đã xác nhận cho provider MỚI.
+  it("form còn thay đổi chưa lưu -> nút 'Thử kết nối' bị disable", async () => {
+    await renderReady(CONFIGURED);
+
+    await userEvent.type(screen.getByLabelText(/^base url/i), "1");
+
+    expect(screen.getByRole("button", { name: /thử kết nối/i })).toBeDisabled();
+    expect(mockedCallTestAiConnection).not.toHaveBeenCalled();
+  });
+
+  it("form khớp cấu hình đã lưu -> nút 'Thử kết nối' KHÔNG bị disable", async () => {
+    await renderReady(CONFIGURED);
+    expect(screen.getByRole("button", { name: /thử kết nối/i })).not.toBeDisabled();
+  });
+
+  it("hiện copy nói rõ Thử kết nối kiểm tra cấu hình ĐÃ LƯU", async () => {
+    await renderReady(CONFIGURED);
+    expect(screen.getByText(/cấu hình đã lưu/i)).toBeInTheDocument();
   });
 });
 
@@ -297,6 +400,26 @@ describe("AiConfigEditor — soạn prompt: draft → preview → publish", () =
 
     await waitFor(() => {
       expect(mockedUnpublishPromptTemplate).toHaveBeenCalledWith("pt1");
+    });
+  });
+
+  // Fix round 1, Finding 5 (ruling của reviewer): sửa và lưu trực tiếp một bản ĐANG PUBLISHED
+  // phải bị từ chối — go-live checklist yêu cầu rà soát trước khi nội dung gửi cho học sinh
+  // đổi. saveDraftPromptTemplate() ném EDIT_PUBLISHED_TEMPLATE_ERROR; component phải hiện lại
+  // đúng thông báo đó qua role=alert, không nuốt thành một câu chung chung.
+  it("sửa một template ĐANG PUBLISHED rồi lưu -> hiện lỗi cụ thể, KHÔNG nuốt thành câu chung chung", async () => {
+    const published: PromptTemplateRecord = { ...TEMPLATE_DRAFT, status: "published" };
+    mockedSaveDraftPromptTemplate.mockRejectedValue(
+      new Error("Không thể sửa trực tiếp một prompt ĐANG PUBLISHED. Hãy gỡ đăng trước, rồi mới sửa nội dung."),
+    );
+    await renderReady(CONFIGURED, [published]);
+
+    await userEvent.click(screen.getByRole("button", { name: /^sửa$/i }));
+    await userEvent.type(screen.getByLabelText(/system prompt/i), " thêm chữ");
+    await userEvent.click(screen.getByRole("button", { name: /lưu bản nháp/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/không thể sửa trực tiếp.*published/i);
     });
   });
 });
