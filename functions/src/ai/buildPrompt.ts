@@ -21,25 +21,36 @@ import { BANNED_DIAGNOSTIC_KEYWORDS } from "./safetyFilter";
 export const MOOD_NOTE_MAX_CHARS = 2000;
 
 /**
- * Cặp dấu phân giới bọc quanh vùng dữ liệu học sinh (note, context, tags) trong userPrompt
- * — đánh dấu đây là VÙNG DỮ LIỆU, không phải chỉ dẫn. Chọn chuỗi khó xuất hiện tình cờ
- * trong bài viết của một học sinh trung học. Export để test dùng lại, tránh lặp magic
- * string.
+ * Cặp dấu phân giới bọc quanh vùng dữ liệu học sinh (note, context, tags, moodIcon) trong
+ * userPrompt — đánh dấu đây là VÙNG DỮ LIỆU, không phải chỉ dẫn. Chọn chuỗi khó xuất hiện
+ * tình cờ trong bài viết của một học sinh trung học. Export để test dùng lại, tránh lặp
+ * magic string.
  */
 export const MOOD_NOTE_DATA_START = "<<<VUNG_DU_LIEU_HOC_SINH>>>";
 export const MOOD_NOTE_DATA_END = "<<<HET_VUNG_DU_LIEU_HOC_SINH>>>";
 
 /**
  * Sentinel dùng để thay thế mọi dấu phân giới giả tìm thấy TRONG dữ liệu học sinh.
- * BẮT BUỘC không rỗng — Fix round 1, Finding 1 (Critical): thay bằng chuỗi RỖNG cho phép
- * một payload lồng nhau kiểu `A + DELIMITER + B` (với A, B chọn sao cho A+B ghép lại đúng
- * bằng DELIMITER) ghép lại thành dấu phân giới thật sau khi phần ở giữa bị xoá — độ dài
- * A+B khớp hệt DELIMITER về mặt cấu tạo. Thay bằng sentinel không rỗng đảm bảo độ dài
- * chuỗi kết quả (A + sentinel + B) không bao giờ trùng độ dài DELIMITER nữa, nên không thể
- * vô tình ghép lại thành dấu phân giới thật dù chỉ quét một lượt (không cần lặp tới điểm
- * bất động).
+ *
+ * Bất biến THẬT SỰ khiến cách thay thế này an toàn (Fix round 2, Finding B — chứng minh
+ * "không rỗng là đủ" ở Fix round 1 SAI: reviewer chỉ ra sentinel không rỗng nhưng dùng
+ * chung ký tự với dấu phân giới, ví dụ `"<<<"`, vẫn cho phép input
+ * `MOOD_NOTE_DATA_START + "VUNG_DU_LIEU_HOC_SINH>>>"` ghép lại thành đúng
+ * `MOOD_NOTE_DATA_START` thật sau khi thay thế): sentinel này KHÔNG dùng chung BẤT KỲ ký
+ * tự nào với hai dấu phân giới, kể cả không phân biệt hoa/thường — có test khẳng định điều
+ * này ở `buildPrompt.test.ts` để bất biến này không chỉ nằm trong comment.
+ *
+ * Vì sao rời rạc ký tự (disjoint) mới là điều kiện đủ, không phải "không rỗng": regex có
+ * cờ `g` quét trái sang phải, khớp không chồng lấp (non-overlapping) — mỗi lần khớp xong
+ * di chuyển con trỏ tới NGAY SAU khớp đó rồi mới tìm khớp tiếp theo. Sau khi thay MỘT khớp
+ * bằng sentinel, một khớp MỚI của dấu phân giới muốn xuất hiện bắc cầu qua đoạn vừa thay
+ * thì bắt buộc phải dùng ít nhất một ký tự thuộc sentinel làm một phần của chính nó — điều
+ * không thể xảy ra vì sentinel không chứa ký tự nào thuộc bảng chữ cái của dấu phân giới.
+ * Một khớp "mới" nằm hoàn toàn ở phần chưa bị thay cũng không có: quét không chồng lấp
+ * nghĩa là mọi khớp không chồng lấp trong chuỗi gốc đều đã được tìm thấy và thay ở đúng
+ * lượt quét duy nhất này.
  */
-const DELIMITER_SENTINEL = "[đã lược]";
+export const DELIMITER_SENTINEL = "[đã xóa]";
 
 /** Bản prompt do admin soạn qua Admin console (`promptTemplates`), publish rồi mới dùng. */
 export type MoodPromptTemplate = {
@@ -61,8 +72,16 @@ export type MoodPromptTemplate = {
  * Kiểu ở đây chỉ có hiệu lực lúc biên dịch — TypeScript không chặn được việc một object
  * Firestore thật đưa vào runtime một giá trị sai kiểu (vd. `context` là DocumentReference,
  * `moodScore` là Timestamp). Vì vậy buildMoodPrompt tự kiểm tra kiểu runtime của cả 5
- * trường bằng `safeString`/`safeNumber`/`safeStringArray` trước khi dùng — xem Fix round 1,
- * Finding 5.
+ * trường — `note`/`context`/`moodIcon` qua `sanitizeFreeText`, `moodScore` qua
+ * `safeNumber`, `tags` qua `safeStringArray` — trước khi dùng, xem Fix round 1, Finding 5.
+ *
+ * Cùng lý do đó, buildMoodPrompt không tin bất kỳ trường string nào trong 5 trường này là
+ * "giá trị đóng" (enum cố định) chỉ vì `moodLogSchema` ở `src/lib/firestore/moods.ts`
+ * ràng buộc nó ở phía client — Security Rules (`firestore.rules`, collection `moodLogs`)
+ * chỉ kiểm tra `userId` sở hữu document, KHÔNG kiểm tra hình dạng hay giá trị của bất kỳ
+ * field nào khác. Một học sinh đã xác thực, dùng thẳng Firebase Web SDK (bỏ qua UI/schema
+ * của app), có thể ghi `moodIcon` là một chuỗi tuỳ ý bất kỳ độ dài nào — xem Fix round 2,
+ * Finding A.
  */
 export type MoodLogPromptInput = {
   moodScore?: number;
@@ -111,8 +130,10 @@ function truncateToCodePoints(text: string, maxCodePoints: number): string {
  * dữ liệu: kiểm tra kiểu runtime trước (không phải string → coi như rỗng, thay vì gọi
  * `.normalize()` trên một giá trị không phải chuỗi và crash, hoặc — nếu không có bước này —
  * để giá trị đó lọt qua dạng khác), chuẩn hoá NFC, khử dấu phân giới giả, rồi cắt trần ký
- * tự. Dùng chung cho note/context/tags vì cả ba đều là văn bản do học sinh tự nhập — cùng
- * một rủi ro prompt injection, cùng một cách xử lý (Fix round 1, Finding 2).
+ * tự. Dùng chung cho note/context/tags/moodIcon vì tất cả đều là trường string mà file này
+ * không tin là "giá trị đóng" tại ranh giới Firestore (xem comment ở `MoodLogPromptInput`)
+ * — cùng một rủi ro prompt injection lẫn rủi ro sai kiểu runtime, cùng một cách xử lý
+ * (Fix round 1, Finding 2; Fix round 2, Finding A).
  */
 function sanitizeFreeText(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -121,16 +142,13 @@ function sanitizeFreeText(value: unknown): string {
   return truncateToCodePoints(neutralized, MOOD_NOTE_MAX_CHARS);
 }
 
-/** Fix round 1, Finding 5: ép kiểu runtime cho từng trường được phép trước khi nội suy vào
- *  prompt — chặn một Timestamp/DocumentReference lọt qua `${...}` (coerce ngầm qua
- *  `toString()`) nếu object nguồn sai kiểu so với khai báo TypeScript (vốn chỉ có hiệu lực
- *  lúc biên dịch). */
+/** Fix round 1, Finding 5: ép kiểu runtime cho `moodScore`/`tags` trước khi nội suy vào
+ *  prompt — chặn một Timestamp/DocumentReference lọt qua `${...}` hay `.join()` (coerce
+ *  ngầm qua `toString()`) nếu object nguồn sai kiểu so với khai báo TypeScript (vốn chỉ có
+ *  hiệu lực lúc biên dịch). Các trường string khác (`note`, `context`, `moodIcon`) được
+ *  `sanitizeFreeText` tự kiểm tra kiểu runtime, không cần guard riêng ở đây. */
 function safeNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function safeString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 function safeStringArray(value: unknown): string[] {
@@ -185,12 +203,17 @@ export const DEFAULT_MOOD_TEMPLATE: MoodPromptTemplate = {
 /**
  * Dựng system/user prompt từ một mood log và một template. userPrompt chỉ chứa đúng 5
  * trường được phép (`moodScore`, `moodIcon`, `note`, `tags`, `context`) — luôn đọc qua tên
- * trường tường minh, không bao giờ spread `moodLog`. `note`, `context`, và từng `tag` là
- * văn bản tự do do học sinh nhập nên được sanitize (kiểm tra kiểu, chuẩn hoá NFC, khử dấu
- * phân giới giả, cắt trần) và đặt CÙNG bên trong vùng dữ liệu có phân giới — Fix round 1,
- * Finding 2: `tags` cho phép chuỗi tự do (kể cả xuống dòng) nên có cùng rủi ro injection
- * như `note`, không thể để ngoài vùng dữ liệu. `moodScore`/`moodIcon` không phải văn bản tự
- * do (số, hoặc một trong vài icon cố định) nên ở lại phần tiêu đề, ngoài vùng dữ liệu.
+ * trường tường minh, không bao giờ spread `moodLog`.
+ *
+ * `note`, `context`, `tags`, và `moodIcon` đều được sanitize (kiểm tra kiểu, chuẩn hoá NFC,
+ * khử dấu phân giới giả, cắt trần) và đặt CÙNG bên trong vùng dữ liệu có phân giới. Lý do
+ * KHÔNG phải "trường nào là văn bản tự do" — Security Rules của `moodLogs` chỉ kiểm tra
+ * `userId` sở hữu document, không kiểm tra hình dạng hay giá trị bất kỳ field nào khác
+ * (xem comment ở `MoodLogPromptInput`), nên tại ranh giới của file này, KHÔNG field string
+ * nào trong 4 field trên được coi là "giá trị đóng" đáng tin — kể cả `moodIcon`, dù
+ * `moodLogSchema` phía client ràng nó vào một enum cố định. Chỉ `moodScore` (một số) ở lại
+ * phần tiêu đề ngoài vùng dữ liệu, vì phần tiêu đề chỉ render số qua `${...}`, không có bề
+ * mặt để chèn chuỗi ký tự tuỳ ý — Fix round 2, Finding A.
  */
 export function buildMoodPrompt(
   moodLog: MoodLogPromptInput,
@@ -199,8 +222,10 @@ export function buildMoodPrompt(
   const systemPrompt = `${template.systemPrompt}\n\n${buildStructuralInstructions()}`;
 
   const moodScore = safeNumber(moodLog.moodScore);
-  const moodIcon = safeString(moodLog.moodIcon);
   const tags = safeStringArray(moodLog.tags);
+
+  const sanitizedMoodIcon = sanitizeFreeText(moodLog.moodIcon);
+  const moodIconBlock = sanitizedMoodIcon === "" ? "(không có)" : sanitizedMoodIcon;
 
   const sanitizedContext = sanitizeFreeText(moodLog.context);
   const contextBlock = sanitizedContext === "" ? "(không có)" : sanitizedContext;
@@ -208,12 +233,10 @@ export function buildMoodPrompt(
   const sanitizedNote = sanitizeFreeText(moodLog.note);
   const noteBlock = sanitizedNote === "" ? "(học sinh không viết ghi chú)" : sanitizedNote;
 
-  const headerLines = [
-    `Điểm tâm trạng: ${moodScore ?? "(không có)"}`,
-    `Biểu tượng tâm trạng: ${moodIcon ?? "(không có)"}`,
-  ].join("\n");
+  const headerLines = `Điểm tâm trạng: ${moodScore ?? "(không có)"}`;
 
   const dataRegionLines = [
+    `Biểu tượng tâm trạng: ${moodIconBlock}`,
     `Bối cảnh check-in: ${contextBlock}`,
     `Thẻ: ${formatTags(tags)}`,
     "Ghi chú:",
