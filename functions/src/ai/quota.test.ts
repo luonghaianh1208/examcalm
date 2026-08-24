@@ -141,6 +141,22 @@ describe("consumeQuota", () => {
     expect(third).toEqual({ allowed: true, reason: null });
   });
 
+  it("rateLimitPerMinute = 0 nghĩa là KHÔNG áp rate limit (ngược chiều quotaStudentPerDay) " +
+    "— hai lượt liên tiếp ngay lập tức đều được cho phép và đều tăng count", async () => {
+    const config = { quotaStudentPerDay: 10, rateLimitPerMinute: 0 };
+    const t1 = new Date("2026-08-24T02:00:00.000Z");
+    const t2 = new Date("2026-08-24T02:00:00.000Z"); // cùng một mốc — cách nhau 0ms
+
+    const first = await consumeQuota(db, "u7", config, t1);
+    expect(first).toEqual({ allowed: true, reason: null });
+
+    const second = await consumeQuota(db, "u7", config, t2);
+    expect(second).toEqual({ allowed: true, reason: null });
+
+    const snap = await db.collection("aiUsage").doc("u7_2026-08-24").get();
+    expect(snap.data()?.count).toBe(2); // cả hai lượt đều tiêu quota, không lượt nào bị chặn
+  });
+
   it("tăng count bằng transaction — N lượt gọi song song không mất lượt nào", async () => {
     // 10 transaction cạnh tranh trên cùng một document cần retry (optimistic concurrency)
     // của Firestore emulator — chậm hơn timeout mặc định 5000ms của vitest.

@@ -101,6 +101,14 @@ jobs:
           cache: npm
           cache-dependency-path: functions/package-lock.json
 
+      # Firestore emulator (dùng bởi `npm test --prefix functions`, xem
+      # functions/src/ai/quota.test.ts) cần JVM để chạy — thiếu bước này thì
+      # `firebase emulators:exec` fail ngay khi khởi động emulator.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Cài dependency functions/
         run: npm ci --prefix functions
 

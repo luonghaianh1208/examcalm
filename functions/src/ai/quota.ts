@@ -63,13 +63,6 @@ export async function consumeQuota(
   const date = vietnamDateKey(now);
   const docRef = db.collection("aiUsage").doc(`${uid}_${date}`);
 
-  // Khoảng cách tối thiểu giữa hai lượt gọi liên tiếp, suy trực tiếp từ rateLimitPerMinute
-  // — không cần nhánh riêng cho rateLimitPerMinute = 0: 60000/0 tự nhiên ra Infinity,
-  // nghĩa là mọi lượt SAU lượt đầu (khi đã có updatedAt để so sánh) đều bị chặn. Trong thực
-  // tế điều này vô hại vì DEFAULT_AI_CONFIG đặt quotaStudentPerDay = 0 song song, nên nhánh
-  // quota ở dưới đã chặn từ lượt đầu, không bao giờ chạm tới so sánh rate limit.
-  const minIntervalMs = 60_000 / config.rateLimitPerMinute;
-
   return db.runTransaction(async (tx): Promise<ConsumeQuotaResult> => {
     const snap = await tx.get(docRef);
     const existing = snap.exists ? (snap.data() as AiUsageDoc) : null;
@@ -79,7 +72,15 @@ export async function consumeQuota(
       return { allowed: false, reason: "quota" };
     }
 
-    if (existing) {
+    // QUY ƯỚC NGƯỢC VỚI quotaStudentPerDay Ở TRÊN — cố ý, xem chú thích đầy đủ ở
+    // aiConfigSchema (src/lib/types/ai.ts): quotaStudentPerDay = 0 nghĩa là "chặn tất cả"
+    // (đó là NGÂN SÁCH của ngày); rateLimitPerMinute chỉ là phanh chống burst TRONG một
+    // ngày, không phải ngân sách, nên rateLimitPerMinute <= 0 nghĩa là "không áp rate
+    // limit" — bỏ qua hẳn bước kiểm tra bên dưới, KHÔNG suy ra một ngưỡng vô hạn rồi khoá
+    // học sinh ở đúng 1 lượt/ngày mãi mãi (đó là bug đã sửa ở fix round 1: admin bật quota
+    // lên nhưng quên nâng field này, mọi học sinh bị kẹt 1 lượt/ngày không rõ lý do).
+    if (existing && config.rateLimitPerMinute > 0) {
+      const minIntervalMs = 60_000 / config.rateLimitPerMinute;
       // Trị tuyệt đối: hai transaction chạy đồng thời có thể commit không theo đúng thứ tự
       // thời gian thực của tham số `now` truyền vào (transaction sau có thể commit trước),
       // nên chỉ so sánh một chiều (now - lastUpdated) có thể bỏ lọt trường hợp hiệu số âm.
