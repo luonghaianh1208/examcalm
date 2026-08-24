@@ -114,6 +114,22 @@ describe("MoodWidget", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  // Fix round 1, Finding 5: nút "Đóng" biến mất khỏi DOM cùng cả panel khi
+  // bấm — không trả focus lại nút mèo thì nó rơi về <body>, học sinh dùng
+  // bàn phím/trình đọc màn hình mất hoàn toàn điểm neo.
+  it("bấm 'Đóng': focus quay lại nút mèo, không rơi về body", async () => {
+    const user = userEvent.setup();
+    render(<MoodWidget uid="u1" canSave />);
+    const toggleButton = screen.getByRole("button", { name: /mở nhật ký cảm xúc/i });
+    await user.click(toggleButton);
+    await user.click(screen.getByRole("button", { name: /lưu vào nhật ký/i }));
+
+    await screen.findByText(/đã lưu vào nhật ký cảm xúc/i);
+    await user.click(screen.getByRole("button", { name: /đóng/i }));
+
+    expect(toggleButton).toHaveFocus();
+  });
+
   // Ràng buộc cứng nhất của task: ghi cảm xúc vẫn lưu được khi lớp AI hỏng
   // hoàn toàn. Test ở mức tích hợp — mount MoodWidget thật, chỉ mock các
   // module Firestore/callable ở tầng lá, không mock ReflectionCard.

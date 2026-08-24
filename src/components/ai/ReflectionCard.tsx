@@ -48,10 +48,28 @@ export function ReflectionCard({ moodLogId, uid }: Props) {
     let cancelled = false;
     setGate("checking");
     (async () => {
-      const [optIn, aiPublic] = await Promise.all([getAiOptIn(uid), getAiPublicConfig()]);
+      const optIn = await getAiOptIn(uid);
+      // Đọc aiOptIn TRƯỚC, chỉ đọc tiếp systemConfig/aiPublic khi optIn đã
+      // bật (Fix round 1, Finding 6). Học sinh chưa bật AI — tuyệt đại đa số
+      // ở thời điểm ra mắt — chỉ tốn ĐÚNG MỘT lần đọc mỗi lần lưu cảm xúc thay
+      // vì hai; systemConfig/aiPublic là document nóng dùng chung toàn trường,
+      // dự án trả phí theo Blaze do một cá nhân tự chi trả nên không đọc thừa.
+      // Độ trễ thêm chỉ rơi vào học sinh THỰC SỰ nhận phản chiếu — nhóm này
+      // vốn đã đợi một lượt gọi model, thêm một lần đọc Firestore không đáng kể.
+      if (!optIn) {
+        if (!cancelled) setGate("closed");
+        return;
+      }
+      const aiPublic = await getAiPublicConfig();
       if (cancelled) return;
-      setGate(optIn && aiPublic.enabled ? "open" : "closed");
-    })();
+      setGate(aiPublic.enabled ? "open" : "closed");
+    })().catch(() => {
+      // Fail-closed TƯỜNG MINH: hai hàm đọc ở trên đã tự nuốt lỗi và không
+      // bao giờ reject, nhưng nếu điều đó thay đổi trong tương lai, im lặng
+      // (không lộ đồng ý) vẫn đúng hơn là một unhandled rejection âm thầm giữ
+      // gate kẹt ở "checking" mãi mãi (Fix round 1, Finding 4).
+      if (!cancelled) setGate("closed");
+    });
     return () => {
       cancelled = true;
     };
@@ -126,7 +144,18 @@ export function ReflectionCard({ moodLogId, uid }: Props) {
   }
 
   return (
-    <section aria-label="Phản chiếu từ mèo" className="mt-3 flex flex-col gap-2 rounded-xl bg-teal-50 p-4">
+    // aria-live="polite" — MoodWidget đưa focus vào nút "Đóng" ngay khi lưu
+    // xong (Fix round 1, Finding 2), TRƯỚC KHI hai lượt đọc gate + một lượt
+    // gọi callable của component này hoàn tất. Không dời focus tới đây vì
+    // MoodWidget/CbtRunner không được biết trạng thái AI đã "settle" chưa
+    // (sẽ phá vỡ ranh giới Task 11b, quyết định 1 — hai component đó không
+    // biết gì về AI); live region để trình đọc màn hình tự loan báo khi nội
+    // dung xuất hiện dù focus đang ở nơi khác.
+    <section
+      aria-label="Phản chiếu từ mèo"
+      aria-live="polite"
+      className="mt-3 flex flex-col gap-2 rounded-xl bg-teal-50 p-4"
+    >
       <p className="text-xs font-medium text-teal-800">Nội dung do AI tạo</p>
 
       {phase === "loading" && <p aria-busy="true" className="text-slate-600">Đang tạo phản chiếu…</p>}

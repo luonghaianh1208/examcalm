@@ -28,6 +28,7 @@ export function MoodWidget({ uid, canSave }: Props) {
   // học sinh chưa bật).
   const [savedMoodLogId, setSavedMoodLogId] = useState<string | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const toggleButtonRef = useRef<HTMLButtonElement>(null);
 
   async function handleSubmit(input: MoodInput) {
     if (!uid || !canSave) return;
@@ -47,6 +48,9 @@ export function MoodWidget({ uid, canSave }: Props) {
   function handleClose() {
     setOpen(false);
     setSavedMoodLogId(null);
+    // Nút "Đóng" sắp biến mất khỏi DOM cùng cả panel — không trả focus lại
+    // nút mèo thì nó rơi về <body> (Fix round 1, Finding 5).
+    toggleButtonRef.current?.focus();
   }
 
   useEffect(() => {
@@ -59,6 +63,7 @@ export function MoodWidget({ uid, canSave }: Props) {
     <>
       <button
         type="button"
+        ref={toggleButtonRef}
         data-tour="mood"
         onClick={handleToggle}
         aria-expanded={open}

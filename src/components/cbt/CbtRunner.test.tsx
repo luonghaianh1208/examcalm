@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -43,11 +43,17 @@ beforeEach(() => { saveCbtSession.mockClear(); saveMoodLog.mockClear(); });
 // Beforeeach RIÊNG cho các mock mới của Task 11b — tách khỏi beforeEach gốc ở
 // trên để không sửa một ký tự nào của nó (xem task-11b-brief.md, ràng buộc
 // "mọi test có sẵn phải pass không sửa một ký tự nào").
+// mockReset() (không phải mockClear()) — mockClear() chỉ xoá lịch sử gọi,
+// không xoá hàng đợi mockResolvedValueOnce()/mockResolvedValue() các test
+// khác để lại. Với vi.fn(impl) như bốn mock này, mockReset() khôi phục đúng
+// impl gốc (đã verify thực nghiệm) — nên getAiOptIn/getAiPublicConfig vẫn về
+// đúng mặc định "gate đóng" cho MỌI test, kể cả test chạy sau một test đã
+// override bằng mockResolvedValue() không phải Once (Fix round 1, Finding 3).
 beforeEach(() => {
-  requestReflection.mockClear();
-  getOutputForMoodLog.mockClear();
-  getAiOptIn.mockClear();
-  getAiPublicConfig.mockClear();
+  requestReflection.mockReset();
+  getOutputForMoodLog.mockReset();
+  getAiOptIn.mockReset();
+  getAiPublicConfig.mockReset();
 });
 
 describe("CbtRunner", () => {
@@ -225,6 +231,56 @@ describe("CbtRunner", () => {
 
     expect(await screen.findByText("Bạn đã hoàn thành bài tập rất tốt.")).toBeInTheDocument();
     expect(requestReflection).toHaveBeenCalledWith("mood-id");
+  });
+
+  // Fix round 1, Finding 1: guard `if (phase === "after") setAfterMoodLogId(id)`
+  // ở CbtRunner.tsx:42 không có test nào chạm tới nhánh nguy hiểm — học sinh
+  // LƯU cảm xúc "trước" (có id) rồi BỎ QUA cảm xúc "sau" (không có id). Thiếu
+  // guard, afterMoodLogId sẽ giữ id của mood "trước" và ReflectionCard sẽ tạo
+  // phản chiếu cho tâm trạng LÚC VÀO bài, trình bày như phản chiếu về bài vừa
+  // làm — sai ngữ cảnh nhưng không có triệu chứng gì lộ ra ngoài để học sinh
+  // nghi ngờ. Test này bắt buộc phải bật gate (aiOptIn=true) để có ý nghĩa:
+  // nếu gate đóng, test sẽ pass ngay cả khi guard bị xoá hẳn.
+  it("lưu cảm xúc 'trước' rồi bỏ qua cảm xúc 'sau': không hiện ReflectionCard, không dùng nhầm moodLogId của 'trước'", async () => {
+    getAiOptIn.mockResolvedValue(true);
+    getAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+
+    const user = userEvent.setup();
+    render(<CbtRunner module={MODULE} uid="u1" canSave />);
+    await user.click(screen.getByRole("button", { name: /bắt đầu/i }));
+    // Lưu THẬT cảm xúc "trước" (không bỏ qua) — đây là bước sinh ra id có thể
+    // bị dùng nhầm nếu guard bị xoá.
+    await user.click(screen.getByRole("button", { name: /lưu và bắt đầu/i }));
+    await user.type(screen.getByLabelText("Bạn đang nghĩ gì?"), "a");
+    await user.click(screen.getByRole("button", { name: /tiếp tục/i }));
+    await user.click(screen.getByRole("button", { name: /hoàn thành/i }));
+    // BỎ QUA cảm xúc "sau" — không có id nào được sinh ra cho bước này.
+    await user.click(screen.getByRole("button", { name: /bỏ qua/i }));
+
+    expect(await screen.findByText(/cảm ơn bạn/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nội dung do ai tạo/i)).not.toBeInTheDocument();
+    expect(requestReflection).not.toHaveBeenCalled();
+  });
+
+  it("lưu cả cảm xúc 'trước' và 'sau' với hai id khác nhau: ReflectionCard dùng đúng id của cảm xúc 'sau'", async () => {
+    getAiOptIn.mockResolvedValue(true);
+    getAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+    saveMoodLog.mockResolvedValueOnce("mood-before").mockResolvedValueOnce("mood-after");
+    requestReflection.mockResolvedValueOnce({ outputId: "output-1" });
+    getOutputForMoodLog.mockResolvedValueOnce(null);
+
+    const user = userEvent.setup();
+    render(<CbtRunner module={MODULE} uid="u1" canSave />);
+    await user.click(screen.getByRole("button", { name: /bắt đầu/i }));
+    await user.click(screen.getByRole("button", { name: /lưu và bắt đầu/i })); // -> "mood-before"
+    await user.type(screen.getByLabelText("Bạn đang nghĩ gì?"), "a");
+    await user.click(screen.getByRole("button", { name: /tiếp tục/i }));
+    await user.click(screen.getByRole("button", { name: /hoàn thành/i }));
+    await user.click(screen.getByRole("button", { name: /lưu và xem lời kết/i })); // -> "mood-after"
+
+    await waitFor(() => expect(requestReflection).toHaveBeenCalled());
+    expect(requestReflection).toHaveBeenCalledWith("mood-after");
+    expect(requestReflection).not.toHaveBeenCalledWith("mood-before");
   });
 
   // Ràng buộc cứng nhất của task: bài làm và cảm xúc vẫn lưu được khi lớp AI

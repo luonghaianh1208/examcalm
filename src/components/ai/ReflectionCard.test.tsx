@@ -91,6 +91,40 @@ describe("ReflectionCard", () => {
     expect(mockedRequestReflection).not.toHaveBeenCalled();
   });
 
+  // Fix round 1, Finding 6: đọc aiOptIn TRƯỚC, chỉ đọc systemConfig/aiPublic
+  // (document nóng dùng chung toàn trường, trả phí Blaze) khi aiOptIn đã bật.
+  // Học sinh chưa bật AI — đa số ở thời điểm ra mắt — không được tốn lượt đọc
+  // thứ hai này mỗi lần lưu cảm xúc.
+  it("aiOptIn tắt: KHÔNG đọc systemConfig/aiPublic (đọc tuần tự, không đọc song song)", async () => {
+    mockedGetAiOptIn.mockResolvedValue(false);
+    render(<ReflectionCard moodLogId="m1" uid="u1" />);
+
+    await waitFor(() => expect(mockedGetAiOptIn).toHaveBeenCalledWith("u1"));
+    expect(mockedGetAiPublicConfig).not.toHaveBeenCalled();
+  });
+
+  // Fix round 1, Finding 4: nếu một trong hai hàm đọc gate NGOÀI DỰ KIẾN
+  // reject (thực tế cả hai đều tự nuốt lỗi và không bao giờ reject — đây là
+  // hàng phòng thủ cho tương lai), fail-closed phải TƯỜNG MINH: gate chuyển
+  // "closed" (không kẹt mãi ở "checking"), không có unhandled rejection.
+  it("getAiOptIn reject bất ngờ: fail-closed tường minh, không render gì, không gọi requestReflection", async () => {
+    mockedGetAiOptIn.mockRejectedValue(new Error("mất mạng"));
+    const { container } = render(<ReflectionCard moodLogId="m1" uid="u1" />);
+
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+    expect(mockedRequestReflection).not.toHaveBeenCalled();
+  });
+
+  // Fix round 1, Finding 2: MoodWidget đưa focus vào nút "Đóng" ngay khi lưu
+  // xong, TRƯỚC KHI ReflectionCard tải xong nội dung — nên section này phải
+  // là live region để trình đọc màn hình tự loan báo khi nội dung tới, dù
+  // focus đang ở nơi khác.
+  it("section phản chiếu có aria-live=polite để trình đọc màn hình loan báo khi nội dung tới", async () => {
+    render(<ReflectionCard moodLogId="m1" uid="u1" />);
+    const region = await screen.findByRole("region", { name: /phản chiếu từ mèo/i });
+    expect(region).toHaveAttribute("aria-live", "polite");
+  });
+
   it("gate mở: gọi requestReflection và hiện trạng thái đang tải", async () => {
     // Giữ promise treo lơ lửng để bắt được đúng trạng thái loading.
     let resolvePending: (v: { outputId: string }) => void = () => {};
