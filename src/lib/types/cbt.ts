@@ -25,7 +25,14 @@ export const cbtSessionSchema = z.object({
   moduleVersion: z.number().int().min(1),
   // Câu trả lời tự luận ngắn. PRD §5.5 ghi `any`; ở đây là `string` vì mọi
   // bước trong spec này đều là câu hỏi mở — xem design spec §4.2.
-  answers: z.record(z.string(), z.string().max(2000)),
+  // Giới hạn 12 mục khớp với cbtModuleSchema.steps.max(12) ở trên — một
+  // session không thể có nhiều câu trả lời hơn số bước của module; đổi một
+  // bên thì phải đổi bên kia. Key tối đa 64 ký tự vì id bước là slug ngắn.
+  answers: z
+    .record(z.string().max(64), z.string().max(2000))
+    .refine((obj) => Object.keys(obj).length <= 12, {
+      message: "answers không được vượt quá 12 mục",
+    }),
   // Học sinh tự viết, được phép để trống — xem design spec §9 điểm 5.
   summary: z.string().max(2000),
 });

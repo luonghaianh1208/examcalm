@@ -54,4 +54,28 @@ describe("cbtSessionSchema", () => {
     const bad = { userId: "", moduleId: "m1", moduleVersion: 1, answers: {}, summary: "" };
     expect(cbtSessionSchema.safeParse(bad).success).toBe(false);
   });
+
+  it("chấp nhận đúng 12 mục trong answers", () => {
+    const answers = Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [`s${i}`, "a"]),
+    );
+    const ok = { userId: "u1", moduleId: "m1", moduleVersion: 1, answers, summary: "" };
+    expect(cbtSessionSchema.safeParse(ok).success).toBe(true);
+  });
+
+  it("từ chối 13 mục trong answers — vượt quá số bước tối đa của module", () => {
+    const answers = Object.fromEntries(
+      Array.from({ length: 13 }, (_, i) => [`s${i}`, "a"]),
+    );
+    const bad = { userId: "u1", moduleId: "m1", moduleVersion: 1, answers, summary: "" };
+    expect(cbtSessionSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("từ chối key dài quá 64 ký tự", () => {
+    const bad = {
+      userId: "u1", moduleId: "m1", moduleVersion: 1,
+      answers: { [`s${"x".repeat(64)}`]: "a" }, summary: "",
+    };
+    expect(cbtSessionSchema.safeParse(bad).success).toBe(false);
+  });
 });
