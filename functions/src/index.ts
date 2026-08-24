@@ -4,5 +4,6 @@ initializeApp();
 
 export { setUserRole } from "./admin/setUserRole";
 export { deleteUserData } from "./admin/deleteUserData";
+export { saveAiConfig } from "./admin/saveAiConfig";
 export { generateReflection } from "./ai/generateReflection";
 export { testAiConnection } from "./ai/testConnection";

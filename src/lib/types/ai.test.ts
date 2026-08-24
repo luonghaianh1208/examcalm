@@ -71,6 +71,13 @@ describe("aiConfigSchema", () => {
     );
   });
 
+  // M10 (final whole-branch review): 0 KHÔNG phải "tắt" — max_tokens=0 vẫn đi ra provider (và
+  // vẫn trừ quota, xem generateReflection.ts) mà chỉ trả về rỗng/lỗi 400. Sàn phải là 1.
+  it("maxTokens có sàn 1, từ chối 0 (M10: 0 không phải trạng thái tắt hợp lệ)", () => {
+    expect(aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, maxTokens: 1 }).success).toBe(true);
+    expect(aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, maxTokens: 0 }).success).toBe(false);
+  });
+
   it("temperature trong khoảng [0, 1]", () => {
     expect(aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, temperature: 0 }).success).toBe(
       true,

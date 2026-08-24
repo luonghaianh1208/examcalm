@@ -164,7 +164,6 @@ describe("AiConfigEditor — kill switch (Decision D)", () => {
     await waitFor(() => {
       expect(mockedSaveAiConfig).toHaveBeenCalledWith(
         expect.objectContaining({ killSwitch: { moodReflection: false } }),
-        "admin-1",
       );
     });
   });

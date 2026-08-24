@@ -26,8 +26,12 @@ export const aiConfigSchema = z.object({
   model: z.string(),
   temperature: z.number().min(0).max(1),
   // Trần cứng 2000 token — phanh chi phí không sửa được từ Admin console.
-  // Một phản chiếu 2–4 câu không cần hơn.
-  maxTokens: z.number().int().min(0).max(2000),
+  // Một phản chiếu 2–4 câu không cần hơn. Sàn 1 (M10, final whole-branch review): 0 KHÔNG phải
+  // "tắt" — provider trả về rỗng hoặc lỗi 400 với max_tokens=0, request đó vẫn đi ra ngoài và
+  // vẫn bị trừ quota (xem functions/src/ai/generateReflection.ts, quota trừ TRƯỚC
+  // callChatCompletion) trong khi học sinh không nhận được gì. Muốn tắt tính năng thì dùng
+  // killSwitch, không phải maxTokens=0.
+  maxTokens: z.number().int().min(1).max(2000),
   // HAI FIELD NÀY CỐ Ý QUY ƯỚC NGƯỢC NHAU CHO GIÁ TRỊ 0 — đọc cả hai đoạn chú
   // thích trước khi sửa bất kỳ field nào ở đây (Task 7, fix round 1):
   //

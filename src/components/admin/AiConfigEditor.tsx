@@ -107,7 +107,7 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
     }
 
     try {
-      await saveAiConfig(parsed.data, adminUid);
+      await saveAiConfig(parsed.data);
       const nextForm = toFormState(parsed.data);
       setForm(nextForm);
       setSavedForm(nextForm);
@@ -302,7 +302,7 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
             </label>
 
             <label className="flex flex-col gap-1">
-              <span>Số token tối đa mỗi lượt (0 đến 2000)</span>
+              <span>Số token tối đa mỗi lượt (1 đến 2000)</span>
               <input
                 value={form.maxTokens}
                 onChange={(e) => updateForm("maxTokens", e.target.value)}

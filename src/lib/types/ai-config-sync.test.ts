@@ -73,7 +73,10 @@ const PROBES: { label: string; override: Record<string, unknown> }[] = [
   { label: "temperature = 1.01 (trên biên)", override: { temperature: 1.01 } },
 
   { label: "maxTokens = -1", override: { maxTokens: -1 } },
-  { label: "maxTokens = 0 (biên dưới hợp lệ)", override: { maxTokens: 0 } },
+  // M10 (final whole-branch review): sàn nâng từ 0 lên 1 — max_tokens=0 vẫn đi ra provider và
+  // vẫn trừ quota, chỉ trả về rỗng/lỗi (xem src/lib/types/ai.ts). 0 giờ PHẢI bị từ chối.
+  { label: "maxTokens = 0 (dưới sàn mới, không còn hợp lệ)", override: { maxTokens: 0 } },
+  { label: "maxTokens = 1 (biên dưới hợp lệ)", override: { maxTokens: 1 } },
   { label: "maxTokens = 2000 (trần cứng, hợp lệ)", override: { maxTokens: 2000 } },
   { label: "maxTokens = 2001 (vượt trần cứng — bắt được nếu ai đó nới trần một bên)", override: { maxTokens: 2001 } },
   { label: "maxTokens = 500.5 (không phải số nguyên)", override: { maxTokens: 500.5 } },
@@ -135,8 +138,19 @@ describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/
   // vô tình luôn pass vì cả hai bên đều chấp nhận mọi giá trị.
   it("một vài probe 'phải reject' thực sự bị từ chối (không phải mọi giá trị đều được chấp nhận)", () => {
     expect(srcSchema.safeParse({ ...BASE_VALID, maxTokens: 2001 }).success).toBe(false);
+    expect(srcSchema.safeParse({ ...BASE_VALID, maxTokens: 0 }).success).toBe(false);
     expect(srcSchema.safeParse({ ...BASE_VALID, temperature: 1.01 }).success).toBe(false);
     expect(srcSchema.safeParse({ ...BASE_VALID, baseUrl: "http://api.example.com/v1" }).success).toBe(false);
+  });
+
+  // M12 (final whole-branch review): test #1 ở trên so AI_CONFIG_FIELD_KEYS với
+  // Object.keys(srcSchema.shape) — nếu AI_CONFIG_FIELD_KEYS tự nó lệch khỏi
+  // Object.keys(functionsSchema.shape) (vd ai đó thêm field vào functionsSchema mà quên cập
+  // nhật hằng số liệt kê field), test #1 vẫn có thể xanh giả nếu hằng số lệch TRÙNG hướng với
+  // srcSchema một cách tình cờ, thay vì thật sự phản ánh functionsSchema. So trực tiếp hằng số
+  // với schema THẬT của chính nó để đóng khe hở đó.
+  it("AI_CONFIG_FIELD_KEYS khớp ĐÚNG Object.keys(functionsSchema.shape) — không lệch khỏi chính schema nó đại diện", () => {
+    expect([...AI_CONFIG_FIELD_KEYS].sort()).toEqual(Object.keys(functionsSchema.shape).sort());
   });
 });
 

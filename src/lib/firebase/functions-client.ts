@@ -118,3 +118,18 @@ export async function callTestAiConnection(): Promise<TestAiConnectionResult> {
   const result = await fn({});
   return result.data;
 }
+
+/**
+ * Khớp response thật của Cloud Function `saveAiConfig` (functions/src/admin/saveAiConfig.ts,
+ * fix I4+I5 — final whole-branch review): ghi ATOMIC systemConfig/aiConfig + aiPublic bằng
+ * Admin SDK (bỏ qua rules, không đụng vấn đề get() không thấy được write cùng batch) VÀ ghi
+ * auditLogs trước/sau baseUrl/providerLabel/killSwitch — hành động mạnh nhất của tính năng
+ * (đổi nơi ghi chú riêng tư của học sinh đi tới) không còn im lặng nữa. Thay thế writeBatch
+ * trực tiếp từ client trước đây ở src/lib/firestore/admin-ai.ts.
+ */
+export async function callSaveAiConfig(config: Record<string, unknown>): Promise<{ ok: true }> {
+  await ensureAuthReady();
+  const fn = httpsCallable<Record<string, unknown>, { ok: true }>(functionsInstance(), "saveAiConfig");
+  const result = await fn(config);
+  return result.data;
+}

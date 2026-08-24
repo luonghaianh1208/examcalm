@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { z } from "zod";
 import { getDb, ensureAuthReady } from "@/lib/firebase/client";
+import { callSaveAiConfig } from "@/lib/firebase/functions-client";
 import {
   aiConfigSchema, promptTemplateSchema, DEFAULT_AI_CONFIG,
   type AiConfig, type PromptTemplate,
@@ -29,44 +30,42 @@ export async function getAiConfig(): Promise<AiConfig> {
  * true khi và chỉ khi tính năng phản chiếu AI sẵn sàng phục vụ học sinh — khớp CHÍNH XÁC điều
  * kiện mà generateReflection kiểm tra (functions/src/ai/generateReflection.ts: killSwitch tắt,
  * baseUrl khác rỗng) CỘNG thêm model khác rỗng, vì baseUrl đúng mà model rỗng vẫn không gọi
- * được provider. Đây là hàm DUY NHẤT quyết định `enabled` của aiPublic — saveAiConfig() gọi
- * lại đúng hàm này, không tính lại điều kiện ở nơi khác (task-12-brief.md, Decision A).
+ * được provider. Bản mirror ở functions/src/ai/config.ts (Cloud Function saveAiConfig, fix
+ * I4+I5) mới là nơi THẬT SỰ derive `enabled` của aiPublic từ server; hàm ở đây chỉ còn dùng để
+ * xem trước kết quả ở phía client (vd hiển thị UI) và pin bằng test — không tự ghi Firestore.
+ *
+ * M8 (final whole-branch review): CỘNG thêm quotaStudentPerDay > 0 — quota mặc định khi ship
+ * là 0 (nghĩa là "không lượt nào", xem aiConfigSchema). Thiếu điều kiện này, admin điền xong
+ * baseUrl/model và tắt kill switch trong khi quên nâng quota sẽ khiến aiPublic.enabled=true,
+ * màn hình đồng ý mời học sinh bật, và MỌI lượt gọi đều rớt resource-exhausted ngay lập tức —
+ * học sinh nhận thông báo "đã dùng hết lượt hôm nay" dù chưa dùng lượt nào.
  */
-export function isAiEnabled(config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch">): boolean {
-  return config.baseUrl !== "" && config.model !== "" && config.killSwitch.moodReflection === false;
+export function isAiEnabled(
+  config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay">,
+): boolean {
+  return (
+    config.baseUrl !== "" && config.model !== "" &&
+    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0
+  );
 }
 
 /**
- * Ghi ATOMIC systemConfig/aiConfig VÀ systemConfig/aiPublic trong CÙNG một writeBatch — xem
- * task-12-brief.md, Decision A. aiPublic là bản có thể đọc công khai (học sinh đã đăng nhập,
- * xem firestore.rules), derive từ aiConfig, dùng để đặt tên provider ở màn hình đồng ý AI. Ghi
- * tách rời hai lần .set() độc lập tạo ra một khoảng hở nơi hai document có thể lệch nhau — màn
- * hình đồng ý khi đó nói sai tên công ty nhận dữ liệu riêng tư của một học sinh vị thành niên.
+ * Lưu cấu hình AI qua Cloud Function `saveAiConfig` (functions/src/admin/saveAiConfig.ts, fix
+ * I4+I5 — final whole-branch review), THAY vì ghi trực tiếp bằng writeBatch từ client như
+ * trước đây. Hai lý do đổi:
+ *
+ * - I5: đổi baseUrl/providerLabel/killSwitch là hành động mạnh nhất của cả tính năng (baseUrl
+ *   là kênh đọc nguyên văn ghi chú học sinh còn mạnh hơn quyền đọc aiJournalOutputs mà admin bị
+ *   cấm) — callable ghi audit log before/after, còn ghi trực tiếp từ client thì không thể.
+ * - I4: firestore.rules giờ ràng buộc `systemConfig/aiPublic.providerLabel` phải khớp
+ *   `systemConfig/aiConfig` mỗi khi ghi qua client SDK — nhưng get() trong rules KHÔNG thấy
+ *   được write khác trong CÙNG một batch, nên writeBatch trực tiếp cho aiConfig+aiPublic sẽ tự
+ *   chặn chính nó mỗi khi đổi providerLabel. Cloud Function dùng Admin SDK bỏ qua rules, tránh
+ *   hẳn vấn đề này — và closes luôn đường ghi aiPublic RIÊNG LẺ từ client mà rules test cũ
+ *   từng chứng minh là mở.
  */
-export async function saveAiConfig(config: AiConfig, adminUid: string): Promise<void> {
-  await ensureAuthReady();
-  const db = getDb();
-  const batch = writeBatch(db);
-
-  batch.set(doc(db, "systemConfig", "aiConfig"), {
-    providerLabel: config.providerLabel,
-    baseUrl: config.baseUrl,
-    model: config.model,
-    temperature: config.temperature,
-    maxTokens: config.maxTokens,
-    quotaStudentPerDay: config.quotaStudentPerDay,
-    rateLimitPerMinute: config.rateLimitPerMinute,
-    killSwitch: config.killSwitch,
-    updatedBy: adminUid,
-    updatedAt: serverTimestamp(),
-  });
-
-  batch.set(doc(db, "systemConfig", "aiPublic"), {
-    providerLabel: config.providerLabel,
-    enabled: isAiEnabled(config),
-  });
-
-  await batch.commit();
+export async function saveAiConfig(config: AiConfig): Promise<void> {
+  await callSaveAiConfig(config);
 }
 
 // ---- promptTemplates ----

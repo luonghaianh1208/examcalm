@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { addDoc, getDoc, getDocs, orderBy, Timestamp, updateDoc } from "firebase/firestore";
 import { ensureAuthReady } from "@/lib/firebase/client";
+import { callSaveAiConfig } from "@/lib/firebase/functions-client";
 import { DEFAULT_AI_CONFIG, type AiConfig } from "@/lib/types/ai";
 import {
   getAiConfig, saveAiConfig, isAiEnabled,
@@ -12,6 +13,13 @@ import {
 vi.mock("@/lib/firebase/client", () => ({
   getDb: vi.fn(() => ({})),
   ensureAuthReady: vi.fn().mockResolvedValue(undefined),
+}));
+
+// I4+I5 (final whole-branch review): saveAiConfig() giờ gọi Cloud Function saveAiConfig thay
+// vì ghi thẳng writeBatch — mock đúng ranh giới mới, cùng phong cách callDeleteUserData/
+// callSetUserRole ở các file test khác dùng functions-client.ts.
+vi.mock("@/lib/firebase/functions-client", () => ({
+  callSaveAiConfig: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 const mockBatchSet = vi.fn();
@@ -112,79 +120,74 @@ describe("getAiConfig", () => {
 });
 
 describe("isAiEnabled", () => {
-  it("true khi baseUrl, model khác rỗng và killSwitch tắt", () => {
-    expect(isAiEnabled({ baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: false } })).toBe(true);
+  it("true khi baseUrl, model khác rỗng, killSwitch tắt và quotaStudentPerDay > 0", () => {
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "m",
+        killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+      }),
+    ).toBe(true);
   });
 
   it("false khi baseUrl rỗng", () => {
-    expect(isAiEnabled({ baseUrl: "", model: "m", killSwitch: { moodReflection: false } })).toBe(false);
+    expect(
+      isAiEnabled({
+        baseUrl: "", model: "m", killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+      }),
+    ).toBe(false);
   });
 
   it("false khi model rỗng", () => {
-    expect(isAiEnabled({ baseUrl: "https://a.test", model: "", killSwitch: { moodReflection: false } })).toBe(false);
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "", killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+      }),
+    ).toBe(false);
   });
 
   it("false khi killSwitch đang bật (true = tính năng TẮT)", () => {
-    expect(isAiEnabled({ baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: true } })).toBe(false);
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: true }, quotaStudentPerDay: 5,
+      }),
+    ).toBe(false);
+  });
+
+  // M8 (final whole-branch review): trước fix, isAiEnabled bỏ qua quotaStudentPerDay — với
+  // quota ở giá trị mặc định khi ship (0, nghĩa là "KHÔNG lượt nào" — xem aiConfigSchema),
+  // baseUrl/model đã điền và kill switch tắt sẽ khiến aiPublic.enabled=true, màn hình đồng ý
+  // mời học sinh bật, và MỌI lượt gọi đều bị resource-exhausted ngay lập tức — hiện ra như
+  // "Bạn đã dùng hết lượt phản chiếu AI cho hôm nay rồi" cho một học sinh chưa dùng lượt nào.
+  it("M8: false khi quotaStudentPerDay=0, dù baseUrl/model/killSwitch đều hợp lệ", () => {
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "m",
+        killSwitch: { moodReflection: false }, quotaStudentPerDay: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("M8: true khi quotaStudentPerDay > 0 cộng các điều kiện còn lại", () => {
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "m",
+        killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+      }),
+    ).toBe(true);
   });
 });
 
+// I4+I5 (final whole-branch review): saveAiConfig() giờ chỉ là một lớp mỏng gọi Cloud Function
+// saveAiConfig (functions/src/admin/saveAiConfig.ts) — nơi THẬT SỰ ghi ATOMIC hai document và
+// audit log giờ nằm ở functions/src/admin/saveAiConfig.test.ts (chạy trên Firestore emulator).
+// Test ở đây chỉ còn xác nhận admin-ai.ts gọi đúng callable với đúng dữ liệu.
 describe("saveAiConfig", () => {
-  it("gọi ensureAuthReady TRƯỚC writeBatch.commit — đóng race lúc mới đăng nhập", async () => {
-    const order: string[] = [];
-    vi.mocked(ensureAuthReady).mockImplementation(async () => {
-      order.push("ensureAuthReady");
-    });
-    mockBatchCommit.mockImplementation(async () => {
-      order.push("commit");
-    });
+  const mockedCallSaveAiConfig = vi.mocked(callSaveAiConfig);
 
-    await saveAiConfig(VALID_CONFIG, "admin-1");
+  it("gọi callSaveAiConfig với đúng config", async () => {
+    await saveAiConfig(VALID_CONFIG);
 
-    expect(order).toEqual(["ensureAuthReady", "commit"]);
-  });
-
-  it("ghi aiConfig VÀ aiPublic trong CÙNG MỘT writeBatch (Decision A) — không có set() nào rời rạc", async () => {
-    await saveAiConfig(VALID_CONFIG, "admin-1");
-
-    expect(mockBatchSet).toHaveBeenCalledTimes(2);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-  });
-
-  it("aiPublic derive đúng: enabled=true khi baseUrl/model khác rỗng và killSwitch tắt", async () => {
-    await saveAiConfig(VALID_CONFIG, "admin-1");
-
-    const aiPublicCall = mockBatchSet.mock.calls.find(
-      (call) => (call[1] as { enabled?: boolean }).enabled !== undefined,
-    );
-    expect(aiPublicCall?.[1]).toEqual({ providerLabel: "OpenAI", enabled: true });
-  });
-
-  it("aiPublic.enabled=false khi killSwitch đang bật, dù baseUrl/model đã điền", async () => {
-    await saveAiConfig({ ...VALID_CONFIG, killSwitch: { moodReflection: true } }, "admin-1");
-
-    const aiPublicCall = mockBatchSet.mock.calls.find(
-      (call) => (call[1] as { enabled?: boolean }).enabled !== undefined,
-    );
-    expect(aiPublicCall?.[1]).toEqual({ providerLabel: "OpenAI", enabled: false });
-  });
-
-  it("aiPublic.enabled=false khi baseUrl rỗng (chưa cấu hình)", async () => {
-    await saveAiConfig({ ...VALID_CONFIG, baseUrl: "" }, "admin-1");
-
-    const aiPublicCall = mockBatchSet.mock.calls.find(
-      (call) => (call[1] as { enabled?: boolean }).enabled !== undefined,
-    );
-    expect(aiPublicCall?.[1]).toEqual({ providerLabel: "OpenAI", enabled: false });
-  });
-
-  it("aiConfig ghi kèm updatedBy đúng adminUid", async () => {
-    await saveAiConfig(VALID_CONFIG, "admin-42");
-
-    const aiConfigCall = mockBatchSet.mock.calls.find(
-      (call) => (call[1] as { updatedBy?: string }).updatedBy !== undefined,
-    );
-    expect(aiConfigCall?.[1]).toMatchObject({ updatedBy: "admin-42" });
+    expect(mockedCallSaveAiConfig).toHaveBeenCalledWith(VALID_CONFIG);
   });
 });
 

@@ -30,7 +30,9 @@ export const aiConfigSchema = z.object({
     ),
   model: z.string(),
   temperature: z.number().min(0).max(1),
-  maxTokens: z.number().int().min(0).max(2000),
+  // Sàn 1, không 0 (M10, final whole-branch review): xem giải thích đầy đủ ở
+  // src/lib/types/ai.ts — max_tokens=0 vẫn đi ra provider và vẫn trừ quota, chỉ trả về rỗng/lỗi.
+  maxTokens: z.number().int().min(1).max(2000),
   // HAI FIELD DƯỚI ĐÂY CỐ Ý QUY ƯỚC NGƯỢC NHAU CHO GIÁ TRỊ 0 — xem giải thích đầy đủ ở
   // src/lib/types/ai.ts (aiConfigSchema) và functions/src/ai/quota.ts:
   // - quotaStudentPerDay = 0  → KHÔNG học sinh nào được gọi AI trong ngày (ngân sách cạn).
@@ -49,6 +51,26 @@ export type AiConfig = z.infer<typeof aiConfigSchema>;
 /** Danh sách tên field top-level của aiConfigSchema, dùng để so đồng bộ với bản gốc ở
  *  src/lib/types/ai.ts trong test Task 13. */
 export const AI_CONFIG_FIELD_KEYS = Object.keys(aiConfigSchema.shape) as (keyof AiConfig)[];
+
+/**
+ * Bản mirror của isAiEnabled() ở src/lib/firestore/admin-ai.ts — package functions/ không
+ * import được src/ (xem giải thích ở đầu file). Dùng bởi Cloud Function saveAiConfig
+ * (functions/src/admin/saveAiConfig.ts, fix I4+I5) để derive systemConfig/aiPublic.enabled từ
+ * phía Admin SDK.
+ *
+ * M8 (final whole-branch review): CỘNG thêm quotaStudentPerDay > 0 — quota mặc định khi ship
+ * là 0 ("không lượt nào", xem aiConfigSchema). Thiếu điều kiện này, aiPublic.enabled=true dù
+ * quota=0 khiến màn hình đồng ý mời học sinh bật một tính năng mà MỌI lượt gọi đều rớt
+ * resource-exhausted ngay lập tức.
+ */
+export function isAiEnabled(
+  config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay">,
+): boolean {
+  return (
+    config.baseUrl !== "" && config.model !== "" &&
+    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0
+  );
+}
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
   providerLabel: "",

@@ -278,8 +278,34 @@ describe("systemConfig/{id}", () => {
     await assertFails(setDoc(doc(authedDb(env, "u1"), "systemConfig/aiPublic"), AI_PUBLIC));
   });
 
-  it("Admin ghi được systemConfig/aiPublic", async () => {
+  // --- I4 (final whole-branch review): aiPublic.providerLabel phải khớp aiConfig.providerLabel
+  // --- mỗi khi ghi qua client SDK — đóng đường ghi RIÊNG LẺ mà chính bộ test rules này từng
+  // --- chứng minh là mở (một admin gọi thẳng setDoc() ngoài saveAiConfig()).
+
+  it("Admin ghi được systemConfig/aiPublic khi providerLabel KHỚP aiConfig hiện có (I4)", async () => {
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "systemConfig/aiConfig"), { ...AI_CONFIG, providerLabel: "OpenAI" });
+    });
     await assertSucceeds(setDoc(doc(adminDb(env), "systemConfig/aiPublic"), AI_PUBLIC));
+  });
+
+  it("Admin KHÔNG ghi được systemConfig/aiPublic khi providerLabel LỆCH aiConfig (I4)", async () => {
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "systemConfig/aiConfig"), { ...AI_CONFIG, providerLabel: "OpenAI" });
+    });
+    await assertFails(
+      setDoc(doc(adminDb(env), "systemConfig/aiPublic"), { providerLabel: "OpenRouter", enabled: true }),
+    );
+  });
+
+  it("Admin KHÔNG ghi được systemConfig/aiPublic với providerLabel khác rỗng khi aiConfig CHƯA tồn tại (I4, bootstrap)", async () => {
+    await assertFails(setDoc(doc(adminDb(env), "systemConfig/aiPublic"), AI_PUBLIC));
+  });
+
+  it("Admin ghi được systemConfig/aiPublic rỗng ('chưa cấu hình') khi aiConfig CHƯA tồn tại (I4, bootstrap)", async () => {
+    await assertSucceeds(
+      setDoc(doc(adminDb(env), "systemConfig/aiPublic"), { providerLabel: "", enabled: false }),
+    );
   });
 });
 

@@ -126,13 +126,32 @@ service cloud.firestore {
     // nhà cung cấp AI để hiển thị ở màn hình xin đồng ý trước khi bật tính
     // năng AI); mọi id khác (vd. aiConfig chứa baseUrl, quota, rate limit)
     // không khớp path này nên chỉ chịu rule admin-only ở khối chung bên dưới.
+    // I4 (final whole-branch review): saveAiConfig() (Cloud Function, Admin SDK) ghi aiConfig
+    // và aiPublic ATOMIC, nhưng rules trước đây vẫn cho phép ghi RIÊNG LẺ document này qua client
+    // SDK — rules test của chính dự án từng chứng minh điều đó (một admin gọi thẳng setDoc() từ
+    // DevTools). providerLabel ghi vào đây PHẢI khớp providerLabel hiện có ở aiConfig, nếu không
+    // màn hình đồng ý (AiConsentSection.tsx) có thể nêu sai tên nơi nhận dữ liệu (R5, spec §3.3).
+    // Ràng buộc này KHÔNG áp dụng cho Cloud Function saveAiConfig — Admin SDK bỏ qua Security
+    // Rules hoàn toàn — nó chỉ đóng đường ghi trực tiếp từ client. aiConfig chưa tồn tại (chưa
+    // cấu hình lần nào) coi providerLabel của nó là rỗng, khớp sentinel "chưa cấu hình" của
+    // DEFAULT_AI_CONFIG — get() sẽ lỗi nếu gọi trên document không tồn tại nên phải exists()
+    // trước.
     match /systemConfig/aiPublic {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isAdmin() &&
+        request.resource.data.providerLabel ==
+          (exists(/databases/$(database)/documents/systemConfig/aiConfig)
+            ? get(/databases/$(database)/documents/systemConfig/aiConfig).data.providerLabel
+            : "");
     }
 
+    // I4 fix, phần 2: Firestore hợp (OR) MỌI khối match khớp cùng path — khối wildcard này
+    // cũng khớp path "systemConfig/aiPublic", nên nếu không loại trừ tường minh, quyền admin
+    // ghi tuỳ ý ở đây sẽ ĐÈ LÊN ràng buộc providerLabel khớp aiConfig ở khối hẹp phía trên (hai
+    // khối OR lại — cái LỎNG hơn thắng), khiến ràng buộc đó vô tác dụng dù đọc code tưởng đã
+    // chặn. "aiPublic" phải đi qua đúng khối hẹp ở trên.
     match /systemConfig/{id} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin() && id != "aiPublic";
     }
 
     match /promptTemplates/{id} {
