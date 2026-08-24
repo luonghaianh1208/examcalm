@@ -162,7 +162,7 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
         <section className="flex flex-col gap-4">
           <p className="text-slate-700">{mod.closingText}</p>
           {saveFailed && (
-            <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            <p role="status" className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
               Bài của bạn đang chờ đồng bộ. Khi có mạng lại, nó sẽ tự lưu.
             </p>
           )}

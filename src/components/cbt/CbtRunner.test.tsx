@@ -124,8 +124,29 @@ describe("CbtRunner", () => {
     }));
   });
 
-  it("không có ngôn ngữ chuỗi ngày ở bất kỳ đâu", () => {
+  // Mở rộng so với brief gốc: check gốc chỉ soi màn hình intro, nên chữ áp
+  // lực thêm vào steps/summary/after/done sẽ lọt qua. Đi qua lần lượt cả 6
+  // pha (kể cả nhánh bỏ qua ở before/after) và soi lại sau mỗi lần chuyển pha.
+  it("không có ngôn ngữ chuỗi ngày ở bất kỳ pha nào", async () => {
+    const user = userEvent.setup();
+    const forbidden = /chuỗi|liên tiếp|streak|bỏ lỡ/i;
     const { container } = render(<CbtRunner module={MODULE} uid="u1" canSave />);
-    expect(container.textContent).not.toMatch(/chuỗi|liên tiếp|streak|bỏ lỡ/i);
+    expect(container.textContent).not.toMatch(forbidden); // intro
+
+    await user.click(screen.getByRole("button", { name: /bắt đầu/i }));
+    expect(container.textContent).not.toMatch(forbidden); // before
+
+    await user.click(screen.getByRole("button", { name: /bỏ qua/i }));
+    expect(container.textContent).not.toMatch(forbidden); // steps
+
+    await user.type(screen.getByLabelText("Bạn đang nghĩ gì?"), "a");
+    await user.click(screen.getByRole("button", { name: /tiếp tục/i }));
+    expect(container.textContent).not.toMatch(forbidden); // summary
+
+    await user.click(screen.getByRole("button", { name: /hoàn thành/i }));
+    expect(container.textContent).not.toMatch(forbidden); // after
+
+    await user.click(screen.getByRole("button", { name: /bỏ qua/i }));
+    expect(container.textContent).not.toMatch(forbidden); // done
   });
 });
