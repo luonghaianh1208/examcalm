@@ -16,9 +16,20 @@ type Props = {
   onSubmit: (input: MoodInput) => Promise<void>;
   context?: MoodContext;
   linkedActivityRef?: string | null;
+  /**
+   * Nhãn nút gửi. Mặc định là chữ cho nhật ký cảm xúc độc lập ("Lưu vào nhật
+   * ký"). Nơi nhúng form vào một luồng khác (vd: CBT trước/sau bài tập) nên
+   * truyền nhãn phù hợp với ngữ cảnh đó thay vì dùng mặc định.
+   */
+  submitLabel?: string;
 };
 
-export function MoodForm({ onSubmit, context = "standalone", linkedActivityRef = null }: Props) {
+export function MoodForm({
+  onSubmit,
+  context = "standalone",
+  linkedActivityRef = null,
+  submitLabel = "Lưu vào nhật ký",
+}: Props) {
   const [moodScore, setMoodScore] = useState(5);
   const [moodIcon, setMoodIcon] = useState<MoodIcon>("neutral");
   const [note, setNote] = useState("");
@@ -94,7 +105,7 @@ export function MoodForm({ onSubmit, context = "standalone", linkedActivityRef =
       {error && <p role="alert" className="text-slate-700">{error}</p>}
 
       <button type="submit" disabled={pending} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-60">
-        {pending ? "Đang lưu…" : "Lưu vào nhật ký"}
+        {pending ? "Đang lưu…" : submitLabel}
       </button>
     </form>
   );
