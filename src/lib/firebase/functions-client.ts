@@ -46,16 +46,18 @@ export async function callSetUserRole(
 
 /**
  * Khớp response thật của Cloud Function `deleteUserData`
- * (functions/src/admin/deleteUserData.ts): `attempts`/`moods`/`favorites` là số
- * document đã xóa ở từng collection. `authDeleteFailed` chỉ xuất hiện khi dữ
- * liệu Firestore đã xóa xong nhưng bản ghi Auth (đăng nhập) chưa xóa được vì lý
- * do khác "đã xóa từ trước" (thiếu quyền, hết quota, mất kết nối...) — hàm
- * KHÔNG throw trong trường hợp đó, vì dữ liệu thật sự đã bị xóa, caller cần
- * phân biệt "xóa thất bại" với "xóa xong nhưng còn sót Auth".
+ * (functions/src/admin/deleteUserData.ts): mỗi field là số document đã xóa ở
+ * từng collection — `aiJournalOutputs`/`aiUsage` thêm vào ở fix C1 (final
+ * whole-branch review) để cascade xóa cùng lúc với moodLogs/cbtSessions.
+ * `authDeleteFailed` chỉ xuất hiện khi dữ liệu Firestore đã xóa xong nhưng bản
+ * ghi Auth (đăng nhập) chưa xóa được vì lý do khác "đã xóa từ trước" (thiếu
+ * quyền, hết quota, mất kết nối...) — hàm KHÔNG throw trong trường hợp đó, vì
+ * dữ liệu thật sự đã bị xóa, caller cần phân biệt "xóa thất bại" với "xóa xong
+ * nhưng còn sót Auth".
  */
 export type DeleteUserDataResult = {
   ok: true;
-  deleted: { attempts: number; moods: number; favorites: number };
+  deleted: { attempts: number; moods: number; aiJournalOutputs: number; aiUsage: number; favorites: number };
   authDeleteFailed?: boolean;
 };
 

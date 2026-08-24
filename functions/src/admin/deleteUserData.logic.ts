@@ -6,7 +6,8 @@ import type { CallerAuth } from "./guards";
  */
 export function collectDeletionTargets(): string[] {
   return [
-    "testAttempts", "testAnswers", "moodLogs", "cbtSessions", "users/{uid}/favorites", "users/{uid}",
+    "testAttempts", "testAnswers", "moodLogs", "cbtSessions", "aiJournalOutputs", "aiUsage",
+    "users/{uid}/favorites", "users/{uid}",
   ];
 }
 

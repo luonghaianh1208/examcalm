@@ -16,6 +16,14 @@ vi.mock("@/lib/auth-client", () => ({
 const mockedCallDeleteUserData = vi.mocked(callDeleteUserData);
 const mockedSignOutEverywhere = vi.mocked(signOutEverywhere);
 
+// File này timeout ngẫu nhiên (mặc định 5000ms) khi chạy TOÀN BỘ suite song song do tranh
+// chấp CPU giữa các worker — pass sạch khi chạy riêng. Có TRƯỚC Spec #3 (final whole-branch
+// review, ghi ở .superpowers/sdd/2026-08-24-examcalm-ai/progress.md), không phải lỗi logic
+// test. Nới timeout CHỈ CHO FILE NÀY (vi.setConfig chỉ áp dụng trong phạm vi file đang chạy,
+// không đổi cấu hình toàn cục) thay vì sửa vitest.config.mts — hai file flaky còn lại
+// (TestRunner.test.tsx, ResourceEditor.test.tsx) không thuộc phạm vi sửa của spec này.
+vi.setConfig({ testTimeout: 15000 });
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -55,7 +63,7 @@ describe("DeleteAccountSection", () => {
   // sinh hiểu lầm rằng dữ liệu vẫn còn và có thể thử xóa lại.
   it("khi xóa THÀNH CÔNG nhưng đăng xuất thất bại: báo đã xóa xong (status), KHÔNG báo lỗi xóa (alert)", async () => {
     mockedCallDeleteUserData.mockResolvedValue({
-      ok: true, deleted: { attempts: 1, moods: 1, favorites: 1 },
+      ok: true, deleted: { attempts: 1, moods: 1, aiJournalOutputs: 1, aiUsage: 1, favorites: 1 },
     });
     mockedSignOutEverywhere.mockRejectedValue(new Error("mất kết nối"));
     const user = userEvent.setup();

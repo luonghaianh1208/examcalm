@@ -44,8 +44,8 @@ export function DeleteAccountSection({ uid }: { uid: string }) {
     <section className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-4">
       <h2 className="mb-2 font-medium text-rose-900">Xóa toàn bộ dữ liệu của tôi</h2>
       <p className="mb-3 text-rose-900">
-        Thao tác này xóa vĩnh viễn tài khoản, toàn bộ nhật ký cảm xúc, lịch sử test
-        và danh sách bài đã lưu. Không khôi phục lại được.
+        Thao tác này xóa vĩnh viễn tài khoản, toàn bộ nhật ký cảm xúc, các phản chiếu AI,
+        lịch sử test và danh sách bài đã lưu. Không khôi phục lại được.
       </p>
 
       <label className="flex flex-col gap-1">

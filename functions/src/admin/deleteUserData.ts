@@ -36,10 +36,10 @@ async function deleteQueryInBatches(
  * danh sách trong collectDeletionTargets() và cascade thực tế không liên kết
  * với nhau, nên test so khớp danh sách không đảm bảo được gì).
  */
-const DELETION_TARGET_HANDLERS: Record<
+export const DELETION_TARGET_HANDLERS: Record<
   string,
   {
-    resultKey: "attempts" | "answers" | "moods" | "cbtSessions" | "favorites";
+    resultKey: "attempts" | "answers" | "moods" | "cbtSessions" | "aiJournalOutputs" | "aiUsage" | "favorites";
     query: (targetUid: string) => FirebaseFirestore.Query;
   }
 > = {
@@ -58,6 +58,20 @@ const DELETION_TARGET_HANDLERS: Record<
   cbtSessions: {
     resultKey: "cbtSessions",
     query: (targetUid) => getFirestore().collection("cbtSessions").where("userId", "==", targetUid),
+  },
+  // aiJournalOutputs: phản chiếu AI VỀ CHÍNH ghi chú vừa xóa — bỏ sót mục này là lỗ hổng C1
+  // (final whole-branch review): document ở lại vĩnh viễn vì rule của nó đòi uid khớp
+  // request.auth.uid, mà uid đó đã không còn tồn tại sau khi xóa xong, và admin bị cấm
+  // đọc/xóa collection này. Field lọc là "userId", khớp aiJournalOutputSchema (src/lib/types/ai.ts).
+  aiJournalOutputs: {
+    resultKey: "aiJournalOutputs",
+    query: (targetUid) => getFirestore().collection("aiJournalOutputs").where("userId", "==", targetUid),
+  },
+  // aiUsage: sổ đếm quota AI, khóa doc theo "{uid}_{yyyy-mm-dd}" (functions/src/ai/quota.ts)
+  // — không phải một doc-id đơn lẻ nên phải lọc bằng where("uid", ...), không doc(targetUid).
+  aiUsage: {
+    resultKey: "aiUsage",
+    query: (targetUid) => getFirestore().collection("aiUsage").where("uid", "==", targetUid),
   },
   "users/{uid}/favorites": {
     resultKey: "favorites",
@@ -103,6 +117,8 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
   const answers = deleted.answers ?? 0;
   const moods = deleted.moods ?? 0;
   const cbtSessions = deleted.cbtSessions ?? 0;
+  const aiJournalOutputs = deleted.aiJournalOutputs ?? 0;
+  const aiUsage = deleted.aiUsage ?? 0;
   const favorites = deleted.favorites ?? 0;
 
   await db.collection("users").doc(targetUid).delete();
@@ -130,11 +146,15 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
     action: "deleteUserData",
     targetType: "user",
     targetId: targetUid,
-    before: { attempts, answers, moods, cbtSessions, favorites },
+    before: { attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage, favorites },
     after: authDeleteFailed ? { authDeleteFailed: true } : null,
   });
 
   return authDeleteFailed
-    ? { ok: true, deleted: { attempts, answers, moods, cbtSessions, favorites }, authDeleteFailed: true }
-    : { ok: true, deleted: { attempts, answers, moods, cbtSessions, favorites } };
+    ? {
+        ok: true,
+        deleted: { attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage, favorites },
+        authDeleteFailed: true,
+      }
+    : { ok: true, deleted: { attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage, favorites } };
 });
