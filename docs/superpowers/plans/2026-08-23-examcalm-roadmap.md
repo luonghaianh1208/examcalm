@@ -72,20 +72,28 @@ Bộ câu hỏi giúp học sinh nhận diện suy nghĩ tiêu cực quanh chuy�
 
 ---
 
-### Spec #3 — AI Layer (Genkit)
+### Spec #3 — AI Layer (provider tuỳ chỉnh, OpenAI-compatible)
 
-**PRD:** §7.2.3, §8 · **Phụ thuộc:** Spec #1 · **Quy mô ước tính:** 14–18 task
+> **Đã được thay thế bằng bản thiết kế chi tiết ngày 2026-08-24:**
+> `docs/superpowers/specs/2026-08-24-examcalm-ai-design.md`
+> Mục dưới đây giữ lại để ghi nhận lịch sử quyết định.
 
-Mascot mèo phản chiếu cảm xúc: `reflectionText`, `catStoryText`, `journalPrompt`, gợi ý tài nguyên.
+**Thay đổi so với bản gốc:** chủ sản phẩm chọn **API tương thích OpenAI với provider cấu hình được lúc chạy**, không dùng Genkit + Vertex AI. Lý do: rẻ hơn, không khoá nhà cung cấp, và đổi provider chỉ cần sửa `baseUrl` + `model` trong Admin console chứ không phải deploy lại.
 
-**Cần xây:**
-- Genkit trong `functions/`, provider Vertex AI/Gemini qua abstraction layer
-- `moodReflectionFlow` + `storyGenerationFlow` → ghi `aiJournalOutputs` (client **không** ghi trực tiếp)
+**PRD:** §7.2.3, §8 · **Phụ thuộc:** Spec #1 · **Quy mô ước tính:** 12–14 task
+
+Mascot mèo phản chiếu cảm xúc: `reflectionText`, `catStoryText`, `journalPrompt`.
+
+**Cần xây (theo bản thiết kế mới):**
+- Lớp client OpenAI-compatible (`chat/completions`) trong `functions/` — **không dùng Genkit**
+- `systemConfig/aiConfig`: `providerLabel`, `baseUrl`, `model`, quota, rate limit, **kill switch từng feature**
+- API key ở **Secret Manager**, không ở Firestore, không bao giờ tới client
+- `generateReflection` callable → ghi `aiJournalOutputs` (client **không** ghi trực tiếp)
 - `promptTemplates` versioned + Admin UI test prompt trước khi publish
-- `systemConfig/aiConfig`: quota Guest/Student, rate limit, **kill switch từng feature**
-- `guestQuota` + Firebase Anonymous Auth cho Guest
-- **Chuyển App Check từ monitor-only sang enforce** — Spec #1 đã wiring sẵn, đây là lúc bật
 - Post-processing chặn ngôn ngữ chẩn đoán
+- **Chuyển App Check từ monitor-only sang enforce** — Spec #1 đã wiring sẵn, đây là lúc bật
+
+**Đã cắt khỏi phạm vi:** AI cho Guest + `guestQuota` + Anonymous Auth (bề mặt lạm dụng lớn nhất, giá trị nhỏ nhất — để lại Spec #3b nếu cần); `storyGenerationFlow` tách riêng (gộp chung một lời gọi).
 
 **Đây là spec đầu tiên tốn tiền thật.** Mỗi lượt mood check-in có AI là một lần gọi model. Trước khi bắt đầu phải có: budget alert, quota mặc định thấp, kill switch chạy được và đã test.
 
@@ -95,7 +103,7 @@ Mascot mèo phản chiếu cảm xúc: `reflectionText`, `catStoryText`, `journa
 - **Mood log phải lưu được kể cả khi AI lỗi** — core feature không phụ thuộc AI layer
 - Không gửi ghi chú sang provider ngoài nếu `privacySettings.aiOptIn` chưa bật
 
-**Con người phải chốt trước:** provider chính thức, data processing terms, và **xác nhận provider tắt "data retention for training"**. Đây là ghi chú cảm xúc của trẻ vị thành niên gửi sang bên thứ ba — không được bắt đầu code khi chưa rõ điều khoản.
+**Con người phải chốt — chặn BẬT cho học sinh, không chặn code:** provider chính thức, data processing terms, và **xác nhận provider tắt "data retention for training"**. Code được viết trước vì `aiOptIn` mặc định tắt và `aiConfig` mặc định trống — không một ký tự nào rời khỏi Firestore khi chưa ai cấu hình. Nhưng **không được bật cho học sinh** khi chưa rõ điều khoản: đây là ghi chú cảm xúc của trẻ vị thành niên gửi sang bên thứ ba.
 
 ---
 
