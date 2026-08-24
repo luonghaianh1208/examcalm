@@ -79,6 +79,60 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // aiJournalOutputs: phản chiếu (reflection) do AI sinh ra dựa trên ghi chú
+    // riêng tư của học sinh (moodLogs/cbtSessions). Vì gắn liền với nội dung
+    // private đó, admin KHÔNG được đọc — cùng lý do admin không đọc được
+    // moodLogs. Chỉ Cloud Function (Admin SDK, bỏ qua rules) mới được tạo
+    // document; client không bao giờ được create trực tiếp.
+    match /aiJournalOutputs/{id} {
+      allow create: if false;
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // update chỉ để học sinh gắn phản hồi (userFeedback) của mình — không
+      // được sửa nội dung phản chiếu (reflectionText) hay đổi userId để "cấy"
+      // output vào tài khoản khác (bài học từ lỗ hổng moodLogs.userId ở trên:
+      // phải so request.resource.data với resource.data, không chỉ kiểm quyền).
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.reflectionText == resource.data.reflectionText;
+    }
+
+    // aiUsage: sổ đếm quota gọi AI. Học sinh đọc được thì không sao nhưng
+    // không cần thiết cho tính năng nào hiện tại, còn ghi được thì quota vô
+    // nghĩa — khoá tuyệt đối từ client, chỉ Cloud Function (Admin SDK) ghi.
+    match /aiUsage/{id} {
+      allow read, write: if false;
+    }
+
+    // systemConfig/aiPublic: đặt TRƯỚC khối chung bên dưới. Ngoại lệ DUY NHẤT
+    // trong systemConfig cho học sinh đọc — chỉ chứa tên nhà cung cấp AI để
+    // hiển thị ở màn hình xin đồng ý (consent) trước khi bật tính năng AI. Các
+    // id khác (vd. aiConfig chứa baseUrl, quota, rate limit) vẫn khoá admin-only
+    // ở khối /systemConfig/{id} bên dưới.
+    match /systemConfig/aiPublic {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /systemConfig/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /promptTemplates/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // aiSafetyLog: Cloud Function ghi vào đây (qua Admin SDK, bỏ qua rules)
+    // khi model sinh ngôn ngữ chẩn đoán bị chặn, để admin sửa lại prompt. CHỈ
+    // lưu metadata (triggeredKeyword, model, promptTemplateId, createdAt) —
+    // TUYỆT ĐỐI không lưu nội dung output bị chặn hay uid học sinh: output đó
+    // là phản chiếu về ghi chú riêng tư của học sinh, nếu admin đọc được sẽ mở
+    // lại đúng lỗ hổng mà lệnh cấm admin đọc aiJournalOutputs ở trên đang đóng.
+    match /aiSafetyLog/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
