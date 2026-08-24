@@ -119,40 +119,50 @@ export function OnboardingTour({ uid, hideTooltips }: Props) {
   }
 
   return (
-    <div
-      ref={containerRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Hướng dẫn sử dụng — bước ${stepIndex + 1} trên ${STEPS.length}`}
-      tabIndex={-1}
-      style={style}
-      className="fixed z-50 w-[min(20rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 shadow-xl outline-none motion-safe:transition-[top,left]"
-    >
-      <p className="mb-4">{step.text}</p>
+    <>
+      {/* aria-modal="true" ở dialog bên dưới nói với screen reader rằng phần
+          còn lại của trang đang bất hoạt — lớp này làm điều đó đúng luôn với
+          chuột/chạm, chặn học sinh bấm xuyên qua card để lỡ tay điều hướng đi
+          nơi khác giữa tour. Rất mờ (không dùng scrim đậm như WelcomeDialog)
+          vì tour đang trỏ vào đúng phần tử được highlight, cần vẫn nhìn thấy
+          rõ. Bấm vào đây coi như "Bỏ qua" — cùng hành vi với Escape, không ghi
+          hideTooltips. */}
+      <div aria-hidden="true" onClick={handleClose} className="fixed inset-0 z-40 bg-slate-900/5" />
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Hướng dẫn sử dụng — bước ${stepIndex + 1} trên ${STEPS.length}`}
+        tabIndex={-1}
+        style={style}
+        className="fixed z-50 w-[min(20rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 shadow-xl outline-none motion-safe:transition-[top,left]"
+      >
+        <p className="mb-4">{step.text}</p>
 
-      {isLastStep && (
-        <label className="mb-4 flex items-start gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => handleCheckbox(e.target.checked)}
-          />
-          <span>Không hiện lại hướng dẫn này</span>
-        </label>
-      )}
+        {isLastStep && (
+          <label className="mb-4 flex items-start gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => handleCheckbox(e.target.checked)}
+            />
+            <span>Không hiện lại hướng dẫn này</span>
+          </label>
+        )}
 
-      <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={handleClose} className="text-slate-600 underline">
-          Bỏ qua
-        </button>
-        <button
-          type="button"
-          onClick={handleNext}
-          className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white"
-        >
-          {isLastStep ? "Xong" : "Tiếp"}
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" onClick={handleClose} className="text-slate-600 underline">
+            Bỏ qua
+          </button>
+          <button
+            type="button"
+            onClick={handleNext}
+            className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white"
+          >
+            {isLastStep ? "Xong" : "Tiếp"}
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

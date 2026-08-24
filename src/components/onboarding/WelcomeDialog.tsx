@@ -15,10 +15,14 @@ type Props = {
  * welcomeSeenAt rồi nhường chỗ cho tour hướng dẫn.
  */
 export function WelcomeDialog({ uid, onDismiss }: Props) {
-  function handleDismiss() {
-    // Ghi nền, không chặn UI — thất bại thì lần sau mở app dialog này chỉ hiện
-    // lại, không phải lỗi nghiêm trọng (xem giải thích swallow trong onboarding.ts).
-    void markWelcomeSeen(uid);
+  async function handleDismiss() {
+    // Đợi ghi xong rồi mới báo "đã dismiss" — để state cục bộ và state đã lưu
+    // khớp nhau trước khi học sinh có thể tải lại trang, tránh dialog hiện lại
+    // ngay sau khi vừa đóng. markWelcomeSeen() tự nuốt lỗi ghi bên trong nó
+    // (xem onboarding.ts) nên await ở đây không bao giờ throw hay treo UI vì
+    // thất bại — ghi lỗi thì vẫn chuyển sang tour bình thường, lần sau mở app
+    // dialog này chỉ hiện lại, không phải lỗi nghiêm trọng.
+    await markWelcomeSeen(uid);
     onDismiss();
   }
 
@@ -32,6 +36,9 @@ export function WelcomeDialog({ uid, onDismiss }: Props) {
         aria-modal="true"
         aria-labelledby="welcome-dialog-title"
         tabIndex={-1}
+        // Giữ padding 1.5rem (p-6) mặc định, chỉ nới thêm đáy khi có safe-area
+        // (home indicator...) — cùng cách OnboardingTour.tsx làm với card của nó.
+        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
         className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl outline-none motion-safe:transition-transform"
       >
         <h2 id="welcome-dialog-title" className="mb-2 text-xl font-semibold">

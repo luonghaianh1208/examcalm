@@ -21,21 +21,26 @@ export function VerifyEmailNotice() {
       const user = getFirebaseAuth().currentUser;
       if (!user || cancelled) return;
 
-      // reload() lấy trạng thái MỚI NHẤT từ Firebase — cần thiết vì học sinh có
-      // thể vừa xác thực ở MỘT trình duyệt/cửa sổ khác; user object ở cửa sổ
-      // này vẫn đang giữ cache cũ (emailVerified: false).
-      await user.reload();
-      if (cancelled || !user.emailVerified) return;
-
       try {
+        // reload() lấy trạng thái MỚI NHẤT từ Firebase — cần thiết vì học sinh có
+        // thể vừa xác thực ở MỘT trình duyệt/cửa sổ khác; user object ở cửa sổ
+        // này vẫn đang giữ cache cũ (emailVerified: false). reload() cũng có thể
+        // reject (tài khoản bị xoá ở thiết bị khác, mất mạng, token hết hạn...) —
+        // nằm trong cùng try/catch với establishSession() để không lọt ra ngoài
+        // thành unhandled rejection (detectVerification() được gọi qua
+        // `void detectVerification()`, không có .catch()).
+        await user.reload();
+        if (cancelled || !user.emailVerified) return;
+
         // __session cookie đông cứng claims lúc mint — phải xin lại ID token
         // (force-refresh, establishSession() đã làm việc này) và đổi lấy cookie
         // mới thì Server Component mới nhận ra emailVerified: true.
         await establishSession(user);
         if (!cancelled) router.refresh();
       } catch {
-        // Mint lại cookie thất bại: học sinh vẫn còn nút "Gửi lại email xác
-        // thực" và có thể tự tải lại trang sau — không được chặn UI ở đây.
+        // reload() hoặc mint lại cookie thất bại: học sinh vẫn còn nút "Gửi lại
+        // email xác thực" và có thể tự tải lại trang sau — không được chặn UI ở
+        // đây, cứ để notice "chưa xác thực" hiện nguyên như hiện tại.
       }
     }
 

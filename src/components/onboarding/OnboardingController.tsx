@@ -46,7 +46,10 @@ export function OnboardingController({ user }: Props) {
   // cấm); state "cũ của người khác" tự bị lọc ra lúc render thay vì phải dọn
   // dẹp chủ động trong effect.
   const [loaded, setLoaded] = useState<{ uid: string; state: OnboardingState } | null>(null);
-  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  // Cùng pattern {uid, ...} như `loaded` ở trên — tránh state "đã dismiss của
+  // tài khoản trước" bị mang nhầm sang tài khoản mới nếu chuyển tài khoản mà
+  // không unmount lại toàn bộ component.
+  const [welcomeDismissed, setWelcomeDismissed] = useState<{ uid: string } | null>(null);
 
   const eligible =
     user !== null && user.role === "student" && user.emailVerified && !isExcludedPath(pathname ?? "");
@@ -63,14 +66,16 @@ export function OnboardingController({ user }: Props) {
   }, [eligible, user]);
 
   const handleWelcomeDismiss = useCallback(() => {
-    setWelcomeDismissed(true);
-  }, []);
+    if (!user) return;
+    setWelcomeDismissed({ uid: user.uid });
+  }, [user]);
 
   const state = user && loaded?.uid === user.uid ? loaded.state : null;
+  const dismissed = user && welcomeDismissed?.uid === user.uid;
 
   if (!eligible || !user || !state) return null;
 
-  if (state.welcomeSeenAt === null && !welcomeDismissed) {
+  if (state.welcomeSeenAt === null && !dismissed) {
     return <WelcomeDialog uid={user.uid} onDismiss={handleWelcomeDismiss} />;
   }
 

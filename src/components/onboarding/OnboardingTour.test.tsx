@@ -94,3 +94,18 @@ describe("OnboardingTour — Escape", () => {
     expect(mockedSetHideTooltips).not.toHaveBeenCalled();
   });
 });
+
+describe("OnboardingTour — backdrop", () => {
+  it("bấm vào lớp nền phía sau card -> đóng tour giống 'Bỏ qua', không gọi setHideTooltips", async () => {
+    renderAnchors();
+    const user = userEvent.setup();
+    const { container } = render(<OnboardingTour uid="u1" hideTooltips={false} />);
+
+    const backdrop = container.querySelector('[aria-hidden="true"]');
+    expect(backdrop).not.toBeNull();
+    await user.click(backdrop!);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(mockedSetHideTooltips).not.toHaveBeenCalled();
+  });
+});

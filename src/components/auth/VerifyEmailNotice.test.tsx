@@ -88,6 +88,22 @@ describe("VerifyEmailNotice — dò xác thực lúc mount", () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /gửi lại email xác thực/i })).toBeInTheDocument();
   });
+
+  it("reload() lỗi (vd: tài khoản bị xoá ở thiết bị khác) -> nuốt lỗi, không unhandled rejection, không gọi establishSession, notice 'chưa xác thực' vẫn còn", async () => {
+    const user = fakeUser(true);
+    user.reload.mockRejectedValue(new Error("auth/user-token-expired"));
+    mockCurrentUser(user);
+
+    render(<VerifyEmailNotice />);
+
+    // Nếu reload() nằm ngoài try/catch, lỗi này sẽ thoát ra thành unhandled
+    // rejection và làm test fail dù không assert gì thêm — waitFor() ở đây chỉ
+    // để đảm bảo promise đã settle trước khi kiểm tra các bước sau đó không xảy ra.
+    await waitFor(() => expect(user.reload).toHaveBeenCalled());
+    expect(mockedEstablishSession).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /gửi lại email xác thực/i })).toBeInTheDocument();
+  });
 });
 
 describe("VerifyEmailNotice — gửi lại email", () => {
