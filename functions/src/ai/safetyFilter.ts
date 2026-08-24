@@ -75,9 +75,24 @@ function buildKeywordPattern(normalizedKeyword: string): RegExp {
   return new RegExp(parts.join("\\s+"), "g");
 }
 
-export function checkOutputSafety(text: string): { safe: boolean; reason: string | null } {
+export type SafetyCheckResult = {
+  safe: boolean;
+  reason: string | null;
+  /** Từ khoá cấm đã kích hoạt (nguyên văn từ BANNED_DIAGNOSTIC_KEYWORDS), null khi an toàn
+   *  hoặc khi bị chặn vì văn bản rỗng (không có từ khoá cụ thể nào để nêu tên). Trả về dữ
+   *  liệu có cấu trúc thay vì bắt caller regex-parse `reason` — `reason` là câu tiếng Việt
+   *  dành cho log/debug, có thể đổi câu chữ bất cứ lúc nào mà không nên làm hỏng bất kỳ
+   *  logic nào phụ thuộc vào nó (Fix round 1, Task 8, Finding 3). */
+  keyword: string | null;
+};
+
+export function checkOutputSafety(text: string): SafetyCheckResult {
   if (text.length === 0) {
-    return { safe: false, reason: "Văn bản rỗng — không thể xác nhận an toàn, mặc định chặn." };
+    return {
+      safe: false,
+      reason: "Văn bản rỗng — không thể xác nhận an toàn, mặc định chặn.",
+      keyword: null,
+    };
   }
 
   // Chuẩn hoá NFC + lowercase trước khi so khớp: tiếng Việt có thể tới dưới dạng NFC
@@ -95,10 +110,11 @@ export function checkOutputSafety(text: string): { safe: boolean; reason: string
         return {
           safe: false,
           reason: `Phát hiện từ khoá chẩn đoán bị cấm: "${keyword}".`,
+          keyword,
         };
       }
     }
   }
 
-  return { safe: true, reason: null };
+  return { safe: true, reason: null, keyword: null };
 }

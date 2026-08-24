@@ -275,12 +275,19 @@ describe("generateReflection", () => {
     expect(outputs.empty).toBe(true);
   });
 
-  it("12. callChatCompletion ném AiProviderError → callable ném internal, không lộ baseUrl", async () => {
+  // Fix round 1, Finding 4: message của AiProviderError phải THỰC SỰ chứa baseUrl/key/status
+  // để hai assertion not.toContain có "răng" — bản cũ dùng message không chứa gì trong số đó
+  // nên pass với BẤT KỲ implementation nào, kể cả một implementation lộ error.message thẳng
+  // ra ngoài.
+  it("12. callChatCompletion ném AiProviderError → callable ném internal, không lộ baseUrl/key/status", async () => {
     await setAiConfig({ baseUrl: "https://secret-provider.example/v1" });
     await setUser(STUDENT_UID, true);
     await setMoodLog("m1", STUDENT_UID);
     const fake = vi.fn(async () => {
-      throw new AiProviderError("server", "AI provider trả về lỗi HTTP 500.");
+      throw new AiProviderError(
+        "server",
+        "POST https://secret-provider.example/v1 failed, key=fake-api-key, 500",
+      );
     });
 
     let caught: unknown;
@@ -309,5 +316,54 @@ describe("generateReflection", () => {
 
     const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
     expect(usageSnap.exists).toBe(false);
+  });
+
+  // Fix round 1, Finding 1: quota bây giờ đứng SAU not-found/ownership — moodLogId sai hay
+  // không thuộc về mình không bao giờ chạm provider, nên không được trừ lượt.
+  it("13b. moodLogId không tồn tại → aiUsage không đổi (quota đứng sau not-found)", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    const now = new Date("2026-08-24T02:00:00Z");
+
+    await expect(
+      runGenerateReflection(AUTH_OK, { moodLogId: "does-not-exist" }, makeDeps({ now })),
+    ).rejects.toMatchObject({ code: "not-found" });
+
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    expect(usageSnap.exists).toBe(false);
+  });
+
+  it("13c. mood log của người khác → aiUsage không đổi (quota đứng sau ownership)", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setMoodLog("m1", OTHER_UID);
+    const now = new Date("2026-08-24T02:00:00Z");
+
+    await expect(
+      runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps({ now })),
+    ).rejects.toMatchObject({ code: "permission-denied" });
+
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    expect(usageSnap.exists).toBe(false);
+  });
+
+  // Ngược lại: một request THỰC SỰ đi ra ngoài (dù provider trả lỗi) đã bị trừ quota — không
+  // rollback, vì request có thể đã bị provider tính phí.
+  it("13d. callChatCompletion ném AiProviderError → aiUsage VẪN bị trừ (request đã đi ra ngoài)", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setMoodLog("m1", STUDENT_UID);
+    const now = new Date("2026-08-24T02:00:00Z");
+    const fake = vi.fn(async () => {
+      throw new AiProviderError("server", "AI provider trả về lỗi.");
+    });
+
+    await expect(
+      runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps({ now, callChatCompletion: fake })),
+    ).rejects.toMatchObject({ code: "internal" });
+
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    expect(usageSnap.exists).toBe(true);
+    expect(usageSnap.data()?.count).toBe(1);
   });
 });

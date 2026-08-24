@@ -6,7 +6,7 @@ describe("checkOutputSafety", () => {
     const result = checkOutputSafety(
       "Hôm nay bạn đã cố gắng rất nhiều. Hãy nghỉ ngơi một chút và hít thở sâu nhé.",
     );
-    expect(result).toEqual({ safe: true, reason: null });
+    expect(result).toEqual({ safe: true, reason: null, keyword: null });
   });
 
   it('case 2: chứa "rối loạn lo âu" → safe: false', () => {
@@ -41,19 +41,23 @@ describe("checkOutputSafety", () => {
     const result = checkOutputSafety(
       "Đây chỉ là một góc nhìn để bạn tham khảo, không phải chẩn đoán y khoa.",
     );
-    expect(result).toEqual({ safe: true, reason: null });
+    expect(result).toEqual({ safe: true, reason: null, keyword: null });
   });
 
-  it("case 8: chuỗi rỗng → safe: false với lý do rõ ràng", () => {
+  it("case 8: chuỗi rỗng → safe: false với lý do rõ ràng, keyword null (không có từ khoá cụ thể)", () => {
     const result = checkOutputSafety("");
     expect(result.safe).toBe(false);
     expect(result.reason).toBeTruthy();
     expect(typeof result.reason).toBe("string");
+    expect(result.keyword).toBeNull();
   });
 
-  it("case 9: reason nêu được từ khoá nào kích hoạt", () => {
+  // Fix round 1 (Task 8, Finding 3): keyword là dữ liệu có cấu trúc, không phải regex-parse
+  // từ câu reason — reason đổi câu chữ không được phép làm hỏng field này.
+  it("case 9: field keyword trả đúng từ khoá kích hoạt (không phải regex-parse reason)", () => {
     const result = checkOutputSafety("Bạn có thể đang bị trầm cảm.");
     expect(result.safe).toBe(false);
+    expect(result.keyword).toBe("trầm cảm");
     expect(result.reason).toContain("trầm cảm");
   });
 
