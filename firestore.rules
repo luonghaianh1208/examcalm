@@ -218,14 +218,24 @@ service cloud.firestore {
     // khoá TOÀN BỘ field còn lại (userId, severity, triggeredBy, createdAt)
     // trong MỘT LẦN, không ghim từng field — bài học Critical của Spec #3
     // Task 2 (ghim 2/11 field, bỏ ngỏ 9 field còn lại). handledBy còn phải
-    // khớp đúng uid của admin đang ghi — hồ sơ này chỉ có giá trị nếu ghi
-    // đúng AI thật sự đã nhận xử lý; không ràng buộc thì một admin có thể gán
-    // handledBy cho đồng nghiệp khác (đổ trách nhiệm) hoặc ngược lại.
+    // khớp đúng uid của admin đang ghi HOẶC là null — hồ sơ này chỉ có giá
+    // trị nếu ghi đúng ai thật sự đã nhận xử lý (không ràng buộc thì một
+    // admin có thể gán handledBy cho đồng nghiệp khác để đổ trách nhiệm),
+    // nhưng vẫn phải mở lại được: Fix round 2 (coordinator) — bản đầu chỉ cho
+    // "handledBy == request.auth.uid" đã vô tình khoá VĨNH VIỄN mọi cảnh báo
+    // ở trạng thái "đã xử lý" một khi đã set, kể cả khi thầy cô đánh dấu
+    // nhầm hoặc xử lý sơ sài rồi nhận ra cần escalate — nếu học sinh đó không
+    // bao giờ mở lại chat, không cảnh báo mới nào sửa lại được. Hai nhánh:
+    // == request.auth.uid để TỰ NHẬN xử lý bằng chính mình, == null để MỞ
+    // LẠI (bất kỳ admin nào cũng mở lại được, kể cả không phải người đã xử
+    // lý trước đó — một cảnh báo bị xử lý sai không được kẹt vĩnh viễn chỉ vì
+    // người xử lý sai đó không có mặt).
     match /crisisAlerts/{id} {
       allow read: if isAdmin();
       allow update: if isAdmin()
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["handledBy", "handledAt"])
-                    && request.resource.data.handledBy == request.auth.uid;
+                    && (request.resource.data.handledBy == request.auth.uid
+                        || request.resource.data.handledBy == null);
       allow create, delete: if false;
     }
 

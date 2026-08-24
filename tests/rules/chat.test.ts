@@ -218,6 +218,58 @@ describe("crisisAlerts/{id}", () => {
     );
   });
 
+  // Fix round 2 (coordinator, hệ quả của chính ruling Finding 2): chỉ cho
+  // "handledBy == request.auth.uid" đã vô tình khoá VĨNH VIỄN mọi cảnh báo
+  // đã đánh dấu "đã xử lý" — không ai, kể cả chính người đã xử lý, mở lại
+  // được nếu đánh dấu nhầm hoặc xử lý sơ sài. Ba test dưới đây pin nhánh mở
+  // lại (handledBy == null) mới thêm, cộng với xác nhận nhánh chống đổ trách
+  // nhiệm (test attribution ở trên) vẫn đứng vững với clause mới.
+
+  it("admin mở lại được cảnh báo do CHÍNH MÌNH đã đánh dấu xử lý (handledBy/handledAt về null)", async () => {
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "crisisAlerts/a1"), { ...ALERT, handledBy: "admin-1", handledAt: new Date() });
+    });
+    await assertSucceeds(
+      updateDoc(doc(adminDb(env, "admin-1"), "crisisAlerts/a1"), {
+        handledBy: null,
+        handledAt: null,
+      }),
+    );
+  });
+
+  // Cố ý: admin-2 (KHÔNG phải người đã đánh dấu xử lý) vẫn mở lại được. Một
+  // cảnh báo bị xử lý sai không được kẹt vĩnh viễn ở trạng thái "đã xử lý"
+  // chỉ vì người xử lý sai đó nghỉ việc/vắng mặt/không đăng nhập lại — mở lại
+  // không phải hành vi cần "đúng người" như tự nhận xử lý, vì nó không gán
+  // trách nhiệm cho ai, chỉ đưa cảnh báo về trạng thái trung lập ban đầu.
+  it("admin KHÁC (không phải người đã xử lý) vẫn mở lại được cảnh báo — cố ý, tránh kẹt vĩnh viễn", async () => {
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "crisisAlerts/a1"), { ...ALERT, handledBy: "admin-1", handledAt: new Date() });
+    });
+    await assertSucceeds(
+      updateDoc(doc(adminDb(env, "admin-2"), "crisisAlerts/a1"), {
+        handledBy: null,
+        handledAt: null,
+      }),
+    );
+  });
+
+  // Ca re-reviewer trace bằng tay nhưng chưa test nào pin: admin chỉ ghi
+  // handledAt, KHÔNG kèm handledBy trong payload update. Lý do vẫn an toàn:
+  // handledBy là field bắt buộc trong schema (src/lib/types/chat.ts) nên
+  // luôn có sẵn trong document, và updateDoc() chỉ merge đúng field được
+  // truyền — handledBy giữ nguyên giá trị cũ ("admin-1", trùng uid admin
+  // đang ghi ở đây), nên diff().affectedKeys() chỉ có "handledAt" (vẫn nằm
+  // trong hasOnly) và handledBy == request.auth.uid vẫn đúng vì KHÔNG đổi.
+  it("admin update CHỈ handledAt (không kèm handledBy trong payload) vẫn thành công — merge giữ nguyên handledBy cũ", async () => {
+    await seed(env, async (db) => {
+      await setDoc(doc(db, "crisisAlerts/a1"), { ...ALERT, handledBy: "admin-1", handledAt: new Date("2026-01-01") });
+    });
+    await assertSucceeds(
+      updateDoc(doc(adminDb(env, "admin-1"), "crisisAlerts/a1"), { handledAt: new Date() }),
+    );
+  });
+
   // Bài học Critical Spec #3 Task 2: hasOnly() phải khoá TOÀN BỘ field khác,
   // không chỉ pin riêng lẻ. Mỗi test tampering dưới đây kèm THEO handledBy +
   // handledAt hợp lệ, để buộc hasOnly() là nhánh DUY NHẤT còn có thể từ chối —

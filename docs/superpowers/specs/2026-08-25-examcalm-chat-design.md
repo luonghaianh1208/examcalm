@@ -136,10 +136,14 @@ match /chatMessages/{id} {
 
 match /crisisAlerts/{id} {
   allow read:   if isAdmin();
+  // handledBy == uid của admin đang ghi để TỰ NHẬN xử lý bằng chính mình,
+  // hoặc == null để MỞ LẠI (bất kỳ admin nào, không chỉ người đã xử lý
+  // trước đó — một cảnh báo bị xử lý sai không được kẹt vĩnh viễn).
   allow update: if isAdmin()
                 && request.resource.data.diff(resource.data)
                      .affectedKeys().hasOnly(["handledBy", "handledAt"])
-                && request.resource.data.handledBy == request.auth.uid;
+                && (request.resource.data.handledBy == request.auth.uid
+                    || request.resource.data.handledBy == null);
   allow create, delete: if false;
 }
 ```
