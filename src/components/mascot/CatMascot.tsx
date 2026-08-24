@@ -1,33 +1,47 @@
+import Image from "next/image";
+
 type Expression = "calm" | "cheer" | "listen";
 
 type Props = {
   expression?: Expression;
   size?: number;
   className?: string;
+  /**
+   * Đặt true cho hình mèo xuất hiện ngay khung nhìn đầu tiên (widget nổi, header)
+   * để Next tải sớm thay vì lazy — tránh mèo "nhảy vào" sau khi trang đã vẽ xong.
+   */
+  priority?: boolean;
 };
 
-const EAR_TILT: Record<Expression, number> = { calm: 0, cheer: -8, listen: 6 };
-
 /**
- * Mascot placeholder. Tên và visual identity chính thức là TBD (spec §12).
- * Thay asset thật CHỈ cần sửa file này.
+ * Mascot chính thức của ExamCalm.
+ *
+ * Ảnh nguồn nằm ở WEB/MASCOT/ (500x500 PNG, ~130–200KB mỗi file). Bản dùng trong
+ * app đã được nén sang WebP 160x160 (5–8KB) ở public/brand/ — hiển thị tối đa 72px
+ * nên 160px là đủ cho màn hình 2x. Đổi mascot chỉ cần thay ba file webp đó và
+ * chạy lại lệnh nén; không component nào khác phải sửa.
+ *
+ * Ba trạng thái tương ứng ba tư thế:
+ *   calm   — mèo cuộn tròn ngủ, dùng làm mặc định
+ *   listen — mèo ngồi ngước nhìn, dùng khi mở nhật ký cảm xúc
+ *   cheer  — mèo đứng, dùng khi động viên
  */
-export function CatMascot({ expression = "calm", size = 72, className }: Props) {
+const POSE: Record<Expression, { src: string; alt: string }> = {
+  calm: { src: "/brand/meo-calm.webp", alt: "Mèo đồng hành của ExamCalm đang nằm nghỉ" },
+  listen: { src: "/brand/meo-listen.webp", alt: "Mèo đồng hành của ExamCalm đang lắng nghe" },
+  cheer: { src: "/brand/meo-cheer.webp", alt: "Mèo đồng hành của ExamCalm đang vui" },
+};
+
+export function CatMascot({ expression = "calm", size = 72, className, priority = false }: Props) {
+  const pose = POSE[expression];
   return (
-    <svg
-      width={size} height={size} viewBox="0 0 100 100"
-      role="img" aria-label="Mèo đồng hành của ExamCalm"
+    <Image
+      src={pose.src}
+      alt={pose.alt}
+      width={size}
+      height={size}
+      priority={priority}
       className={className}
-    >
-      <g transform={`rotate(${EAR_TILT[expression]} 50 50)`}>
-        <path d="M22 34 L30 12 L46 26 Z" fill="#f6c9a8" />
-        <path d="M78 34 L70 12 L54 26 Z" fill="#f6c9a8" />
-      </g>
-      <circle cx="50" cy="56" r="30" fill="#fbe0cd" />
-      <circle cx="39" cy="52" r="4" fill="#3f3a36" />
-      <circle cx="61" cy="52" r="4" fill="#3f3a36" />
-      <path d="M44 64 Q50 70 56 64" stroke="#3f3a36" strokeWidth="3" fill="none" strokeLinecap="round" />
-      <path d="M18 56 H32 M18 62 H32 M68 56 H82 M68 62 H82" stroke="#d9b49b" strokeWidth="2" strokeLinecap="round" />
-    </svg>
+    />
   );
 }

@@ -20,3 +20,7 @@ test-results/
 functions/lib/
 functions/node_modules/
 *.tsbuildinfo
+
+# Asset goc do designer cung cap — nang (54MB) va khong dung truc tiep khi chay.
+# Ban da nen de dung trong app nam o public/brand/.
+WEB/

@@ -1,6 +1,6 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { SessionUser } from "@/lib/firebase/session";
-import { CatMascot } from "@/components/mascot/CatMascot";
 
 type Props = {
   /**
@@ -14,9 +14,17 @@ export function SiteHeader({ user }: Props) {
   return (
     <header className="border-b bg-white">
       <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-4 px-4 py-3">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <CatMascot size={32} />
-          ExamCalm
+        {/* Logo đã gồm sẵn chữ ExamCalm nên không lặp lại bằng text; tên sản phẩm
+            vẫn tới được trình đọc màn hình qua alt của ảnh. */}
+        <Link href="/" aria-label="ExamCalm — về trang chủ" className="flex items-center">
+          <Image
+            src="/brand/logo.webp"
+            alt="ExamCalm"
+            width={132}
+            height={40}
+            priority
+            className="h-10 w-auto"
+          />
         </Link>
 
         <nav aria-label="Chính" className="flex flex-wrap items-center gap-4">

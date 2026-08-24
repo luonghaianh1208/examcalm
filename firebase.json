@@ -54,7 +54,8 @@
         ".superpowers",
         "tests",
         "**/*.test.ts",
-        "**/*.test.tsx"
+        "**/*.test.tsx",
+        "WEB"
       ]
     }
   ]
