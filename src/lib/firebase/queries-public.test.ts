@@ -12,7 +12,7 @@ vi.mock("./admin", () => ({ adminDb: vi.fn() }));
 const { adminDb } = await import("./admin");
 const {
   filterResources, listPublishedResources, getResourceBySlug,
-  listPublishedTests, getPublishedTest,
+  listPublishedTests, getPublishedTest, toCbtModuleListItem,
 } = await import("./queries-public");
 const mockedAdminDb = vi.mocked(adminDb);
 
@@ -227,5 +227,19 @@ describe("hàm đọc chỉ trả về đúng field đã khai báo trong type", 
     const item = await getPublishedTest("t1");
     expect(item).not.toBeNull();
     expect(Object.keys(item!).sort()).toEqual(EXPECTED_TEST_KEYS);
+  });
+
+  it("toCbtModuleListItem chỉ trả field khai báo, không mang Timestamp", () => {
+    const raw = {
+      title: "Bài mẫu", version: 1, status: "published", isSampleContent: true,
+      disclaimer: "d", intro: "i", steps: [{ id: "s1", prompt: "p", hint: "h" }],
+      closingText: "c", suggestedResourceSlugs: [], updatedBy: "admin",
+      updatedAt: new FakeTimestamp(), createdAt: new FakeTimestamp(),
+    };
+    const item = toCbtModuleListItem("m1", raw as never);
+    expect(Object.keys(item).sort()).toEqual([
+      "closingText", "disclaimer", "id", "intro", "isSampleContent", "status",
+      "steps", "suggestedResourceSlugs", "title", "updatedBy", "version",
+    ]);
   });
 });

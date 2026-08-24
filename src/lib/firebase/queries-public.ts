@@ -3,9 +3,11 @@ import "server-only";
 import { adminDb } from "./admin";
 import type { Resource } from "@/lib/types/resource";
 import type { TestDefinition } from "@/lib/types/test";
+import type { CbtModule } from "@/lib/types/cbt";
 
 export type ResourceListItem = Resource & { id: string };
 export type TestListItem = TestDefinition & { id: string };
+export type CbtModuleListItem = CbtModule & { id: string };
 
 export type ListResourcesOptions = {
   /** true khi người xem đã đăng nhập — mở thêm resource student_only */
@@ -139,4 +141,37 @@ export async function getPublishedTest(testId: string): Promise<TestListItem | n
   const data = docSnap.data() as TestDefinition;
   if (data.status !== "published") return null;
   return toTestListItem(docSnap.id, data);
+}
+
+/** Liệt kê tường minh — xem giải thích ở toResourceListItem(). */
+export function toCbtModuleListItem(id: string, data: CbtModule): CbtModuleListItem {
+  return {
+    id,
+    title: data.title,
+    version: data.version,
+    status: data.status,
+    isSampleContent: data.isSampleContent,
+    disclaimer: data.disclaimer,
+    intro: data.intro,
+    steps: data.steps,
+    closingText: data.closingText,
+    suggestedResourceSlugs: data.suggestedResourceSlugs,
+    updatedBy: data.updatedBy,
+  };
+}
+
+export async function listPublishedCbtModules(): Promise<CbtModuleListItem[]> {
+  const snap = await adminDb()
+    .collection("cbtModules")
+    .where("status", "==", "published")
+    .get();
+  return snap.docs.map((d) => toCbtModuleListItem(d.id, d.data() as CbtModule));
+}
+
+export async function getPublishedCbtModule(id: string): Promise<CbtModuleListItem | null> {
+  const snap = await adminDb().collection("cbtModules").doc(id).get();
+  if (!snap.exists) return null;
+  const data = snap.data() as CbtModule;
+  if (data.status !== "published") return null;
+  return toCbtModuleListItem(snap.id, data);
 }
