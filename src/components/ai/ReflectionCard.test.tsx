@@ -1,0 +1,170 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ReflectionCard } from "./ReflectionCard";
+import {
+  requestReflection,
+  getOutputForMoodLog,
+  setOutputFeedback,
+  deleteOutput,
+  type AiJournalOutputRecord,
+} from "@/lib/firestore/ai-outputs";
+
+vi.mock("@/lib/firestore/ai-outputs", () => ({
+  requestReflection: vi.fn(),
+  getOutputForMoodLog: vi.fn(),
+  setOutputFeedback: vi.fn(),
+  deleteOutput: vi.fn(),
+}));
+
+const mockedRequestReflection = vi.mocked(requestReflection);
+const mockedGetOutputForMoodLog = vi.mocked(getOutputForMoodLog);
+const mockedSetOutputFeedback = vi.mocked(setOutputFeedback);
+const mockedDeleteOutput = vi.mocked(deleteOutput);
+
+// Bản ghi mẫu — khớp AiJournalOutputRecord của Task 9.
+const RECORD: AiJournalOutputRecord = {
+  id: "output-1",
+  userId: "u1",
+  moodLogId: "m1",
+  reflectionText: "Bạn đã cố gắng rất nhiều hôm nay.",
+  catStoryText: "Chú mèo cuộn tròn cạnh bạn, lặng lẽ lắng nghe.",
+  journalPrompt: "Điều gì khiến bạn thấy nhẹ nhõm hơn một chút?",
+  promptTemplateId: "tpl-1",
+  promptVersion: 1,
+  providerLabel: "DeepSeek",
+  model: "deepseek-chat",
+  userFeedback: null,
+  createdAt: null,
+};
+
+// Hai thông điệp lỗi này lấy NGUYÊN VĂN từ mapping thật của Task 9
+// (src/lib/firestore/ai-outputs.ts, mapReflectionErrorMessage) — brief yêu
+// cầu không viết lại câu chữ, chỉ hiển thị đúng những gì requestReflection
+// đã ném ra.
+const INTERNAL_ERROR_MESSAGE =
+  "Không thể tạo phản chiếu lúc này, nhưng nhật ký cảm xúc của bạn đã được lưu an toàn. Thử lại sau nhé.";
+const QUOTA_MESSAGE = "Bạn đã dùng hết lượt phản chiếu AI cho hôm nay rồi, mai quay lại nhé.";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockedRequestReflection.mockResolvedValue({ outputId: "output-1" });
+  mockedGetOutputForMoodLog.mockResolvedValue(RECORD);
+  mockedSetOutputFeedback.mockResolvedValue(undefined);
+  mockedDeleteOutput.mockResolvedValue(undefined);
+});
+
+describe("ReflectionCard", () => {
+  it("aiOptIn tắt: không render gì, không gọi requestReflection", () => {
+    const { container } = render(
+      <ReflectionCard moodLogId="m1" uid="u1" aiOptIn={false} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(mockedRequestReflection).not.toHaveBeenCalled();
+  });
+
+  it("aiOptIn bật: gọi requestReflection và hiện trạng thái đang tải", async () => {
+    // Giữ promise treo lơ lửng để bắt được đúng trạng thái loading.
+    let resolvePending: (v: { outputId: string }) => void = () => {};
+    mockedRequestReflection.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePending = resolve;
+      }),
+    );
+
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    await waitFor(() => expect(mockedRequestReflection).toHaveBeenCalledWith("m1"));
+    expect(screen.getByText(/đang tạo phản chiếu/i)).toBeInTheDocument();
+
+    resolvePending({ outputId: "output-1" });
+  });
+
+  it("thành công: hiện reflectionText, catStoryText, journalPrompt", async () => {
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    expect(await screen.findByText(RECORD.reflectionText)).toBeInTheDocument();
+    expect(screen.getByText(RECORD.catStoryText)).toBeInTheDocument();
+    expect(screen.getByText(RECORD.journalPrompt)).toBeInTheDocument();
+    expect(mockedGetOutputForMoodLog).toHaveBeenCalledWith("u1", "m1");
+  });
+
+  it("luôn hiện nhãn 'Nội dung do AI tạo', nhìn thấy được (không phải tooltip ẩn)", async () => {
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    const label = await screen.findByText("Nội dung do AI tạo");
+    expect(label).toBeVisible();
+    // Nhãn phải là nội dung văn bản thật trong DOM, không phải giấu trong
+    // thuộc tính title/aria-describedby của một icon.
+    expect(label.tagName).not.toBe("TITLE");
+  });
+
+  it("callable lỗi: hiện thông báo nhẹ nhàng, không có chữ nào gợi ý nhật ký chưa lưu", async () => {
+    mockedRequestReflection.mockRejectedValue(new Error(INTERNAL_ERROR_MESSAGE));
+
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    expect(await screen.findByText(INTERNAL_ERROR_MESSAGE)).toBeInTheDocument();
+    // Ràng buộc cốt lõi: AI hỏng không được đọc như nhật ký cảm xúc thất bại.
+    expect(
+      screen.queryByText(/chưa lưu|không lưu được|lưu thất bại|mất dữ liệu/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hết quota: thông điệp riêng, tử tế, không dùng từ 'lỗi'", async () => {
+    mockedRequestReflection.mockRejectedValue(new Error(QUOTA_MESSAGE));
+
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    const message = await screen.findByText(QUOTA_MESSAGE);
+    expect(message).toBeInTheDocument();
+    expect(message.textContent).not.toMatch(/lỗi/i);
+  });
+
+  it("bấm 'Hữu ích': gọi setOutputFeedback('helpful')", async () => {
+    const user = userEvent.setup();
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    await screen.findByText(RECORD.reflectionText);
+    // Regex neo hai đầu — "Không hữu ích" cũng chứa "hữu ích" nên nếu không
+    // neo sẽ khớp nhầm cả hai nút.
+    await user.click(screen.getByRole("button", { name: /^hữu ích$/i }));
+
+    expect(mockedSetOutputFeedback).toHaveBeenCalledWith("output-1", "helpful");
+  });
+
+  it("bấm 'Không hữu ích': gọi setOutputFeedback('not_helpful')", async () => {
+    const user = userEvent.setup();
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    await screen.findByText(RECORD.reflectionText);
+    await user.click(screen.getByRole("button", { name: /không hữu ích/i }));
+
+    expect(mockedSetOutputFeedback).toHaveBeenCalledWith("output-1", "not_helpful");
+  });
+
+  it("xoá: bấm nút xoá phải hỏi xác nhận TRƯỚC, chưa gọi deleteOutput ngay", async () => {
+    const user = userEvent.setup();
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    await screen.findByText(RECORD.reflectionText);
+    await user.click(screen.getByRole("button", { name: /xoá phản chiếu này/i }));
+
+    expect(mockedDeleteOutput).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /xác nhận xoá/i }));
+    expect(mockedDeleteOutput).toHaveBeenCalledWith("output-1");
+  });
+
+  it("xoá: bấm huỷ ở bước xác nhận thì KHÔNG gọi deleteOutput", async () => {
+    const user = userEvent.setup();
+    render(<ReflectionCard moodLogId="m1" uid="u1" aiOptIn={true} />);
+
+    await screen.findByText(RECORD.reflectionText);
+    await user.click(screen.getByRole("button", { name: /xoá phản chiếu này/i }));
+    await user.click(screen.getByRole("button", { name: /huỷ/i }));
+
+    expect(mockedDeleteOutput).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /xoá phản chiếu này/i })).toBeInTheDocument();
+  });
+});
