@@ -228,6 +228,102 @@ describe("generateReflection", () => {
     expect(data?.createdAt).toBeTruthy();
   });
 
+  // Fix round 2, Finding 5: pin lựa chọn max(version) — nếu loadPromptTemplate quay lại dùng
+  // `.limit(1)` không orderBy, Firestore ngầm sort theo `__name__` (id document) tăng dần và
+  // sẽ trả về "aaa-old-v1" (id nhỏ hơn theo thứ tự chữ cái) thay vì bản version mới hơn, làm
+  // test này fail — đó chính là bug Finding 5 đã sửa.
+  it("9b. nhiều promptTemplates published cùng name → chọn bản version LỚN NHẤT, không phải theo thứ tự id", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setMoodLog("m1", STUDENT_UID);
+
+    // Id của bản version 3 sắp xếp SAU bản version 1 theo thứ tự chữ cái ("aaa" < "zzz") —
+    // cố ý ngược với version, để phép thử phân biệt được "chọn theo version" và "chọn theo id".
+    await db.collection("promptTemplates").doc("aaa-old-v1").set({
+      name: "mood_reflection",
+      version: 1,
+      status: "published",
+      systemPrompt: "Persona bản cũ, version 1.",
+      userTemplate: "Template bản cũ.",
+      updatedBy: "admin1",
+      updatedAt: new Date(),
+    });
+    await db.collection("promptTemplates").doc("zzz-new-v3").set({
+      name: "mood_reflection",
+      version: 3,
+      status: "published",
+      systemPrompt: "Persona bản mới, version 3.",
+      userTemplate: "Template bản mới.",
+      updatedBy: "admin1",
+      updatedAt: new Date(),
+    });
+
+    const result = await runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps());
+    const snap = await db.collection("aiJournalOutputs").doc(result.outputId).get();
+    const data = snap.data();
+    expect(data?.promptVersion).toBe(3);
+    expect(data?.promptTemplateId).toBe("zzz-new-v3");
+  });
+
+  // Fix round 2, Finding 6: pin safePromptVersion — mỗi case dưới đây exercise một nhánh
+  // điều kiện riêng (typeof, Number.isInteger, >= 1) trong hàm validate.
+  it("9c. version = 0 (dưới ngưỡng min 1) → promptVersion ghi ra là 1, không phải 0", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setMoodLog("m1", STUDENT_UID);
+    await db.collection("promptTemplates").doc("tpl-zero").set({
+      name: "mood_reflection",
+      version: 0,
+      status: "published",
+      systemPrompt: "Persona.",
+      userTemplate: "Template.",
+      updatedBy: "admin1",
+      updatedAt: new Date(),
+    });
+
+    const result = await runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps());
+    const snap = await db.collection("aiJournalOutputs").doc(result.outputId).get();
+    expect(snap.data()?.promptVersion).toBe(1);
+  });
+
+  it("9d. version = 1.5 (không phải số nguyên) → promptVersion ghi ra là 1", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setMoodLog("m1", STUDENT_UID);
+    await db.collection("promptTemplates").doc("tpl-decimal").set({
+      name: "mood_reflection",
+      version: 1.5,
+      status: "published",
+      systemPrompt: "Persona.",
+      userTemplate: "Template.",
+      updatedBy: "admin1",
+      updatedAt: new Date(),
+    });
+
+    const result = await runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps());
+    const snap = await db.collection("aiJournalOutputs").doc(result.outputId).get();
+    expect(snap.data()?.promptVersion).toBe(1);
+  });
+
+  it('9e. version = "3" (chuỗi, sai kiểu runtime) → promptVersion ghi ra là 1', async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setMoodLog("m1", STUDENT_UID);
+    await db.collection("promptTemplates").doc("tpl-string-version").set({
+      name: "mood_reflection",
+      version: "3",
+      status: "published",
+      systemPrompt: "Persona.",
+      userTemplate: "Template.",
+      updatedBy: "admin1",
+      updatedAt: new Date(),
+    });
+
+    const result = await runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps());
+    const snap = await db.collection("aiJournalOutputs").doc(result.outputId).get();
+    expect(snap.data()?.promptVersion).toBe(1);
+  });
+
   it("10. checkOutputSafety trả safe:false → KHÔNG ghi aiJournalOutputs, ném internal, ghi aiSafetyLog (chỉ 4 field cho phép)", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
