@@ -179,4 +179,30 @@ describe("consumeQuota", () => {
     const snap = await db.collection("aiUsage").doc("u6_2026-08-24").get();
     expect(snap.data()?.count).toBe(N);
   }, 20_000);
+
+  // Quota concurrency test (final whole-branch review): test trên KHÔNG phân biệt được
+  // "transaction đúng" với "implementation cho vượt quota" — quota=N với đúng N caller thì
+  // MỌI implementation (kể cả một cái cho phép overrun) đều trả về allowed=true cho tất cả,
+  // vì không có ai vượt ngưỡng để bị từ chối cả. Test này dùng quota < số caller (10 < 20) để
+  // thực sự bắt được overrun: nếu consumeQuota đọc-rồi-ghi không transaction (hoặc transaction
+  // có bug), nhiều hơn 10 lượt có thể "thấy" count cũ và đều được cho phép.
+  it("quota=10, 20 lượt gọi song song -> ĐÚNG 10 lượt được phép, count cuối cùng ĐÚNG 10 (không vượt, không mất lượt)", async () => {
+    const N_CALLERS = 20;
+    const QUOTA = 10;
+    const config = { quotaStudentPerDay: QUOTA, rateLimitPerMinute: 6000 }; // ngưỡng tối thiểu 10ms
+    const base = new Date("2026-08-24T02:00:00Z").getTime();
+
+    // Mỗi lượt cách nhau 1s (>> ngưỡng rate limit 10ms) để CHỈ còn kiểm tra đúng bất biến
+    // quota dưới truy cập đồng thời, không lẫn với rate limit.
+    const calls = Array.from({ length: N_CALLERS }, (_, i) =>
+      consumeQuota(db, "u8", config, new Date(base + i * 1000)),
+    );
+
+    const results = await Promise.all(calls);
+    const allowedCount = results.filter((r) => r.allowed).length;
+    expect(allowedCount).toBe(QUOTA);
+
+    const snap = await db.collection("aiUsage").doc("u8_2026-08-24").get();
+    expect(snap.data()?.count).toBe(QUOTA);
+  }, 20_000);
 });

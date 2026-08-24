@@ -81,9 +81,21 @@ export async function consumeQuota(
     // lên nhưng quên nâng field này, mọi học sinh bị kẹt 1 lượt/ngày không rõ lý do).
     if (existing && config.rateLimitPerMinute > 0) {
       const minIntervalMs = 60_000 / config.rateLimitPerMinute;
-      // Trị tuyệt đối: hai transaction chạy đồng thời có thể commit không theo đúng thứ tự
-      // thời gian thực của tham số `now` truyền vào (transaction sau có thể commit trước),
-      // nên chỉ so sánh một chiều (now - lastUpdated) có thể bỏ lọt trường hợp hiệu số âm.
+      // M9 (final whole-branch review): comment cũ giải thích Math.abs SAI — "để không bỏ lọt
+      // trường hợp hiệu số âm" không đúng: KHÔNG dùng abs, một hiệu số âm luôn nhỏ hơn
+      // minIntervalMs (dương) nên tự động rơi vào nhánh từ chối — không hề "bỏ lọt", đó là
+      // fail-closed. Nhưng ĐÃ THỬ bỏ abs (xác nhận bằng cách chạy quota.test.ts trên Firestore
+      // emulator thật, đặc biệt "20 lượt song song, quota 10"): fail-closed đó chặn nhầm CHÍNH
+      // các lượt gọi hợp lệ đang chạy đồng thời. `now` của mỗi lượt là mốc SERVER tự sinh độc
+      // lập (generateReflection.ts: `now: new Date()`), không phải giá trị client gửi lên; hai
+      // transaction chạy song song có thể commit KHÔNG theo đúng thứ tự `now` của chúng (do cơ
+      // chế optimistic concurrency tự retry của Firestore) — một lượt có `now` NHỎ hơn hoàn
+      // toàn có thể đọc thấy `existing.updatedAt` của một lượt có `now` LỚN hơn đã commit
+      // trước, cho hiệu số âm dù khoảng cách THẬT giữa hai request không hề gần. Giữ Math.abs
+      // là quyết định có chủ đích: nó đo đúng "cách nhau bao xa", bất kể thứ tự commit — không
+      // phải để "không bỏ lọt", mà để không phạt nhầm các lượt hợp lệ chỉ vì thứ tự commit xáo
+      // trộn. Rủi ro đối trọng (updatedAt bị đẩy tới tương lai do lệch đồng hồ máy khách) không
+      // áp dụng ở đây vì `now` luôn do server tự sinh, không phải giá trị client kiểm soát.
       const diffMs = Math.abs(now.getTime() - existing.updatedAt.toMillis());
       if (diffMs < minIntervalMs) {
         return { allowed: false, reason: "rate_limit" };

@@ -21,6 +21,22 @@ import { BANNED_DIAGNOSTIC_KEYWORDS } from "./safetyFilter";
 export const MOOD_NOTE_MAX_CHARS = 2000;
 
 /**
+ * Trần TỔNG (theo code point) của toàn bộ vùng dữ liệu học sinh (moodIcon + context + tags +
+ * note gộp lại, kể cả nhãn dòng) — độc lập với MOOD_NOTE_MAX_CHARS áp dụng riêng từng field.
+ * Prompt-injection hardening (b), final whole-branch review: trần per-field không chặn được
+ * TỔNG kích thước, vì note (2000) + context (2000) + N tag (2000/tag qua sanitizeFreeText,
+ * không giới hạn số lượng trước fix này) cộng dồn vô hạn — maxTokens chỉ chặn OUTPUT, không
+ * chặn INPUT. Giá trị đủ rộng cho một check-in hợp lệ (note+context+vài tag) nhưng chặn đứng
+ * trường hợp cộng dồn nhiều field đều gần chạm trần riêng.
+ */
+export const MOOD_DATA_REGION_MAX_CHARS = 3000;
+
+/** Số tag tối đa đưa vào prompt — khớp `tags: z.array(...).max(10)` ở src/lib/types/mood.ts.
+ *  Security Rules không kiểm tra shape (chỉ userId, xem comment MoodLogPromptInput bên dưới),
+ *  nên giới hạn này phải tự áp lại ở đây, không tin cậy vào ràng buộc phía client. */
+export const MOOD_TAGS_MAX_COUNT = 10;
+
+/**
  * Cặp dấu phân giới bọc quanh vùng dữ liệu học sinh (note, context, tags, moodIcon) trong
  * userPrompt — đánh dấu đây là VÙNG DỮ LIỆU, không phải chỉ dẫn. Chọn chuỗi khó xuất hiện
  * tình cờ trong bài viết của một học sinh trung học. Export để test dùng lại, tránh lặp
@@ -219,10 +235,19 @@ export function buildMoodPrompt(
   moodLog: MoodLogPromptInput,
   template: MoodPromptTemplate = DEFAULT_MOOD_TEMPLATE,
 ): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `${template.systemPrompt}\n\n${buildStructuralInstructions()}`;
+  // (a) neutralizeDelimiters() áp cho CẢ template do admin soạn — trước fix chỉ áp cho dữ liệu
+  // học sinh (note/context/tags/moodIcon). template nằm ngoài vùng dữ liệu có phân giới nên
+  // một dấu phân giới giả trong đó không "thoát" ra khỏi vùng dữ liệu theo cách note/tags có
+  // thể, nhưng vẫn có thể tạo thêm một cặp phân giới KHÔNG do buildMoodPrompt chèn — đủ để phá
+  // giả định "chỉ có đúng một cặp phân giới thật trong prompt" mà hậu xử lý dựa vào. Ledger xếp
+  // minor vì tin admin, nhưng I5 (đổi baseUrl không audit) + I3 (rules từng hở privacySettings)
+  // buộc threat model phải tính cả admin.
+  const systemPrompt = `${neutralizeDelimiters(template.systemPrompt)}\n\n${buildStructuralInstructions()}`;
 
   const moodScore = safeNumber(moodLog.moodScore);
-  const tags = safeStringArray(moodLog.tags);
+  // (b) cắt còn tối đa MOOD_TAGS_MAX_COUNT phần tử TRƯỚC khi sanitize từng tag — khớp giới hạn
+  // 10 tag của src/lib/types/mood.ts, không tin cậy ràng buộc đó (chỉ có hiệu lực phía client).
+  const tags = safeStringArray(moodLog.tags).slice(0, MOOD_TAGS_MAX_COUNT);
 
   const sanitizedMoodIcon = sanitizeFreeText(moodLog.moodIcon);
   const moodIconBlock = sanitizedMoodIcon === "" ? "(không có)" : sanitizedMoodIcon;
@@ -235,16 +260,19 @@ export function buildMoodPrompt(
 
   const headerLines = `Điểm tâm trạng: ${moodScore ?? "(không có)"}`;
 
-  const dataRegionLines = [
+  const rawDataRegionLines = [
     `Biểu tượng tâm trạng: ${moodIconBlock}`,
     `Bối cảnh check-in: ${contextBlock}`,
     `Thẻ: ${formatTags(tags)}`,
     "Ghi chú:",
     noteBlock,
   ].join("\n");
+  // (b) trần TỔNG độc lập với trần từng field — xem MOOD_DATA_REGION_MAX_CHARS. Cắt SAU khi
+  // ghép nhãn dòng, không phải trước, để trần áp đúng lên kích thước thật sự gửi đi.
+  const dataRegionLines = truncateToCodePoints(rawDataRegionLines, MOOD_DATA_REGION_MAX_CHARS);
 
   const userPrompt = [
-    template.userTemplate,
+    neutralizeDelimiters(template.userTemplate),
     "",
     headerLines,
     MOOD_NOTE_DATA_START,
