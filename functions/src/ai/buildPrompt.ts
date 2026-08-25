@@ -118,8 +118,12 @@ function escapeRegExp(segment: string): string {
  * rỗng (KHÔNG xoá — xem giải thích ở `DELIMITER_SENTINEL`). Nếu bỏ qua bước này, một học
  * sinh (hoặc kẻ tấn công) chỉ cần gõ đúng chuỗi phân giới vào note/tag/context là tự tạo
  * được một dấu đóng/mở giả, thoát khỏi vùng dữ liệu mà không cần biết gì thêm.
+ *
+ * Export (Task 4, Spec #4): `buildChatPrompt.ts` dùng lại đúng hàm và đúng hai hằng số phân
+ * giới này cho vùng dữ liệu học sinh trong tin nhắn chat, thay vì tự định nghĩa một cặp phân
+ * giới mới — cùng một bất biến rời-ký-tự (xem `DELIMITER_SENTINEL`) không nên bị nhân đôi.
  */
-function neutralizeDelimiters(text: string): string {
+export function neutralizeDelimiters(text: string): string {
   const pattern = new RegExp(
     `${escapeRegExp(MOOD_NOTE_DATA_START)}|${escapeRegExp(MOOD_NOTE_DATA_END)}`,
     "gi",
@@ -134,8 +138,11 @@ function neutralizeDelimiters(text: string): string {
  * tự dùng emoji cho `moodIcon`) chiếm 2 code unit (surrogate pair), cắt đúng giữa cặp đó để
  * lại một high surrogate mồ côi — mojibake, hoặc lỗi 400 khi provider parse JSON.
  * `Array.from` tách chuỗi theo code point nên không bao giờ tách đôi một surrogate pair.
+ *
+ * Export (Task 4, Spec #4): dùng lại nguyên hàm này cho việc cắt trần tin nhắn chat — cắt theo
+ * code point là một bất biến chung cho MỌI văn bản tự do gửi ra provider, không riêng mood log.
  */
-function truncateToCodePoints(text: string, maxCodePoints: number): string {
+export function truncateToCodePoints(text: string, maxCodePoints: number): string {
   const codePoints = Array.from(text);
   if (codePoints.length <= maxCodePoints) return text;
   return codePoints.slice(0, maxCodePoints).join("");
