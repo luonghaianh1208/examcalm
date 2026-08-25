@@ -77,6 +77,19 @@ export const CONCERN_LEVEL_LABEL = "MỨC ĐỘ LO NGẠI:";
 export const CONCERN_LEVEL_VALUES = ["urgent", "concern", "none"] as const;
 
 /**
+ * Fix round 2, Finding 1 (review từ coordinator): MỘT nguồn duy nhất cho tên/mô tả Tổng đài
+ * Quốc gia Bảo vệ Trẻ em 111 — dùng ở CẢ `CRISIS_REPLY_TEXT` (đường "urgent") lẫn system prompt
+ * (đường "concern"/hội thoại bình thường, xem `buildChatStructuralInstructions()`), để hai nơi
+ * không bao giờ gõ lệch số hay lệch câu chữ theo thời gian. Trước fix này, số 111 CHỈ tồn tại
+ * trong `CRISIS_REPLY_TEXT` — sau khi §3.1 được sửa để không còn chặn cứng học sinh tuyệt
+ * vọng-nhưng-chưa-nêu-ý-định (đường "concern" vẫn gọi model bình thường), một học sinh nói "em
+ * thấy mình vô dụng, chẳng ai cần em" nhận một câu trả lời từ model KHÔNG CÓ số nào để gọi, trừ
+ * khi model tự bịa — và một model tự bịa số tổng đài tiếng Việt còn tệ hơn không có số nào.
+ */
+export const TRUSTED_HELPLINE_TEXT =
+  "Tổng đài Quốc gia Bảo vệ Trẻ em 111 — miễn phí, có người trực 24/7";
+
+/**
  * Câu trả lời CỐ ĐỊNH, không do model sinh ra — dùng thay cho việc gọi model khi Lớp 1 phát
  * hiện mức "urgent" (design spec §3.1, §3.3). Khi kích hoạt, AI dừng vai bạn tâm sự: không an
  * ủi tiếp, không tư vấn, không "kể cho tôi nghe thêm", không đặt câu hỏi tiếp theo — chỉ nêu rõ
@@ -93,7 +106,7 @@ export const CONCERN_LEVEL_VALUES = ["urgent", "concern", "none"] as const;
 export const CRISIS_REPLY_TEXT = [
   "Cảm ơn em đã nói ra điều này với mình.",
   "Ngay lúc này mình không thể tiếp tục trò chuyện về chuyện này — mình là một chương trình AI, không phải người có chuyên môn để giữ em an toàn.",
-  "Em hãy gọi ngay Tổng đài Quốc gia Bảo vệ Trẻ em 111 — miễn phí, có người trực 24/7. Và hãy nói với một người lớn em tin tưởng ngay bây giờ: bố mẹ, thầy cô, hoặc bất kỳ ai đang ở gần em.",
+  `Em hãy gọi ngay ${TRUSTED_HELPLINE_TEXT}. Và hãy nói với một người lớn em tin tưởng ngay bây giờ: bố mẹ, thầy cô, hoặc bất kỳ ai đang ở gần em.`,
   "Em xứng đáng được một người thật giúp đỡ, ngay hôm nay.",
 ].join("\n\n");
 
@@ -159,6 +172,26 @@ function escapeRegExp(segment: string): string {
  * tồn tại để bắt. Spec #3 tránh được rủi ro tương đương nhờ `parseReflectionOutput` đòi ba nhãn,
  * đúng thứ tự, neo đầu dòng, fail-closed — ở đây chỉ có MỘT nhãn, MỘT lần khớp, nên hàng rào yếu
  * hơn nhiều và cần được gia cố từ phía INPUT thay vì chỉ trông chờ vào cách parse phía sau.
+ *
+ * Fix round 2, Finding 3 (review từ coordinator) — SỬA LẠI một tuyên bố sai trong bản trước: hàm
+ * này KHÔNG kế thừa nguyên vẹn chứng minh "an toàn vì sentinel rời ký tự" của
+ * `neutralizeDelimiters`/`DELIMITER_SENTINEL` (xem `buildPrompt.ts`). Chứng minh gốc đó dựa trên
+ * việc `DELIMITER_SENTINEL` ("[đã xóa]") KHÔNG dùng chung BẤT KỲ ký tự nào với hai dấu phân giới
+ * — tiền đề đó KHÔNG đúng ở đây: sentinel và `CONCERN_LEVEL_LABEL` ("MỨC ĐỘ LO NGẠI:") cùng chứa
+ * ký tự dấu cách (" "), nên hai chuỗi này KHÔNG rời ký tự với nhau.
+ *
+ * Việc khử vẫn an toàn, nhưng vì một lý do KHÁC, cụ thể cho trường hợp này: dấu cách duy nhất
+ * trong sentinel nằm ở vị trí NỘI BỘ (index 3/8: `[đã` + ` ` + `xóa]`), kẹp giữa 'ã' (trước) và
+ * 'x' (sau) — hai ký tự không xuất hiện ở bất kỳ đâu trong `CONCERN_LEVEL_LABEL`. Nhãn có ba dấu
+ * cách nội bộ (sau "MỨC", sau "ĐỘ", sau "LO"), nhưng ký tự liền kề mỗi dấu cách đó trong nhãn
+ * (C/Đ, Ộ/L, O/N) không trùng 'ã'/'x'. Vì một cửa sổ so khớp liên tục bắt buộc phải đi qua các ký
+ * tự liền kề của sentinel để "chạm" tới dấu cách của nó (không thể nhảy cóc qua ký tự liền kề mà
+ * vẫn giữ tính liên tục của một substring), không tồn tại cách ghép [phần văn bản còn lại] +
+ * [một phần của sentinel] nào tái tạo đúng nguyên văn nhãn — đã kiểm chứng bằng rà soát thủ công
+ * cả ba vị trí dấu cách của nhãn, VÀ bằng fuzz 400.000 trường hợp ở vòng review này (zero
+ * reconstruction). Đây là một lập luận HẸP, đúng cho ĐÚNG cặp (sentinel, nhãn) hiện tại — không
+ * phải một bất biến tổng quát như "rời ký tự"; nếu `CONCERN_LEVEL_LABEL` hoặc `DELIMITER_SENTINEL`
+ * đổi giá trị sau này, lập luận này phải được rà soát lại từ đầu, không tự động còn đúng.
  */
 function neutralizeConcernLabel(text: string): string {
   const pattern = new RegExp(escapeRegExp(CONCERN_LEVEL_LABEL), "gi");
@@ -216,16 +249,35 @@ function buildHistoryMessage(turn: ChatTurnPromptInput): ChatApiMessage | null {
  *    Finding 6 — cơ chế đã được công bố qua thông báo cố định trên màn hình trước tin đầu tiên,
  *    §3.5; model ứng biến giải thích giữa chừng hội thoại là kênh KHÔNG được rà soát).
  * 6. Hướng dẫn AN TOÀN CHỦ ĐỘNG (Fix round 1, Finding 3 — trước đó mọi quy tắc chỉ là cấm đoán,
- *    không có gì lái model về phía hỗ trợ thật khi học sinh tuyệt vọng nhưng chưa nêu ý định):
- *    không mô tả/gợi ý phương thức tự hại dù để khuyên can; khuyến khích tìm người lớn tin
- *    tưởng; không nhận làm người tâm sự duy nhất; ghi nhận tuyệt vọng mà không khuếch đại.
+ *    không có gì lái model về phía hỗ trợ thật khi học sinh tuyệt vọng nhưng chưa nêu ý định),
+ *    MỞ RỘNG ở Fix round 2 sau khi review chỉ ra phần này "tốt hơn là có, nhưng chưa đủ":
+ *    - LUÔN ghi nhận cảm xúc học sinh một cách ẤM ÁP, CỤ THỂ TRƯỚC khi chuyển hướng sang bất kỳ
+ *      nguồn hỗ trợ nào (Fix round 2, Finding 2 — trước đó toàn bộ khối này chỉ có giới hạn, câu
+ *      duy nhất nói về CẢM XÚC lại là một giới hạn "ngắn gọn, không khuếch đại", khiến hai bullet
+ *      "ghi nhận" và "không làm người tâm sự duy nhất" cùng lúc dội một học sinh vừa nói không ai
+ *      cần mình sang một câu nghe như cự tuyệt).
+ *    - Không mô tả/gợi ý phương thức tự hại dù để khuyên can.
+ *    - Khuyến khích tìm người lớn tin tưởng.
+ *    - CÓ THỂ nhắc `TRUSTED_HELPLINE_TEXT` khi học sinh tuyệt vọng/cô đơn, dùng chung MỘT nguồn
+ *      với `CRISIS_REPLY_TEXT` để không lệch số (Fix round 2, Finding 1 — trước đó số 111 CHỈ
+ *      tồn tại ở đường "urgent", đường "concern"/hội thoại thường không có số nào để model đưa
+ *      cho một học sinh đang tuyệt vọng, trừ khi model tự bịa số — còn tệ hơn không có).
+ *    - Không nhận làm người tâm sự duy nhất.
+ *    - Ghi nhận tuyệt vọng mà không khuếch đại.
  * 7. Luôn kèm một dòng nhãn mức độ lo ngại ở cuối câu trả lời — Lớp 2 phát hiện khủng hoảng.
  *
  * CHẶN GO-LIVE (mở rộng theo Fix round 1, Finding 6): không chỉ `CRISIS_REPLY_TEXT`, mà TOÀN BỘ
  * nội dung của hàm này cũng cần một chuyên gia tâm lý học đường duyệt trước go-live — sau khi
  * §3.1 được sửa, đây là câu chữ mà học sinh tuyệt vọng-nhưng-chưa-nêu-ý-định THỰC SỰ đọc được
  * (model trả lời dựa trên các chỉ dẫn này), không phải một câu cố định đã được duyệt sẵn như
- * `CRISIS_REPLY_TEXT` — xem `docs/ai-go-live-checklist.md`.
+ * `CRISIS_REPLY_TEXT` — xem `docs/ai-go-live-checklist.md`. HAI ĐIỂM CẦN CHUYÊN GIA QUYẾT ĐỊNH
+ * RIÊNG (Fix round 2, ghi nhận nhưng KHÔNG tự sửa vì đây là quyết định lâm sàng — xem report):
+ * (a) bullet "không nhận làm người tâm sự duy nhất" kích hoạt đúng lúc một học sinh CHỈ muốn nói
+ * chuyện với bot, nên có thể nhận câu "mình không thể thay thế một người thật" trong CÙNG một
+ * câu trả lời với việc em vừa nói không ai cần mình — có phải điều nên nói vào đúng lúc đó
+ * không; (b) bullet "người lớn tin tưởng" nêu tên bố mẹ trước và cho phép lặp lại, với "nếu phù
+ * hợp" là phanh duy nhất — không có gì dặn model chấp nhận "không phải bố mẹ em" rồi chuyển sang
+ * gợi ý một người lớn khác thay vì tiếp tục nhấn.
  */
 function buildChatStructuralInstructions(): string {
   return [
@@ -236,8 +288,10 @@ function buildChatStructuralInstructions(): string {
     `- Không bao giờ chẩn đoán hay gọi tên một tình trạng sức khoẻ tâm thần. Tuyệt đối không dùng các từ/cụm sau dưới bất kỳ hình thức nào: ${BANNED_DIAGNOSTIC_KEYWORDS.join(", ")}. Không được lặp lại bất kỳ từ/cụm nào trong danh sách này ở bất kỳ đâu trong câu trả lời — kể cả khi bạn đang xác nhận sẽ tuân thủ quy tắc này, cũng không được nhắc lại chúng để phủ định.`,
     "- Bạn là một AI, không phải người. Không bao giờ giả vờ là người — nếu học sinh hỏi trực tiếp bạn có phải người thật không, phải trả lời thật rằng bạn là một AI/chương trình máy tính.",
     "- Không được hứa giữ bí mật cho học sinh dưới bất kỳ hình thức nào, kể cả khi học sinh yêu cầu. Khi từ chối, KHÔNG giải thích cơ chế cảnh báo hay bất kỳ lý do kỹ thuật nào — chỉ nói ngắn gọn rằng bạn không thể hứa điều đó, và nhắc học sinh xem lại thông báo đã hiển thị trên màn hình trước khi bắt đầu trò chuyện.",
+    "- Trước khi hướng học sinh sang bất kỳ nguồn hỗ trợ nào (người lớn, tổng đài, chuyên viên tư vấn học đường...), LUÔN ghi nhận cảm xúc của học sinh một cách ấm áp và cụ thể trước — nhắc lại đúng điều học sinh vừa chia sẻ theo cách cho thấy bạn thực sự lắng nghe, không mở đầu ngay bằng việc chuyển hướng. Chỉ sau khi học sinh cảm thấy được lắng nghe, mới nhẹ nhàng gợi ý bước tiếp theo.",
     "- Khi học sinh nhắc tới cách/phương thức tự làm hại bản thân, KHÔNG BAO GIỜ mô tả, gợi ý, hay bàn luận chi tiết về bất kỳ cách/phương thức nào — kể cả khi mục đích là để khuyên can. Chuyển hướng ngay sang việc tìm người lớn giúp đỡ, không đi sâu vào chi tiết đó.",
     "- Nhẹ nhàng khuyến khích, và có thể nhắc lại nhiều lần trong cuộc trò chuyện nếu phù hợp: học sinh nên nói chuyện với một người lớn tin tưởng — bố mẹ, thầy cô, hoặc chuyên viên tư vấn tâm lý học đường.",
+    `- Khi học sinh tỏ ra tuyệt vọng hoặc cô đơn (dù chưa nêu ý định tự hại cụ thể), bạn CÓ THỂ nhắc tới ${TRUSTED_HELPLINE_TEXT}, bên cạnh việc khuyến khích tìm người lớn tin tưởng — không cần lặp lại số này ở mọi lượt trả lời, chỉ khi phù hợp với những gì học sinh vừa chia sẻ.`,
     "- Không bao giờ nhận hay khuyến khích trở thành người duy nhất học sinh tâm sự. Nếu học sinh có dấu hiệu chỉ muốn nói chuyện với bạn mà không muốn tìm ai khác, hãy nói rõ ràng rằng bạn không thể thay thế một người thật.",
     "- Khi học sinh tỏ ra tuyệt vọng nhưng chưa nêu ý định cụ thể, hãy ghi nhận cảm xúc đó một cách ngắn gọn, không khuếch đại hay xoáy sâu thêm, rồi hướng cuộc trò chuyện về phía tìm kiếm hỗ trợ thật ngoài đời.",
     `- Ở CUỐI câu trả lời, luôn thêm đúng một dòng bắt đầu bằng nhãn "${CONCERN_LEVEL_LABEL}" theo sau bởi CHÍNH XÁC một trong ba từ: ${CONCERN_LEVEL_VALUES.join(", ")} — đánh giá mức độ lo ngại về an toàn của học sinh dựa trên toàn bộ tin nhắn, không thêm giải thích nào khác trên dòng đó.`,
