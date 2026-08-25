@@ -124,6 +124,17 @@ có dấu hiệu tự hại. **Ba mục dưới đây PHẢI xong TRƯỚC khi t
 mục ở trên đã xong từ lâu** (ví dụ trường bạn đã bật "phản chiếu" từ trước, giờ mới bật thêm
 "trò chuyện").
 
+**Điều sẽ tự động xảy ra khi bạn tick công tắc này (I4, final whole-branch review):** một học
+sinh đã đồng ý dùng AI TỪ TRƯỚC (dưới hộp thoại cũ, chỉ nói về "ghi chú cảm xúc"/phản chiếu —
+chưa từng nhắc chat hay đường cảnh báo tới thầy cô) sẽ **không** được tự động vào thẳng màn hình
+trò chuyện. Hệ thống ghi nhớ PHIÊN BẢN của hộp thoại đồng ý mỗi học sinh đã đọc
+(`privacySettings.aiConsentVersion`) — một đồng ý cũ hơn phiên bản hiện tại không đủ cho chat.
+Học sinh đó sẽ thấy màn hình chat báo "cần bật tính năng AI trong phần Cài đặt riêng tư", và ở
+trang Hồ sơ, ô tick đồng ý sẽ hiện lại như CHƯA tick — bấm vào sẽ hiện lại đúng hộp thoại đồng ý
+(giờ đã nói rõ cả chat), không xoá bất cứ dữ liệu nào, và phản chiếu của em vẫn hoạt động bình
+thường trong lúc chờ em xác nhận lại. Đây là hành vi **có chủ đích**, không phải lỗi — không nên
+coi là "học sinh bị mất quyền dùng AI" khi nhận được câu hỏi từ giáo viên/học sinh về việc này.
+
 ### ☐ 9. Ai nhận cảnh báo khủng hoảng, và trong bao lâu phải phản hồi?
 
 **Đây là dòng quan trọng nhất trong toàn bộ tài liệu này — quan trọng hơn mọi mục ở trên.**

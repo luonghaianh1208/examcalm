@@ -21,7 +21,7 @@ import {
 } from "./sendChatMessage";
 import { AiProviderError, type ChatCompletionResult } from "./openaiClient";
 import { CRISIS_REPLY_TEXT, CONCERN_LEVEL_LABEL } from "./buildChatPrompt";
-import { DEFAULT_AI_CONFIG, type AiConfig } from "./config";
+import { DEFAULT_AI_CONFIG, CURRENT_AI_CONSENT_VERSION, type AiConfig } from "./config";
 
 let app: App;
 let db: Firestore;
@@ -82,11 +82,26 @@ async function setAiConfig(overrides: Partial<AiConfig> = {}): Promise<void> {
   await db.collection("systemConfig").doc("aiConfig").set(config);
 }
 
-async function setUser(uid: string, aiOptIn: boolean): Promise<void> {
+// I4 (final whole-branch review): `aiConsentVersion` mặc định là bản MỚI NHẤT — hầu hết test ở
+// file này kiểm hành vi KHÔNG liên quan tới I4, nên phải mặc định "đã đồng ý đủ mới" để không
+// phải sửa lại hàng loạt call site. `aiConsentVersion` tham số RIÊNG (tuỳ chọn) cho các test cố
+// ý kiểm phiên bản đồng ý cũ/thiếu.
+// `null` (khác `undefined` — tham số CÓ default) là sentinel tường minh cho "KHÔNG ghi field
+// aiConsentVersion" (đồng ý từ trước khi field này tồn tại) — `undefined` sẽ kích hoạt default
+// parameter của JS thay vì được coi là "cố ý truyền rỗng", nên không dùng được làm sentinel ở đây.
+async function setUser(
+  uid: string,
+  aiOptIn: boolean,
+  aiConsentVersion: number | null = CURRENT_AI_CONSENT_VERSION,
+): Promise<void> {
   await db
     .collection("users")
     .doc(uid)
-    .set({ uid, role: "student", privacySettings: { aiOptIn, shareImageWithAI: false } });
+    .set({
+      uid,
+      role: "student",
+      privacySettings: { aiOptIn, shareImageWithAI: false, ...(aiConsentVersion !== null ? { aiConsentVersion } : {}) },
+    });
 }
 
 async function setChatSession(sessionId: string, userId: string): Promise<void> {
@@ -263,6 +278,53 @@ describe("sendChatMessage", () => {
       details: { reason: "ai_opt_in" },
     });
     expect(fake).not.toHaveBeenCalled();
+  });
+
+  // ==== I4 (final whole-branch review) — callable KHÔNG được chỉ tin aiOptIn thô: đồng ý dưới
+  // hộp thoại CŨ (trước khi chat tồn tại) không đủ. Server phải tự chặn, không chỉ dựa vào
+  // ChatWindow.tsx (client có thể bị bỏ qua — gọi callable trực tiếp).
+  it("3b. aiOptIn=true NHƯNG thiếu hẳn aiConsentVersion (đồng ý từ trước khi field tồn tại) → permission-denied, reason=ai_opt_in", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true, null); // KHÔNG ghi field aiConsentVersion
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Xin chào" },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "permission-denied", details: { reason: "ai_opt_in" } });
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("3c. aiOptIn=true, aiConsentVersion CŨ HƠN version hiện tại → permission-denied, reason=ai_opt_in", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true, CURRENT_AI_CONSENT_VERSION - 1);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Xin chào" },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "permission-denied", details: { reason: "ai_opt_in" } });
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("3d. aiOptIn=true, aiConsentVersion ĐÚNG version hiện tại → qua được guard này (không permission-denied vì lý do ai_opt_in)", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true, CURRENT_AI_CONSENT_VERSION);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    const result = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Xin chào" },
+      makeDeps({ callChatCompletion: fake }),
+    );
+    expect(result.messageId).toBeTruthy();
   });
 
   it("4. sessionId không tồn tại → not-found", async () => {

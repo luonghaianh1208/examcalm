@@ -13,7 +13,7 @@ import {
   type ChatMessageRecord,
   type ChatSessionRecord,
 } from "@/lib/firestore/chat";
-import { getAiOptIn } from "@/lib/firestore/ai-optin";
+import { getChatConsent } from "@/lib/firestore/ai-optin";
 import { getAiPublicConfig } from "@/lib/firestore/ai-public";
 
 vi.mock("@/lib/firestore/chat", () => {
@@ -42,7 +42,7 @@ vi.mock("@/lib/firestore/chat", () => {
 // Cùng khuôn ReflectionCard.test.tsx (Task 11b): ChatWindow tự đọc cổng của
 // chính nó thay vì nhận prop, nên phải mock hai nguồn đọc gate này.
 vi.mock("@/lib/firestore/ai-optin", () => ({
-  getAiOptIn: vi.fn(),
+  getChatConsent: vi.fn(),
 }));
 vi.mock("@/lib/firestore/ai-public", () => ({
   getAiPublicConfig: vi.fn(),
@@ -54,7 +54,7 @@ const mockedListMessages = vi.mocked(listMessages);
 const mockedListMySessions = vi.mocked(listMySessions);
 const mockedDeleteMessage = vi.mocked(deleteMessage);
 const mockedDeleteSession = vi.mocked(deleteSession);
-const mockedGetAiOptIn = vi.mocked(getAiOptIn);
+const mockedGetChatConsent = vi.mocked(getChatConsent);
 const mockedGetAiPublicConfig = vi.mocked(getAiPublicConfig);
 
 // Câu chữ lấy NGUYÊN VĂN từ chat.ts (Task 6) — brief yêu cầu ChatWindow chỉ
@@ -87,7 +87,7 @@ const EXISTING_SESSION: ChatSessionRecord = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedGetAiOptIn.mockResolvedValue(true);
+  mockedGetChatConsent.mockResolvedValue(true);
   mockedGetAiPublicConfig.mockResolvedValue({
     providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true,
   });
@@ -102,7 +102,7 @@ beforeEach(() => {
 
 describe("ChatWindow", () => {
   it("aiOptIn tắt (gate đóng): không render ô chat, chỉ dẫn tới trang Hồ sơ, không gọi hàm chat nào", async () => {
-    mockedGetAiOptIn.mockResolvedValue(false);
+    mockedGetChatConsent.mockResolvedValue(false);
     render(<ChatWindow uid="u1" />);
 
     const link = await screen.findByRole("link", { name: /hồ sơ/i });
@@ -114,7 +114,7 @@ describe("ChatWindow", () => {
   });
 
   it("aiPublic tắt dù aiOptIn bật (gate đóng): không render ô chat, không gọi hàm chat nào", async () => {
-    mockedGetAiOptIn.mockResolvedValue(true);
+    mockedGetChatConsent.mockResolvedValue(true);
     mockedGetAiPublicConfig.mockResolvedValue({
       providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
     });
@@ -130,7 +130,7 @@ describe("ChatWindow", () => {
   // PHẢI enabled — đối xứng ReflectionCard.tsx: bật RIÊNG phản chiếu (chat vẫn tắt) không được
   // phép mở ô nhập chat.
   it("Finding 2: enabled=true nhưng chatEnabled=false (chỉ phản chiếu bật) -> gate vẫn ĐÓNG", async () => {
-    mockedGetAiOptIn.mockResolvedValue(true);
+    mockedGetChatConsent.mockResolvedValue(true);
     mockedGetAiPublicConfig.mockResolvedValue({
       providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false,
     });

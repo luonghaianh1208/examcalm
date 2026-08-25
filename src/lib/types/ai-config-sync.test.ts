@@ -19,6 +19,8 @@ import {
   CHAT_WINDOW_SIZE as functionsChatWindowSize,
   CHAT_MESSAGE_MAX_CHARS as functionsChatMessageMaxChars,
 } from "../../../functions/src/ai/buildChatPrompt";
+import { CURRENT_AI_CONSENT_VERSION as srcConsentVersion } from "@/lib/types/ai-consent";
+import { CURRENT_AI_CONSENT_VERSION as functionsConsentVersion } from "../../../functions/src/ai/config";
 
 /**
  * Task 13 (R2 — ruling của reviewer trước khi spec bắt đầu): `functions/src/ai/config.ts` là
@@ -200,6 +202,17 @@ describe("CHAT_WINDOW_SIZE / CHAT_MESSAGE_MAX_CHARS — đồng bộ src/lib/typ
 
   it("CHAT_MESSAGE_MAX_CHARS giống hệt nhau giữa hai bên", () => {
     expect(functionsChatMessageMaxChars).toBe(srcChatMessageMaxChars);
+  });
+});
+
+// I4 (final whole-branch review): CURRENT_AI_CONSENT_VERSION là mirror thứ ba, CÙNG DẠNG với
+// hai mirror ở trên — src/lib/types/ai-consent.ts khai báo, functions/src/ai/config.ts mirror
+// lại để sendChatMessage.ts dùng. Rủi ro cụ thể nếu lệch: nâng version ở phía src/ (đòi hộp
+// thoại mới hơn) mà quên nâng ở functions/ sẽ để callable vẫn chấp nhận một đồng ý CŨ mà UI đã
+// coi là không đủ — đúng lỗ hổng I4 tồn tại để bịt, tái diễn ở phía server.
+describe("CURRENT_AI_CONSENT_VERSION — đồng bộ src/lib/types/ai-consent.ts và functions/src/ai/config.ts", () => {
+  it("giống hệt nhau giữa hai bên", () => {
+    expect(functionsConsentVersion).toBe(srcConsentVersion);
   });
 });
 

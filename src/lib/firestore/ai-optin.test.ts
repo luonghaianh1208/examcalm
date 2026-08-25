@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getDoc } from "firebase/firestore";
 import { ensureAuthReady } from "@/lib/firebase/client";
-import { getAiOptIn } from "./ai-optin";
+import { getAiOptIn, getChatConsent } from "./ai-optin";
+import { CURRENT_AI_CONSENT_VERSION } from "@/lib/types/ai-consent";
 
 vi.mock("@/lib/firebase/client", () => ({
   getDb: vi.fn(() => ({})),
@@ -62,5 +63,45 @@ describe("getAiOptIn", () => {
   it("getDoc lỗi -> trả về false thay vì throw (không được chặn hay tự ý gọi callable)", async () => {
     mockedGetDoc.mockRejectedValue(new Error("mất mạng"));
     await expect(getAiOptIn("u1")).resolves.toBe(false);
+  });
+});
+
+// I4 (final whole-branch review): getChatConsent đòi CẢ aiOptIn LẪN aiConsentVersion đủ mới —
+// khác getAiOptIn (chỉ đọc field boolean, dùng cho ReflectionCard.tsx, không đổi).
+describe("getChatConsent", () => {
+  it("aiOptIn=true, aiConsentVersion = CURRENT_AI_CONSENT_VERSION -> true", async () => {
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ privacySettings: { aiOptIn: true, aiConsentVersion: CURRENT_AI_CONSENT_VERSION } }),
+    );
+    expect(await getChatConsent("u1")).toBe(true);
+  });
+
+  it("aiOptIn=true, aiConsentVersion CŨ HƠN hiện tại -> false", async () => {
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ privacySettings: { aiOptIn: true, aiConsentVersion: CURRENT_AI_CONSENT_VERSION - 1 } }),
+    );
+    expect(await getChatConsent("u1")).toBe(false);
+  });
+
+  it("aiOptIn=true, THIẾU hẳn aiConsentVersion (đồng ý từ trước khi field tồn tại) -> false", async () => {
+    mockedGetDoc.mockResolvedValue(fakeSnap({ privacySettings: { aiOptIn: true } }));
+    expect(await getChatConsent("u1")).toBe(false);
+  });
+
+  it("aiOptIn=false dù aiConsentVersion mới -> false", async () => {
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ privacySettings: { aiOptIn: false, aiConsentVersion: CURRENT_AI_CONSENT_VERSION } }),
+    );
+    expect(await getChatConsent("u1")).toBe(false);
+  });
+
+  it("document không tồn tại -> false", async () => {
+    mockedGetDoc.mockResolvedValue(fakeSnap(undefined));
+    expect(await getChatConsent("u1")).toBe(false);
+  });
+
+  it("getDoc lỗi -> false thay vì throw", async () => {
+    mockedGetDoc.mockRejectedValue(new Error("mất mạng"));
+    await expect(getChatConsent("u1")).resolves.toBe(false);
   });
 });

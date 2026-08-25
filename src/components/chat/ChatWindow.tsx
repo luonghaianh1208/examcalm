@@ -12,7 +12,7 @@ import {
   type ChatMessageRecord,
   type ChatSendErrorKind,
 } from "@/lib/firestore/chat";
-import { getAiOptIn } from "@/lib/firestore/ai-optin";
+import { getChatConsent } from "@/lib/firestore/ai-optin";
 import { getAiPublicConfig } from "@/lib/firestore/ai-public";
 
 type Props = {
@@ -66,14 +66,20 @@ export function ChatWindow({ uid }: Props) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmingDeleteSession, setConfirmingDeleteSession] = useState(false);
 
-  // Đọc cổng — cùng khuôn ReflectionCard.tsx: đọc aiOptIn TRƯỚC, chỉ đọc tiếp
-  // systemConfig/aiPublic (document nóng dùng chung toàn trường) khi optIn đã bật.
+  // Đọc cổng — cùng khuôn ReflectionCard.tsx: đọc đồng ý TRƯỚC, chỉ đọc tiếp
+  // systemConfig/aiPublic (document nóng dùng chung toàn trường) khi đồng ý đã đủ.
+  //
+  // I4 (final whole-branch review): dùng getChatConsent (đòi aiConsentVersion đủ mới), KHÔNG
+  // dùng getAiOptIn — một học sinh đồng ý dưới hộp thoại CŨ (trước khi chat tồn tại) không được
+  // coi là đã đồng ý CHAT, dù aiOptIn của họ vẫn true. "closed" ở nhánh này hiện đúng thông báo
+  // "cần bật tính năng AI trong phần Cài đặt riêng tư" — trang Hồ sơ (AiConsentSection.tsx) sẽ
+  // tự hiện lại hộp thoại đồng ý (xem hasCurrentConsent ở đó) khi phát hiện version cũ.
   useEffect(() => {
     let cancelled = false;
     setGate("checking");
     (async () => {
-      const optIn = await getAiOptIn(uid);
-      if (!optIn) {
+      const hasChatConsent = await getChatConsent(uid);
+      if (!hasChatConsent) {
         if (!cancelled) setGate("closed");
         return;
       }

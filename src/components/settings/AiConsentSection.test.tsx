@@ -6,6 +6,7 @@ import { updateDoc } from "firebase/firestore";
 import { ensureAuthReady } from "@/lib/firebase/client";
 import { getAiPublicConfig } from "@/lib/firestore/ai-public";
 import { deleteAllMyOutputs } from "@/lib/firestore/ai-outputs";
+import { CURRENT_AI_CONSENT_VERSION } from "@/lib/types/ai-consent";
 
 vi.mock("firebase/firestore", () => ({
   doc: vi.fn(() => ({})),
@@ -39,14 +40,14 @@ beforeEach(() => {
 
 describe("AiConsentSection", () => {
   it("mặc định hiển thị trạng thái tắt", async () => {
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     expect(await screen.findByRole("checkbox")).not.toBeChecked();
   });
 
   it("trước khi bật: hộp thoại nêu đích danh providerLabel đọc từ aiPublic (không phải chuỗi cứng)", async () => {
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
 
@@ -56,7 +57,7 @@ describe("AiConsentSection", () => {
 
   it("hộp thoại nói rõ ghi chú gửi tới dịch vụ bên ngoài và có thể tắt bất cứ lúc nào", async () => {
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
 
@@ -70,7 +71,7 @@ describe("AiConsentSection", () => {
   // cũng rời khỏi hệ thống, không chỉ ghi chú cảm xúc.
   it("I3: hộp thoại bật nói rõ CẢ ghi chú cảm xúc LẪN nội dung trò chuyện đều gửi ra ngoài", async () => {
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
 
@@ -82,7 +83,7 @@ describe("AiConsentSection", () => {
   // I3: thân bài thường trực (không phải hộp thoại) VÀ nhãn ô tick cũng phải nói cả hai — đây
   // là những gì học sinh thấy khi chưa bấm mở hộp thoại.
   it("I3: thân bài thường trực và nhãn ô tick đều nhắc tới nội dung trò chuyện, không chỉ ghi chú cảm xúc", async () => {
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await screen.findByRole("checkbox");
     // Cả thân bài VÀ nhãn ô tick đều phải nhắc — đúng hai chỗ, không phải một.
@@ -96,7 +97,7 @@ describe("AiConsentSection", () => {
   // phát hiện có cảnh báo âm thầm (đúng lý do §3.5 nêu ra).
   it("hộp thoại bật cũng nói rõ có đường cảnh báo an toàn tới thầy cô — không hứa giữ bí mật tuyệt đối", async () => {
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
 
@@ -108,7 +109,7 @@ describe("AiConsentSection", () => {
 
   it("bấm huỷ: aiOptIn không đổi, không ghi Firestore", async () => {
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await screen.findByRole("dialog");
@@ -129,7 +130,7 @@ describe("AiConsentSection", () => {
     });
 
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /đồng ý/i }));
@@ -144,7 +145,7 @@ describe("AiConsentSection", () => {
 
   it("tắt lại: hỏi xác nhận, xác nhận thì gọi deleteAllMyOutputs (xoá thật, không phải ẩn)", async () => {
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     const checkbox = await screen.findByRole("checkbox");
     expect(checkbox).toBeChecked();
@@ -158,9 +159,49 @@ describe("AiConsentSection", () => {
     expect(screen.getByRole("checkbox")).not.toBeChecked();
   });
 
+  // ==== I4 (final whole-branch review) — đồng ý dưới hộp thoại CŨ (thiếu hoặc lệch
+  // aiConsentVersion) phải được coi như CHƯA đồng ý cho MỤC ĐÍCH hiện checkbox/mở hộp thoại,
+  // dù aiOptIn thô vẫn true (phản chiếu vẫn hoạt động bình thường — không đổi gì ở đó).
+  it("I4: aiOptIn=true nhưng THIẾU aiConsentVersion (đồng ý từ trước khi chat tồn tại) -> checkbox hiện CHƯA tick", async () => {
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={null} />);
+
+    const checkbox = await screen.findByRole("checkbox");
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it("I4: aiOptIn=true, aiConsentVersion CŨ HƠN hiện tại -> checkbox hiện CHƯA tick, bấm vào mở hộp thoại BẬT (turn-on) không phải hộp thoại TẮT — không gọi deleteAllMyOutputs", async () => {
+    const user = userEvent.setup();
+    render(
+      <AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION - 1} />,
+    );
+
+    const checkbox = await screen.findByRole("checkbox");
+    expect(checkbox).not.toBeChecked();
+    await user.click(checkbox);
+
+    const dialog = await screen.findByRole("dialog");
+    // Hộp thoại BẬT nói về gửi dữ liệu ra ngoài — hộp thoại TẮT nói về xoá vĩnh viễn. Đây phải
+    // là hộp thoại BẬT, không phải TẮT (khác test "tắt lại" ở trên).
+    expect(dialog).toHaveTextContent(/gửi|dịch vụ/i);
+    expect(dialog).not.toHaveTextContent(/xoá vĩnh viễn/i);
+
+    await user.click(screen.getByRole("button", { name: /đồng ý/i }));
+
+    await waitFor(() => expect(screen.getByRole("checkbox")).toBeChecked());
+    // Xác nhận lại KHÔNG xoá gì — chỉ ghi lại true + version mới.
+    expect(mockedDeleteAllMyOutputs).not.toHaveBeenCalled();
+    expect(mockedUpdateDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        "privacySettings.aiOptIn": true,
+        "privacySettings.aiConsentVersion": CURRENT_AI_CONSENT_VERSION,
+      }),
+    );
+  });
+
   it("aiPublic.enabled=false (chưa cấu hình) -> hiện trạng thái chưa khả dụng, không có nút bật", async () => {
     mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     expect(await screen.findByText(/chưa khả dụng/i)).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
@@ -169,7 +210,7 @@ describe("AiConsentSection", () => {
   it("ghi hỏng khi bật: hiện lỗi, KHÔNG đổi trạng thái công tắc", async () => {
     mockedUpdateDoc.mockRejectedValue(new Error("permission-denied"));
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /đồng ý/i }));
@@ -195,7 +236,7 @@ describe("AiConsentSection", () => {
     });
 
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /tắt/i }));
@@ -207,7 +248,7 @@ describe("AiConsentSection", () => {
   it("xoá phản chiếu lỗi khi tắt: báo đúng lỗi xoá, KHÔNG ghi cài đặt, công tắc vẫn ON, dialog vẫn mở để thử lại", async () => {
     mockedDeleteAllMyOutputs.mockRejectedValueOnce(new Error("mất mạng"));
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     const confirmButton = await screen.findByRole("button", { name: /tắt/i });
@@ -228,7 +269,7 @@ describe("AiConsentSection", () => {
   it("xoá xong nhưng ghi cài đặt lỗi: dữ liệu đã xoá thật (đã gọi deleteAllMyOutputs), báo lỗi LƯU cài đặt (khác lỗi xoá), công tắc vẫn hiện ON", async () => {
     mockedUpdateDoc.mockRejectedValue(new Error("permission-denied"));
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /tắt/i }));
@@ -248,7 +289,7 @@ describe("AiConsentSection", () => {
   it("I2: kill switch TẮT nhưng aiOptIn đã BẬT -> vẫn hiện được checkbox và luồng tắt/xoá, không rơi vào 'chưa khả dụng'", async () => {
     mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     expect(screen.queryByText(/chưa khả dụng/i)).not.toBeInTheDocument();
     const checkbox = await screen.findByRole("checkbox");
@@ -269,7 +310,7 @@ describe("AiConsentSection", () => {
 
   it("I2 (provider-change exposure): kill switch TẮT, aiOptIn BẬT -> KHÔNG bịa/giữ lại tên provider cũ khi aiPublic không còn xác nhận nó", async () => {
     mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
-    render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await screen.findByRole("checkbox");
     // Panel vẫn hiện (đường rút lui mở), nhưng vì aiPublic không xác nhận provider nào (bị
@@ -281,7 +322,7 @@ describe("AiConsentSection", () => {
   it("ghi hỏng khi bật (đối chứng): hiện lỗi lưu, KHÔNG gọi deleteAllMyOutputs", async () => {
     mockedUpdateDoc.mockRejectedValue(new Error("permission-denied"));
     const user = userEvent.setup();
-    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
 
     await user.click(await screen.findByRole("checkbox"));
     await user.click(await screen.findByRole("button", { name: /đồng ý/i }));

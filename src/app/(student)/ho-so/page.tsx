@@ -11,12 +11,20 @@ export default async function Page() {
   const snap = await adminDb().collection("users").doc(user.uid).get();
   const granted = snap.data()?.researchConsent?.granted === true;
   const aiOptIn = snap.data()?.privacySettings?.aiOptIn === true;
+  // I4 (final whole-branch review): field vắng mặt (đồng ý từ trước khi field này tồn tại,
+  // hoặc chưa từng đồng ý) -> null, coi như version cũ — xem hasCurrentAiConsent.
+  const rawAiConsentVersion = snap.data()?.privacySettings?.aiConsentVersion;
+  const aiConsentVersion = typeof rawAiConsentVersion === "number" ? rawAiConsentVersion : null;
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10">
       <h1 className="text-2xl font-semibold">Hồ sơ và quyền riêng tư</h1>
       <ResearchConsentForm uid={user.uid} initialGranted={granted} />
-      <AiConsentSection uid={user.uid} initialAiOptIn={aiOptIn} />
+      <AiConsentSection
+        uid={user.uid}
+        initialAiOptIn={aiOptIn}
+        initialAiConsentVersion={aiConsentVersion}
+      />
       <DeleteAccountSection uid={user.uid} />
     </main>
   );

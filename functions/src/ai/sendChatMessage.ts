@@ -126,7 +126,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { z } from "zod";
-import { aiConfigSchema, DEFAULT_AI_CONFIG, type AiConfig } from "./config";
+import { aiConfigSchema, DEFAULT_AI_CONFIG, CURRENT_AI_CONSENT_VERSION, type AiConfig } from "./config";
 import {
   callChatCompletion as callChatCompletionDefault,
   AiProviderError,
@@ -621,9 +621,21 @@ export async function runSendChatMessage(
   // 3. aiOptIn — lời hứa riêng tư cốt lõi. Đứng TRÊN việc đọc session: đây là consent, không
   // phải trạng thái vận hành (Fix round 1, Finding 4 — chỉ các gate VẬN HÀNH mới lùi xuống
   // dưới Lớp 1, không phải consent/authorization).
+  //
+  // I4 (final whole-branch review): KHÔNG chỉ tin `aiOptIn` — còn đòi `aiConsentVersion` đạt
+  // CURRENT_AI_CONSENT_VERSION. Một học sinh tick đồng ý dưới hộp thoại CŨ (trước khi chat tồn
+  // tại — document thiếu field này, hoặc field < version hiện tại) chưa từng thấy câu chữ nói
+  // về chat/đường cảnh báo an toàn; ChatWindow.tsx đã chặn họ ở UI (getChatConsent), nhưng
+  // callable KHÔNG được chỉ tin cổng phía client — một request gọi thẳng (bỏ qua UI) vẫn phải
+  // bị chặn ở đây.
   const userSnap = await deps.db.collection("users").doc(auth.uid).get();
-  const aiOptIn = userSnap.exists && userSnap.data()?.privacySettings?.aiOptIn === true;
-  if (!aiOptIn) {
+  const privacySettings = userSnap.exists
+    ? (userSnap.data()?.privacySettings as { aiOptIn?: unknown; aiConsentVersion?: unknown } | undefined)
+    : undefined;
+  const aiOptIn = privacySettings?.aiOptIn === true;
+  const aiConsentVersion =
+    typeof privacySettings?.aiConsentVersion === "number" ? privacySettings.aiConsentVersion : 0;
+  if (!aiOptIn || aiConsentVersion < CURRENT_AI_CONSENT_VERSION) {
     throw new HttpsError(
       "permission-denied",
       "Bạn cần bật đồng ý dùng tính năng AI trong phần cài đặt riêng tư trước.",

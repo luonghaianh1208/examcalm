@@ -142,6 +142,15 @@ export function isAiEnabled(
   return isReflectionEnabled(config) || isChatEnabled(config);
 }
 
+/**
+ * Mirror của CURRENT_AI_CONSENT_VERSION (src/lib/types/ai-consent.ts) — cùng lý do mirror
+ * aiConfigSchema ở trên (package functions/ không import được src/ ở runtime). Dùng bởi
+ * sendChatMessage.ts để KHÔNG chỉ tin vào cổng phía client (ChatWindow.tsx): một học sinh đồng
+ * ý dưới hộp thoại CŨ (trước khi chat tồn tại, `aiConsentVersion` thiếu hoặc < giá trị này)
+ * không được phép gọi được callable chat, kể cả khi cố gọi thẳng bỏ qua UI.
+ */
+export const CURRENT_AI_CONSENT_VERSION = 2;
+
 export const DEFAULT_AI_CONFIG: AiConfig = {
   providerLabel: "",
   baseUrl: "",

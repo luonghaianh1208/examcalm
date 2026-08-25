@@ -6,8 +6,15 @@ import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import { getAiPublicConfig, type AiPublicConfig } from "@/lib/firestore/ai-public";
 import { deleteAllMyOutputs } from "@/lib/firestore/ai-outputs";
 import { useFocusTrap } from "@/components/onboarding/useFocusTrap";
+import { CURRENT_AI_CONSENT_VERSION, hasCurrentAiConsent } from "@/lib/types/ai-consent";
 
-type Props = { uid: string; initialAiOptIn: boolean };
+type Props = {
+  uid: string;
+  initialAiOptIn: boolean;
+  /** I4 (final whole-branch review): `null` khi document chưa từng có field này (đồng ý
+   *  từ trước khi field tồn tại, hoặc chưa từng đồng ý) — xem hasCurrentAiConsent. */
+  initialAiConsentVersion: number | null;
+};
 
 // Đang hỏi bật hay hỏi tắt — quyết định nội dung hộp thoại xác nhận.
 type DialogMode = "turn-on" | "turn-off";
@@ -19,8 +26,9 @@ type DialogMode = "turn-on" | "turn-off";
 const SAVE_ERROR_MESSAGE = "Không thể lưu thay đổi lúc này. Bạn thử lại sau nhé.";
 const DELETE_ERROR_MESSAGE = "Không thể xoá các phản chiếu đã lưu lúc này. Bạn thử lại sau nhé.";
 
-export function AiConsentSection({ uid, initialAiOptIn }: Props) {
+export function AiConsentSection({ uid, initialAiOptIn, initialAiConsentVersion }: Props) {
   const [aiOptIn, setAiOptIn] = useState(initialAiOptIn);
+  const [aiConsentVersion, setAiConsentVersion] = useState(initialAiConsentVersion);
   // null = đang tải xong dữ liệu systemConfig/aiPublic lần đầu — chưa đủ
   // thông tin để quyết định hiện nút bật hay trạng thái "chưa khả dụng".
   const [aiPublic, setAiPublic] = useState<AiPublicConfig | null>(null);
@@ -38,9 +46,18 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
     };
   }, []);
 
+  // I4 (final whole-branch review): CÁI học sinh thấy checkbox "đã tick" và luồng bấm-vào phải
+  // dựa trên đồng ý CÒN HIỆU LỰC cho chat (aiOptIn ĐÚNG và aiConsentVersion đủ mới) — KHÔNG chỉ
+  // aiOptIn thô. Một học sinh đồng ý dưới hộp thoại CŨ thấy checkbox này như CHƯA tick, bấm vào
+  // mở lại hộp thoại "turn-on" (câu chữ đã nói rõ cả chat — xem I3) thay vì hộp thoại "turn-off"
+  // — xác nhận lại không xoá gì cả (handleConfirmOn chỉ ghi lại true + version mới), khác hẳn vô
+  // tình kích hoạt luồng xoá dữ liệu nếu dùng nhầm aiOptIn thô ở đây. Phản chiếu VẪN hoạt động
+  // bình thường trong lúc này — gate của ReflectionCard.tsx đọc `aiOptIn` thô, không đổi.
+  const hasCurrentConsent = hasCurrentAiConsent(aiOptIn, aiConsentVersion);
+
   function openConfirm() {
     setError(null);
-    setDialogMode(aiOptIn ? "turn-off" : "turn-on");
+    setDialogMode(hasCurrentConsent ? "turn-off" : "turn-on");
   }
 
   function closeDialog() {
@@ -54,11 +71,13 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
       await ensureAuthReady();
       await updateDoc(doc(getDb(), "users", uid), {
         "privacySettings.aiOptIn": true,
+        "privacySettings.aiConsentVersion": CURRENT_AI_CONSENT_VERSION,
         updatedAt: serverTimestamp(),
       });
       // Chỉ đổi trạng thái công tắc SAU KHI ghi thành công — công tắc nói dối
       // về trạng thái riêng tư nghiêm trọng hơn một thông báo lỗi (rào chắn task 10).
       setAiOptIn(true);
+      setAiConsentVersion(CURRENT_AI_CONSENT_VERSION);
       setDialogMode(null);
     } catch {
       setError(SAVE_ERROR_MESSAGE);
@@ -160,7 +179,7 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
       <label className="flex items-start gap-2">
         <input
           type="checkbox"
-          checked={aiOptIn}
+          checked={hasCurrentConsent}
           onChange={openConfirm}
           disabled={pending}
           className="mt-1"
