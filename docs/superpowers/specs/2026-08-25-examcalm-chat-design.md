@@ -53,11 +53,21 @@ Mọi quyết định trong spec này xuất phát từ câu đó.
 
 Bắt được ở lớp 1 thì **không gọi model** — trả thẳng phản hồi khủng hoảng. Không có lý do gửi câu đó ra provider.
 
-### 3.2. Chiều sai lầm được chọn có chủ đích
+### 3.2. Chiều sai lầm được chọn có chủ đích — có một ngoại lệ
 
-**Thà báo nhầm còn hơn bỏ sót.** Báo nhầm là thầy cô hỏi thăm một em đang ổn — hơi ngượng. Bỏ sót là một đứa trẻ gặp nguy mà không ai biết.
+**Thà báo nhầm còn hơn bỏ sót.** Bỏ sót là một đứa trẻ gặp nguy mà không ai biết. Cùng triết lý đã áp cho bộ lọc chẩn đoán ở Spec #3.
 
-Cùng triết lý đã áp cho bộ lọc chẩn đoán ở Spec #3, cùng lý do.
+> **Đính chính ngày 2026-08-25 — bản đầu của mục này lập luận sai.**
+>
+> Nó viết "báo nhầm chỉ là thầy cô hỏi thăm một em đang ổn — hơi ngượng", tức chỉ tính tới **cảnh báo**. Nhưng theo §3.1, lớp 1 bắt được thì còn **chặn luôn lời gọi model và trả về phản hồi khủng hoảng**.
+>
+> Nên một lần báo nhầm ở lớp 1 không phải một cảnh báo thừa. Nó là một học sinh gõ `"Đề toán khó muốn chết luôn chị ạ"` rồi nhận lại Tổng đài 111 thay vì một câu trò chuyện — và không lấy lại được phản hồi bình thường nếu không diễn đạt lại.
+>
+> Điều đó **không** nằm ở phía an toàn của đánh đổi. Nó dạy học sinh né chatbot, và đó chính là hiện thực hoá rủi ro R6.
+
+**Do đó:** over-inclusive vẫn là hướng đúng cho những cụm *chỉ* xuất hiện trong ngữ cảnh khủng hoảng. Nhưng một cụm **va chạm với cách nói thường ngày** thì phải được chặn hẹp lại — không phải bằng cách nới lỏng chung, mà bằng một ngoại lệ neo chặt vào đúng ngữ cảnh va chạm đó, cùng khuôn `NEGATION_PREFIXES` của `safetyFilter.ts`.
+
+Ví dụ đã biết: `muốn chết` trong `X muốn chết` là cấu trúc tăng cấp ("khó muốn chết", "mệt muốn chết") — dùng hằng ngày, và dùng nhiều nhất đúng trong ngữ cảnh than thở về bài vở mà app này tồn tại để phục vụ.
 
 ### 3.3. Khi kích hoạt, AI dừng vai bạn tâm sự
 
