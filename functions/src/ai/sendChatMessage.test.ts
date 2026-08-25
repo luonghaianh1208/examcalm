@@ -242,6 +242,39 @@ function makeDbWithNotFoundSessionUpdate(realDb: Firestore, targetSessionId: str
   return wrapper as unknown as Firestore;
 }
 
+/**
+ * Finding 1 (final whole-branch review, second pass, BLOCKING): giả lập `db.runTransaction()`
+ * (dùng bởi consumeQuota — cả feature "chat" lẫn "chat_urgent_persist", tức
+ * shouldPersistCrisisMessages) LUÔN thất bại — vd transaction abort, UNAVAILABLE. Mọi
+ * `.collection()` khác đi thẳng qua `db` thật không đổi gì.
+ */
+function makeDbWithFailingRunTransaction(realDb: Firestore): Firestore {
+  const wrapper = {
+    collection: (name: string) => realDb.collection(name),
+    runTransaction: () => Promise.reject(new Error("ABORTED: simulated transaction failure")),
+  };
+  return wrapper as unknown as Firestore;
+}
+
+/**
+ * Finding 1: giả lập `chatMessages.add()` LUÔN thất bại (vd UNAVAILABLE thoáng qua) — mọi
+ * collection khác (kể cả `crisisAlerts`, và `runTransaction` cho consumeQuota) đi thẳng qua `db`
+ * thật.
+ */
+function makeDbWithFailingChatMessagesAdd(realDb: Firestore): Firestore {
+  const wrapper = {
+    collection: (name: string) => {
+      const real = realDb.collection(name);
+      if (name !== "chatMessages") return real;
+      return {
+        add: () => Promise.reject(new Error("UNAVAILABLE: simulated Firestore write failure")),
+      };
+    },
+    runTransaction: realDb.runTransaction.bind(realDb),
+  };
+  return wrapper as unknown as Firestore;
+}
+
 describe("sendChatMessage", () => {
   it("1. chưa đăng nhập → unauthenticated", async () => {
     await expect(
@@ -542,6 +575,96 @@ describe("sendChatMessage", () => {
     expect(alerts.size).toBe(1);
     expect(alerts.docs[0].id).toBe(firstAlerts.docs[0].id);
     expect(alerts.docs[0].data().severity).toBe("urgent"); // không bị hạ về "concern"
+  });
+
+  // ==== Finding 1 (final whole-branch review, second pass, BLOCKING) — không lời gọi Firestore
+  // nào giữa alert write và các message write trên nhánh urgent được phép làm hỏng cả lượt gọi.
+  // Trước fix: shouldPersistCrisisMessages (consumeQuota → db.runTransaction) và
+  // appendChatMessage (.add()) không được bọc — một lỗi thoáng qua ở BẤT KỲ đâu trong khối này
+  // ném internal, đúng thất bại C1/C2 tồn tại để loại bỏ, tái diễn ở tầng ghi thấp hơn.
+  it("6i2. Finding 1: db.runTransaction() (shouldPersistCrisisMessages) LỖI trên nhánh urgent → KHÔNG throw, học sinh VẪN nhận CRISIS_REPLY_TEXT, cảnh báo VẪN được ghi", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    const brokenDb = makeDbWithFailingRunTransaction(db);
+
+    const result = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em muốn tự tử" },
+      makeDeps({ db: brokenDb, callChatCompletion: fake }),
+    );
+
+    expect(result.messageId).toBe("");
+    expect(result.crisisReplyText).toBe(CRISIS_REPLY_TEXT);
+    expect(fake).not.toHaveBeenCalled();
+
+    // Alert write (writeCrisisAlert) đứng TRƯỚC shouldPersistCrisisMessages và không dùng
+    // runTransaction — vẫn được ghi bình thường dù bước sau đó lỗi.
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "urgent", triggeredBy: "keyword" });
+
+    // KHÔNG document chatMessages nào được tạo — lỗi xảy ra trước appendChatMessage.
+    const messages = await getSessionMessagesAsc(SESSION_ID);
+    expect(messages.length).toBe(0);
+  });
+
+  it("6i3. Finding 1: chatMessages.add() LỖI trên nhánh urgent → KHÔNG throw, học sinh VẪN nhận CRISIS_REPLY_TEXT", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    const brokenDb = makeDbWithFailingChatMessagesAdd(db);
+
+    const result = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em muốn tự tử" },
+      makeDeps({ db: brokenDb, callChatCompletion: fake }),
+    );
+
+    expect(result.messageId).toBe("");
+    expect(result.crisisReplyText).toBe(CRISIS_REPLY_TEXT);
+    expect(fake).not.toHaveBeenCalled();
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "urgent" });
+  });
+
+  // ==== Finding 2 (final whole-branch review, second pass, Important) — một alert "urgent" đang
+  // mở không được phép bị hạ cấp xuống "concern" chỉ vì tin nhắn KẾ TIẾP (bị dedup vào CHÍNH alert
+  // đó) có Lớp 2 nhẹ hơn. Trước fix: upgradeCrisisAlert ghi thẳng combinedSeverity — tính từ
+  // layer1Severity CỤC BỘ của tin dedup (luôn tối đa "concern"), không phải severity THẬT đang
+  // lưu trên document (có thể đã là "urgent" từ tin trước) — nên ghi đè "concern" lên "urgent".
+  it("6i4. Finding 2: alert 'urgent' đang mở, tin KẾ TIẾP bị dedup vào alert đó VÀ Lớp 2 của tin đó chỉ 'concern' → severity VẪN 'urgent' (không bị hạ cấp), triggeredBy thành 'both'", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00Z");
+
+    // Tin 1: Lớp 1 urgent → tạo alert severity="urgent", triggeredBy="keyword".
+    await runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Em muốn tự tử" }, makeDeps({ now: t1 }));
+    const firstAlerts = await db.collection("crisisAlerts").get();
+    expect(firstAlerts.size).toBe(1);
+    expect(firstAlerts.docs[0].data().severity).toBe("urgent");
+
+    // Tin 2, trong cửa sổ chống-lụt: Lớp 1 CHỈ khớp "concern" ("tuyệt vọng") → dedup vào alert
+    // urgent đã có (không nâng cấp, vì "concern" không nặng hơn "urgent") — layer1Alert.severity
+    // phải là "urgent" thật, không phải "concern". Model tự chấm "none"/không nhãn hợp lệ → Lớp 2
+    // fail-closed về "concern".
+    const t2 = new Date(t1.getTime() + 60_000);
+    const fake2 = fakeCallChatCompletion(NORMAL_REPLY_TEXT); // không có nhãn hợp lệ → fail-closed "concern"
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+      makeDeps({ now: t2, callChatCompletion: fake2 }),
+    );
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1); // vẫn một document, cùng id
+    expect(alerts.docs[0].id).toBe(firstAlerts.docs[0].id);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "urgent", triggeredBy: "both" });
   });
 
   // ==== I7 (final whole-branch review) — nhánh urgent bỏ qua consumeQuota nên chatMessages

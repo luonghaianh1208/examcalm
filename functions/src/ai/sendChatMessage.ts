@@ -319,6 +319,12 @@ function isMoreSevere(a: "urgent" | "concern", b: "urgent" | "concern"): boolean
  * đều có nghĩa "không có id cảnh báo nào biết chắc để nâng cấp sau này", và logic gộp hai lớp
  * phía dưới (runSendChatMessage) đã xử lý đúng cho cả hai trường hợp (thử tạo mới nếu Lớp 2 sau
  * đó có tín hiệu, cũng fail-open theo đúng cơ chế này).
+ *
+ * Finding 2 (final whole-branch review, second pass): trả về CẢ `severity` THẬT SỰ đang được lưu
+ * (không chỉ `id`) — trước fix này, caller phải tự nhớ severity nào đã ghi, và khi bị dedup vào
+ * MỘT document CÓ SẴN nặng hơn (vd tin hiện tại "concern" gắn vào một alert "urgent" tạo bởi tin
+ * trước), caller không có cách nào biết alert đó THẬT SỰ đang ở mức "urgent" — dẫn tới hạ cấp
+ * nhầm ở nơi gọi (xem upgradeCrisisAlert bên dưới). Trả về severity thật giải quyết tận gốc.
  */
 async function writeCrisisAlert(
   db: Firestore,
@@ -326,7 +332,7 @@ async function writeCrisisAlert(
   severity: "urgent" | "concern",
   triggeredBy: "keyword" | "model" | "both",
   now: Date,
-): Promise<string | null> {
+): Promise<{ id: string; severity: "urgent" | "concern" } | null> {
   let existing: { id: string; severity: "urgent" | "concern" } | null = null;
   try {
     existing = await findRecentUnhandledAlert(db, userId, now);
@@ -352,13 +358,16 @@ async function writeCrisisAlert(
         handledBy: null,
         handledAt: null,
       });
-      return ref.id;
+      return { id: ref.id, severity };
     }
 
     if (isMoreSevere(severity, existing.severity)) {
       await db.collection("crisisAlerts").doc(existing.id).update({ severity, triggeredBy });
+      return { id: existing.id, severity };
     }
-    return existing.id;
+    // Không nâng cấp — trả về severity THẬT SỰ đang lưu (existing.severity), KHÔNG phải
+    // `severity` (giá trị tín hiệu của lượt gọi này, có thể nhẹ hơn) — xem Finding 2 ở trên.
+    return { id: existing.id, severity: existing.severity };
   } catch (error) {
     // C2: fail-open trên chính bước GHI — xem comment lớn ở trên hàm này. KHÔNG kèm uid trong
     // log, cùng kỷ luật với console.error khác trong file này.
@@ -673,35 +682,57 @@ export async function runSendChatMessage(
     // client gọi lặp không ép ghi hàng loạt vào chatMessages. Bị phanh → KHÔNG ghi gì, nhưng
     // CRISIS_REPLY_TEXT vẫn trả về thẳng trong response (client hiện trực tiếp, không đọc lại
     // Firestore — xem comment SendChatMessageResult).
-    const shouldPersist = await shouldPersistCrisisMessages(deps.db, auth.uid, deps.now);
-    if (!shouldPersist) {
+    //
+    // Finding 1 (final whole-branch review, second pass, BLOCKING): shouldPersistCrisisMessages
+    // (consumeQuota → db.runTransaction) và appendChatMessage (.add()) bên dưới là các lời gọi
+    // Firestore CHƯA được bọc — một lỗi thoáng qua (transaction abort, UNAVAILABLE) ở BẤT KỲ đâu
+    // trong khối này làm hỏng cả lượt gọi cho một học sinh đang khủng hoảng, đúng thất bại C1/C2
+    // tồn tại để loại bỏ, tái diễn ở tầng ghi thấp hơn — ngay trên đúng con đường (crisisReplyText,
+    // do I7 dựng lên) lẽ ra phải cứu nó. FAIL OPEN: bọc toàn bộ khối GHI (writeCrisisAlert ở trên
+    // đã tự fail-open rồi, không cần bọc lại) — bất kỳ lỗi nào ở đây đều rơi về CRISIS_REPLY_TEXT
+    // không ghi gì, giống hệt nhánh bị phanh chống-lụt (I7) ngay phía trên — học sinh KHÔNG BAO
+    // GIỜ nhận lỗi trên đường này.
+    try {
+      const shouldPersist = await shouldPersistCrisisMessages(deps.db, auth.uid, deps.now);
+      if (!shouldPersist) {
+        return { messageId: "", crisisReplyText: CRISIS_REPLY_TEXT };
+      }
+
+      await appendChatMessage(deps.db, sessionId, {
+        userId: auth.uid,
+        sessionId,
+        role: "user",
+        text,
+        isCrisisResponse: false,
+      });
+      const assistantMessageId = await appendChatMessage(deps.db, sessionId, {
+        userId: auth.uid,
+        sessionId,
+        role: "assistant",
+        text: CRISIS_REPLY_TEXT,
+        isCrisisResponse: true,
+      });
+      return { messageId: assistantMessageId };
+    } catch (error) {
+      console.error(
+        "sendChatMessage: ghi tin nhắn/phanh chống-lụt thất bại trên nhánh urgent — fail-open, " +
+          "KHÔNG làm hỏng phản hồi cho học sinh",
+        { message: error instanceof Error ? error.message : String(error) },
+      );
       return { messageId: "", crisisReplyText: CRISIS_REPLY_TEXT };
     }
-
-    await appendChatMessage(deps.db, sessionId, {
-      userId: auth.uid,
-      sessionId,
-      role: "user",
-      text,
-      isCrisisResponse: false,
-    });
-    const assistantMessageId = await appendChatMessage(deps.db, sessionId, {
-      userId: auth.uid,
-      sessionId,
-      role: "assistant",
-      text: CRISIS_REPLY_TEXT,
-      isCrisisResponse: true,
-    });
-    return { messageId: assistantMessageId };
   }
   // "concern" — Fix round 2, Finding 1 (CRITICAL, sửa lỗi round 1 gây ra): ghi NGAY, không hoãn
-  // tới sau khi gọi model nữa. `layer1AlertId` giữ id document — LUÔN là id thật (document mới
-  // HOẶC document đã có mà tin nhắn này được "gắn" vào, xem writeCrisisAlert; Fix round 3,
-  // Finding 1: không còn null khi bị dedup) khi Lớp 1 phát hiện gì đó; chỉ null nếu Lớp 1 không
-  // phát hiện gì. Lớp 2 dùng id này để nâng cấp đúng document đó sau này thay vì tạo document
-  // thứ hai — kể cả khi document đó không phải do CHÍNH tin nhắn này tạo ra.
+  // tới sau khi gọi model nữa. `layer1Alert` giữ id VÀ severity THẬT SỰ đang lưu của document —
+  // LUÔN là giá trị thật (document mới HOẶC document đã có mà tin nhắn này được "gắn" vào, xem
+  // writeCrisisAlert; Fix round 3, Finding 1: không còn null khi bị dedup) khi Lớp 1 phát hiện gì
+  // đó; chỉ null nếu Lớp 1 không phát hiện gì. Lớp 2 dùng `layer1Alert.id` để nâng cấp đúng
+  // document đó sau này thay vì tạo document thứ hai — kể cả khi document đó không phải do CHÍNH
+  // tin nhắn này tạo ra. `layer1Alert.severity` (Finding 2, final whole-branch review, second
+  // pass) là severity THẬT của document đó — có thể NẶNG HƠN "concern" nếu tin nhắn này bị dedup
+  // vào một alert "urgent" đã có sẵn — không phải suy ra từ `layer1Severity` cục bộ bên dưới.
   const layer1Severity: InternalSeverity = layer1.severity === "concern" ? "concern" : null;
-  const layer1AlertId =
+  const layer1Alert =
     layer1Severity !== null
       ? await writeCrisisAlert(deps.db, auth.uid, "concern", "keyword", deps.now)
       : null;
@@ -832,11 +863,22 @@ export async function runSendChatMessage(
 
   // Fix round 2, Finding 1: KHÔNG còn tạo document ở đây khi Lớp 1 đã ghi một cái rồi — NÂNG
   // CẤP đúng document đó (severity lên mức nặng hơn nếu cần, triggeredBy thành "both"). Chỉ tạo
-  // document MỚI nếu Lớp 1 không phát hiện gì (layer1AlertId === null) và Lớp 2 có tín hiệu.
+  // document MỚI nếu Lớp 1 không phát hiện gì (layer1Alert === null) và Lớp 2 có tín hiệu.
   const combinedSeverity = maxSeverity(layer1Severity, layer2Severity);
-  if (layer1AlertId !== null) {
+  if (layer1Alert !== null) {
     if (layer2Severity !== null) {
-      await upgradeCrisisAlert(deps.db, layer1AlertId, combinedSeverity!);
+      // Finding 2 (final whole-branch review, second pass, Important): KHÔNG được ghi thẳng
+      // `combinedSeverity` — nó tính từ `layer1Severity` CỤC BỘ của tin nhắn này (luôn tối đa là
+      // "concern", vì "urgent" đã return sớm ở nhánh riêng), trong khi `layer1Alert.severity` là
+      // severity THẬT ĐANG LƯU trên document (có thể đã là "urgent" nếu tin nhắn này bị dedup
+      // vào một alert do một tin TRƯỚC đó tạo ra ở mức urgent). Ghi thẳng combinedSeverity sẽ HẠ
+      // CẤP một alert urgent đang mở xuống "concern" ngay khi Lớp 2 của tin dedup có bất kỳ tín
+      // hiệu nào — đúng lúc thầy cô cần biết mức độ CAO NHẤT đã từng xảy ra, không phải mức độ
+      // của tin gần nhất. `maxSeverity` đảm bảo severity chỉ có thể tăng, không bao giờ giảm —
+      // cùng bất biến `isMoreSevere` đã áp dụng trong writeCrisisAlert. triggeredBy vẫn LUÔN
+      // thành "both" mỗi khi nhánh này chạy (Lớp 2 có tín hiệu) — không đổi so với trước.
+      const severityToWrite = maxSeverity(layer1Alert.severity, combinedSeverity)!;
+      await upgradeCrisisAlert(deps.db, layer1Alert.id, severityToWrite);
     }
     // else: Lớp 2 không có tín hiệu gì ("none") — để nguyên document Lớp 1 đã ghi
     // (severity="concern", triggeredBy="keyword"), không cần đụng vào.
