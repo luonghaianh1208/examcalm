@@ -129,27 +129,51 @@ describe("gõ điện thoại bỏ dấu / viết tắt teen (Fix round 1, Findi
 // danh sách — danh sách đầy đủ và lý do từng cụm nằm trong task-3-report.md cho chuyên gia
 // tâm lý rà soát.
 describe("các nhóm cụm mới bổ sung (Fix round 1, Finding 2)", () => {
+  // Fix round 2, Finding 5: thêm assertion `matched` để một mis-attribution trong tương lai
+  // (VD entry mới che khuất entry cũ, hoặc ngược lại) bị bắt ngay ở đây thay vì chỉ được phát
+  // hiện qua rà soát thủ công.
   it("nhóm ý định gián tiếp", () => {
-    expect(detectCrisisKeywords("Em chỉ muốn kết thúc tất cả.").severity).toBe("urgent");
-    expect(detectCrisisKeywords("Dạo này em chán đời lắm.").severity).toBe("urgent");
+    const ketThuc = detectCrisisKeywords("Em chỉ muốn kết thúc tất cả.");
+    expect(ketThuc.severity).toBe("urgent");
+    expect(ketThuc.matched).toBe("kết thúc tất cả");
+
+    const chanDoi = detectCrisisKeywords("Dạo này em chán đời lắm.");
+    expect(chanDoi.severity).toBe("urgent");
+    expect(chanDoi.matched).toBe("chán đời");
   });
 
   it("nhóm lời từ biệt", () => {
-    expect(detectCrisisKeywords("Em muốn viết thư tuyệt mệnh.").severity).toBe("urgent");
-    expect(detectCrisisKeywords("Em chào tạm biệt mọi người ở đây.").severity).toBe("urgent");
+    const thuTuyetMenh = detectCrisisKeywords("Em muốn viết thư tuyệt mệnh.");
+    expect(thuTuyetMenh.severity).toBe("urgent");
+    expect(thuTuyetMenh.matched).toBe("thư tuyệt mệnh");
+
+    const tamBiet = detectCrisisKeywords("Em chào tạm biệt mọi người ở đây.");
+    expect(tamBiet.severity).toBe("urgent");
+    expect(tamBiet.matched).toBe("chào tạm biệt mọi người");
   });
 
   it("nhóm phương thức đặc thù Việt Nam (thuốc diệt cỏ/thuốc sâu, thắt cổ)", () => {
-    expect(detectCrisisKeywords("Em định uống thuốc diệt cỏ.").severity).toBe("urgent");
-    expect(detectCrisisKeywords("Nhà em có thuốc sâu, em định uống.").severity).toBe("urgent");
-    expect(detectCrisisKeywords("Em nghĩ đến việc thắt cổ.").severity).toBe("urgent");
+    const dietCo = detectCrisisKeywords("Em định uống thuốc diệt cỏ.");
+    expect(dietCo.severity).toBe("urgent");
+    expect(dietCo.matched).toBe("thuốc diệt cỏ");
+
+    const thuocSau = detectCrisisKeywords("Nhà em có thuốc sâu, em định uống.");
+    expect(thuocSau.severity).toBe("urgent");
+    expect(thuocSau.matched).toBe("thuốc sâu");
+
+    const thatCo = detectCrisisKeywords("Em nghĩ đến việc thắt cổ.");
+    expect(thatCo.severity).toBe("urgent");
+    expect(thatCo.matched).toBe("thắt cổ");
   });
 
   it("nhóm cảm giác là gánh nặng (perceived burdensomeness) — mức concern", () => {
-    expect(detectCrisisKeywords("Chắc tốt hơn nếu không có em.").severity).toBe("concern");
-    expect(detectCrisisKeywords("Không có em thì cả nhà đỡ khổ hơn nhiều.").severity).toBe(
-      "concern",
-    );
+    const totHon = detectCrisisKeywords("Chắc tốt hơn nếu không có em.");
+    expect(totHon.severity).toBe("concern");
+    expect(totHon.matched).toBe("tốt hơn nếu không có em");
+
+    const doKho = detectCrisisKeywords("Không có em thì cả nhà đỡ khổ hơn nhiều.");
+    expect(doKho.severity).toBe("concern");
+    expect(doKho.matched).toBe("không có em thì ... đỡ khổ");
   });
 });
 
@@ -229,5 +253,119 @@ describe("entry dư thừa đã gỡ vẫn được bắt qua entry ngắn hơn 
     expect(result.detected).toBe(true);
     expect(result.severity).toBe("concern");
     expect(result.matched).toBe("muốn biến mất");
+  });
+});
+
+// Fix round 2, Finding 1 (CRITICAL): cơ chế bỏ dấu cả câu ở Fix round 1 gộp mất thanh điệu —
+// "từ từ" (chầm chậm, có dấu ĐÚNG) bị strip trùng với "tự tử" đã strip. Năm dòng dưới đây đều
+// là văn bản có dấu ĐẦY ĐỦ và ĐÚNG của học sinh, không liên quan khủng hoảng — từng bị báo
+// nhầm ở mức urgent trước khi sửa. Quan trọng nhất: "tư vấn" (counselling) bị đọc thành "tự
+// vẫn" — một học sinh xin app tư vấn lại nhận về tổng đài khủng hoảng.
+describe("gộp nhầm thanh điệu do bỏ dấu cả câu (Fix round 2, Finding 1)", () => {
+  const falsePositives = [
+    "Chị ơi em ôn từ từ có kịp không?",
+    "Em muốn được tư vấn về việc chọn trường",
+    "Nói thật cô giáo em cũng không hiểu bài",
+    "Lớp em hôm nay trực treo cờ ở sân trường",
+    "Bạn Vinh biết điểm rồi",
+  ];
+
+  it.each(falsePositives)("%s → detected: false", (text) => {
+    expect(detectCrisisKeywords(text).detected).toBe(false);
+  });
+
+  // So khớp bỏ dấu vẫn phải hoạt động ở CẤP TỪ khi văn bản mix có dấu/không dấu — trường hợp
+  // rất phổ biến khi học sinh gõ điện thoại (chỉ một từ bị thiếu dấu, không phải cả câu).
+  it("văn bản mix có dấu/không dấu vẫn bắt được đúng từ thiếu dấu", () => {
+    const result = detectCrisisKeywords("em muon chết");
+    expect(result.detected).toBe(true);
+    expect(result.severity).toBe("urgent");
+    expect(result.matched).toBe("muốn chết");
+  });
+});
+
+// Fix round 2, Finding 2 (Important): pattern trước đây là substring thô, không có ranh giới
+// từ — "k"/"kg" khớp được giữa chừng "Ok"/"50kg". Bốn dòng đầu từng bị báo nhầm.
+describe("thiếu ranh giới từ (word boundary) cho biến thể ASCII ngắn (Fix round 2, Finding 2)", () => {
+  const falsePositives = [
+    "Ok ai quan tâm điểm của em đâu",
+    "Thôi ok ai yêu em đâu",
+    "50kg ai cần thì lấy",
+    "Em vừa chạy bộ được 3 kms",
+  ];
+
+  it.each(falsePositives)("%s → detected: false", (text) => {
+    expect(detectCrisisKeywords(text).detected).toBe(false);
+  });
+
+  it("'kms' (tiếng lóng, không có số đứng trước) vẫn phải bị bắt", () => {
+    expect(detectCrisisKeywords("might just kms tonight ngl").severity).toBe("urgent");
+  });
+
+  // "cutting" bị gỡ khỏi URGENT_KEYWORDS (quyết định có chủ đích, xem comment tại Nhóm 9 trong
+  // crisisDetector.ts) — quá nhiều cách dùng đời thường vô hại để làm tín hiệu đơn lẻ đáng tin.
+  it("'cutting' không còn là từ khoá — 'cutting edge' không bị bắt", () => {
+    expect(detectCrisisKeywords("cutting edge technology").detected).toBe(false);
+  });
+});
+
+// Fix round 1, Finding 4 từng liệt kê 23 từ tăng cường cho "X muốn chết" — nhưng bỏ sót đúng
+// từ vựng của use-case chính app (áp lực thi cử). Bảy dòng dưới đây từng bị báo nhầm.
+describe('"muốn chết" thiếu từ vựng áp lực thi cử (Fix round 2, Finding 3)', () => {
+  const falsePositives = [
+    "Áp lực muốn chết",
+    "Căng thẳng muốn chết",
+    "Stress muốn chết",
+    "Xấu hổ muốn chết",
+    "Ngượng muốn chết",
+    "Bực muốn chết",
+    "Hồi hộp muốn chết",
+  ];
+
+  it.each(falsePositives)("%s → detected: false", (text) => {
+    expect(detectCrisisKeywords(text).detected).toBe(false);
+  });
+});
+
+// Fix round 2, Finding 5 (Minor): "cắt tay" trước đó chỉ có test khẳng định false (guard) —
+// xoá nó khỏi URGENT_KEYWORDS thử nghiệm sẽ không làm fail test nào, chứng tỏ thiếu test
+// dương tính. Bổ sung test dương tính, và mở rộng sang các biến thể gõ tắt/bỏ dấu chưa có test
+// ("hông", "kg", "mong").
+describe("bổ sung test dương tính còn thiếu (Fix round 2, Finding 5)", () => {
+  it("'cắt tay' trong ngữ cảnh tự hại thật vẫn phải bị bắt", () => {
+    const result = detectCrisisKeywords("Em vừa cắt tay xong, máu chảy nhiều lắm.");
+    expect(result.detected).toBe(true);
+    expect(result.severity).toBe("urgent");
+    expect(result.matched).toBe("cắt tay");
+  });
+
+  it("'hông' (biến thể gõ tắt của 'không') chưa có test trước đây", () => {
+    const result = detectCrisisKeywords("Em hông muốn sống nữa.");
+    expect(result.detected).toBe(true);
+    expect(result.matched).toBe("không muốn sống nữa");
+  });
+
+  it("'kg' (biến thể gõ tắt của 'không') chưa có test trước đây", () => {
+    const result = detectCrisisKeywords("Em kg muốn sống nữa rồi.");
+    expect(result.detected).toBe(true);
+    expect(result.matched).toBe("không muốn sống nữa");
+  });
+
+  it("'mong' (biến thể gõ tắt của 'muốn') chưa có test trước đây", () => {
+    const result = detectCrisisKeywords("Em không mong sống nữa.");
+    expect(result.detected).toBe(true);
+    expect(result.matched).toBe("không muốn sống nữa");
+  });
+});
+
+// Fix round 2, Finding 6 (Minor): TEEN_ABBREVIATIONS/PHRASE_GUARDS trước đây là object literal
+// — tra cứu với key trùng tên thuộc tính kế thừa từ Object.prototype ("constructor",
+// "toString", "valueOf"...) có thể trả về một hàm thay vì undefined và làm code sau đó ném
+// lỗi. Chuyển sang Map để loại bỏ rủi ro này.
+describe("an toàn với prototype lookup (Fix round 2, Finding 6)", () => {
+  it("không ném lỗi và không báo nhầm khi văn bản chứa tên thuộc tính Object.prototype", () => {
+    const text = "constructor toString valueOf hasOwnProperty";
+    expect(() => detectCrisisKeywords(text)).not.toThrow();
+    expect(detectCrisisKeywords(text).detected).toBe(false);
   });
 });
