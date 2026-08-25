@@ -65,6 +65,23 @@ describe("AiConsentSection", () => {
     expect(dialog).toHaveTextContent(/tắt.*(bất cứ lúc nào|bất kỳ lúc nào)/i);
   });
 
+  // Task 8 (design spec §3.5): kể từ khi chat có đường cảnh báo khủng hoảng tới thầy cô, và
+  // cùng công tắc aiOptIn này mở cả ReflectionCard lẫn ChatWindow, hộp thoại đồng ý PHẢI nói rõ
+  // cả hai điều đang được đồng ý — không chỉ "ghi chú gửi tới AI" mà còn "có đường báo an toàn
+  // tới thầy cô". Thiếu câu này, một em bật AI mà không biết trước sẽ mất niềm tin nếu sau này
+  // phát hiện có cảnh báo âm thầm (đúng lý do §3.5 nêu ra).
+  it("hộp thoại bật cũng nói rõ có đường cảnh báo an toàn tới thầy cô — không hứa giữ bí mật tuyệt đối", async () => {
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+
+    await user.click(await screen.findByRole("checkbox"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/thầy cô/i);
+    expect(dialog).toHaveTextContent(/an toàn/i);
+    expect(dialog).toHaveTextContent(/báo/i);
+  });
+
   it("bấm huỷ: aiOptIn không đổi, không ghi Firestore", async () => {
     const user = userEvent.setup();
     render(<AiConsentSection uid="u1" initialAiOptIn={false} />);

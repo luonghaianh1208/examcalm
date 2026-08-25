@@ -181,10 +181,17 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
                 <h3 id="ai-consent-dialog-title" className="mb-2 text-lg font-semibold">
                   Gửi ghi chú cảm xúc tới AI?
                 </h3>
-                <p className="mb-6 text-slate-600">
+                <p className="mb-3 text-slate-600">
                   Ghi chú cảm xúc của bạn sẽ được gửi tới dịch vụ AI bên ngoài{" "}
                   <strong>{aiPublic.providerLabel}</strong> để tạo phản chiếu. Bạn có thể tắt
                   tính năng này bất cứ lúc nào trong trang Hồ sơ.
+                </p>
+                {/* Task 8 (design spec §3.5): cùng công tắc này còn mở tính năng trò chuyện
+                    cùng AI, nơi có đường cảnh báo an toàn tới thầy cô — hộp thoại đồng ý phải
+                    nói rõ cả hai điều đang được đồng ý, không chỉ việc gửi ghi chú cho AI. */}
+                <p className="mb-6 text-slate-600">
+                  Nếu bạn nói điều gì khiến chúng tôi lo cho sự an toàn của bạn khi trò chuyện
+                  cùng AI, thầy cô sẽ được báo để giúp bạn.
                 </p>
                 <div className="flex gap-2">
                   <button
