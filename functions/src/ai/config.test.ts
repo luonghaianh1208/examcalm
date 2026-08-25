@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAiEnabled } from "./config";
+import { isAiEnabled, isReflectionEnabled, isChatEnabled } from "./config";
 
 /**
  * Task 9 (task-9-brief.md): trước fix, isAiEnabled() chỉ xét killSwitch.moodReflection —
@@ -112,5 +112,52 @@ describe("isAiEnabled — Task 9, quyết định OR giữa hai tính năng", ()
         chatQuotaPerDay: 30,
       }),
     ).toBe(false);
+  });
+});
+
+/**
+ * Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): `isAiEnabled()` (OR) chỉ đúng cho MỘT
+ * việc — ô tick đồng ý của học sinh. `ReflectionCard.tsx`/`ChatWindow.tsx` gate TRÊN hai flag
+ * RIÊNG này (`aiPublic.reflectionEnabled`/`aiPublic.chatEnabled`), không phải `enabled` — nếu
+ * không, kịch bản §10 (bật RIÊNG chat) sẽ khiến `enabled=true` MỞ CỔNG luôn cho ReflectionCard
+ * dù `killSwitch.moodReflection` vẫn tắt, và một học sinh viết nhật ký sẽ hứng trọn lỗi
+ * resource-exhausted — đúng lỗi hình dạng M8 tái diễn ở tầng gate, không phải tầng consent.
+ */
+describe("isReflectionEnabled / isChatEnabled — Task 9 fix round 1, Finding 2", () => {
+  const CHAT_ONLY = {
+    baseUrl: "https://a.test",
+    model: "m",
+    killSwitch: { moodReflection: true, chat: false },
+    quotaStudentPerDay: 0,
+    chatQuotaPerDay: 30,
+  };
+
+  const MOOD_ONLY = {
+    baseUrl: "https://a.test",
+    model: "m",
+    killSwitch: { moodReflection: false, chat: true },
+    quotaStudentPerDay: 5,
+    chatQuotaPerDay: 0,
+  };
+
+  it("kịch bản §10 (chỉ chat bật): isChatEnabled=true, NHƯNG isReflectionEnabled=false — ReflectionCard KHÔNG được mở cổng", () => {
+    expect(isChatEnabled(CHAT_ONLY)).toBe(true);
+    expect(isReflectionEnabled(CHAT_ONLY)).toBe(false);
+  });
+
+  it("chỉ phản chiếu bật: isReflectionEnabled=true, NHƯNG isChatEnabled=false — ChatWindow KHÔNG được mở cổng", () => {
+    expect(isReflectionEnabled(MOOD_ONLY)).toBe(true);
+    expect(isChatEnabled(MOOD_ONLY)).toBe(false);
+  });
+
+  it("isAiEnabled luôn bằng isReflectionEnabled OR isChatEnabled — không lệch nhau", () => {
+    for (const config of [CHAT_ONLY, MOOD_ONLY]) {
+      expect(isAiEnabled(config)).toBe(isReflectionEnabled(config) || isChatEnabled(config));
+    }
+  });
+
+  it("baseUrl/model rỗng -> cả hai đều false dù killSwitch/quota hợp lệ (điều kiện provider CHUNG)", () => {
+    expect(isReflectionEnabled({ ...MOOD_ONLY, baseUrl: "" })).toBe(false);
+    expect(isChatEnabled({ ...CHAT_ONLY, model: "" })).toBe(false);
   });
 });

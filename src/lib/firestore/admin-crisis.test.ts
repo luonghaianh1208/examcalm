@@ -102,6 +102,20 @@ describe("listCrisisAlerts", () => {
     });
   });
 
+  // Fix round 1, Finding 5: fallback KHÔNG được là new Date(0) (1970) — trông như một thời điểm
+  // THẬT trên một dòng cảnh báo. Invalid Date là sentinel duy nhất CrisisAlertList.tsx phân biệt
+  // được bằng Number.isNaN(d.getTime()).
+  it("createdAt không đọc được -> fallback Invalid Date (NaN), KHÔNG PHẢI new Date(0)/1970", async () => {
+    mockedGetDocs.mockResolvedValue(
+      fakeQuerySnap([{ id: "bad-date", data: { userId: "u1", severity: "concern", triggeredBy: "keyword" } }]),
+    );
+
+    const result = await listCrisisAlerts();
+
+    expect(Number.isNaN(result[0]!.createdAt.getTime())).toBe(true);
+    expect(result[0]!.createdAt.getTime()).not.toBe(new Date(0).getTime());
+  });
+
   it("chuyển Timestamp createdAt/handledAt thành Date", async () => {
     const createdAt = new Date("2026-08-24T10:00:00Z");
     const handledAt = new Date("2026-08-24T11:00:00Z");

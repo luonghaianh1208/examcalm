@@ -13,7 +13,9 @@ const saveMoodLog = vi.fn(async () => "mood-id");
 const requestReflection = vi.fn();
 const getOutputForMoodLog = vi.fn();
 const getAiOptIn = vi.fn(async () => false);
-const getAiPublicConfig = vi.fn(async () => ({ providerLabel: "", enabled: false }));
+const getAiPublicConfig = vi.fn(async () => ({
+  providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+}));
 
 vi.mock("@/lib/firestore/cbt-sessions", () => ({
   newSessionRef: () => ({ id: "sess-1", path: "cbtSessions/sess-1" }),
@@ -209,7 +211,7 @@ describe("CbtRunner", () => {
 
   it("aiOptIn bật + aiPublic bật: phase done hiện thẻ phản chiếu dùng moodLogId của cảm xúc sau", async () => {
     getAiOptIn.mockResolvedValueOnce(true);
-    getAiPublicConfig.mockResolvedValueOnce({ providerLabel: "DeepSeek", enabled: true });
+    getAiPublicConfig.mockResolvedValueOnce({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
     requestReflection.mockResolvedValueOnce({ outputId: "output-1" });
     getOutputForMoodLog.mockResolvedValueOnce({
       id: "output-1",
@@ -243,7 +245,7 @@ describe("CbtRunner", () => {
   // nếu gate đóng, test sẽ pass ngay cả khi guard bị xoá hẳn.
   it("lưu cảm xúc 'trước' rồi bỏ qua cảm xúc 'sau': không hiện ReflectionCard, không dùng nhầm moodLogId của 'trước'", async () => {
     getAiOptIn.mockResolvedValue(true);
-    getAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+    getAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
 
     const user = userEvent.setup();
     render(<CbtRunner module={MODULE} uid="u1" canSave />);
@@ -264,7 +266,7 @@ describe("CbtRunner", () => {
 
   it("lưu cả cảm xúc 'trước' và 'sau' với hai id khác nhau: ReflectionCard dùng đúng id của cảm xúc 'sau'", async () => {
     getAiOptIn.mockResolvedValue(true);
-    getAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+    getAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
     saveMoodLog.mockResolvedValueOnce("mood-before").mockResolvedValueOnce("mood-after");
     requestReflection.mockResolvedValueOnce({ outputId: "output-1" });
     getOutputForMoodLog.mockResolvedValueOnce(null);
@@ -288,7 +290,7 @@ describe("CbtRunner", () => {
   // module Firestore/callable ở tầng lá, không mock ReflectionCard.
   it("AI layer hỏng hoàn toàn: vẫn hiện lời kết, không có gì gợi ý mất bài hay mất cảm xúc", async () => {
     getAiOptIn.mockResolvedValueOnce(true);
-    getAiPublicConfig.mockResolvedValueOnce({ providerLabel: "DeepSeek", enabled: true });
+    getAiPublicConfig.mockResolvedValueOnce({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
     requestReflection.mockRejectedValueOnce(new Error("Không thể kết nối AI."));
 
     const user = userEvent.setup();

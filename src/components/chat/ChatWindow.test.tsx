@@ -88,7 +88,9 @@ const EXISTING_SESSION: ChatSessionRecord = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockedGetAiOptIn.mockResolvedValue(true);
-  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+  mockedGetAiPublicConfig.mockResolvedValue({
+    providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true,
+  });
   // Mặc định: chưa có phiên nào — ChatWindow chỉ tạo phiên mới lúc gửi tin đầu tiên.
   mockedListMySessions.mockResolvedValue([]);
   mockedListMessages.mockResolvedValue([]);
@@ -113,7 +115,25 @@ describe("ChatWindow", () => {
 
   it("aiPublic tắt dù aiOptIn bật (gate đóng): không render ô chat, không gọi hàm chat nào", async () => {
     mockedGetAiOptIn.mockResolvedValue(true);
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    mockedGetAiPublicConfig.mockResolvedValue({
+      providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+    });
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByRole("link", { name: /hồ sơ/i });
+    expect(screen.queryByLabelText(/nhập tin nhắn/i)).not.toBeInTheDocument();
+    expect(mockedListMySessions).not.toHaveBeenCalled();
+    expect(mockedSendMessage).not.toHaveBeenCalled();
+  });
+
+  // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): gate PHẢI khoá theo chatEnabled, KHÔNG
+  // PHẢI enabled — đối xứng ReflectionCard.tsx: bật RIÊNG phản chiếu (chat vẫn tắt) không được
+  // phép mở ô nhập chat.
+  it("Finding 2: enabled=true nhưng chatEnabled=false (chỉ phản chiếu bật) -> gate vẫn ĐÓNG", async () => {
+    mockedGetAiOptIn.mockResolvedValue(true);
+    mockedGetAiPublicConfig.mockResolvedValue({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false,
+    });
     render(<ChatWindow uid="u1" />);
 
     await screen.findByRole("link", { name: /hồ sơ/i });

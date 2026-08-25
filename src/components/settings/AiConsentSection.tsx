@@ -118,10 +118,14 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
   // xoá) phải luôn mở bất kể kill switch; chỉ đường BẬT mới phụ thuộc aiPublic.enabled.
   const showWithdrawOnly = !aiPublic.enabled && aiOptIn;
 
+  // Fix round 1, Finding 3 (Minor, reviewer): tiêu đề CỐ Ý không còn nói "Phản chiếu AI" — một
+  // ô tick DUY NHẤT ở đây mở cả hai tính năng (phản chiếu + chat, xem hộp thoại "turn-on" bên
+  // dưới), nên dưới cấu hình chỉ-bật-chat, tiêu đề cũ mời học sinh bật một tính năng mang TÊN
+  // đúng tính năng đang tắt.
   if (!aiPublic.enabled && !aiOptIn) {
     return (
       <section className="rounded-xl border bg-white px-4 py-4">
-        <h2 className="mb-2 font-medium">Phản chiếu AI (không bắt buộc)</h2>
+        <h2 className="mb-2 font-medium">Tính năng AI (không bắt buộc)</h2>
         <p className="text-slate-600">
           Tính năng phản chiếu AI hiện <strong>chưa khả dụng</strong> — nhà trường chưa cấu
           hình dịch vụ AI nào. Bạn sẽ thấy nút bật ở đây khi tính năng sẵn sàng.
@@ -132,7 +136,7 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
 
   return (
     <section className="rounded-xl border bg-white px-4 py-4">
-      <h2 className="mb-2 font-medium">Phản chiếu AI (không bắt buộc)</h2>
+      <h2 className="mb-2 font-medium">Tính năng AI (không bắt buộc)</h2>
       {showWithdrawOnly ? (
         // aiPublic không còn xác nhận provider nào lúc này (kill switch tắt) — KHÔNG tự nêu
         // tên một provider ở đây, tránh nói sai nếu provider đã đổi trong lúc tính năng tắt

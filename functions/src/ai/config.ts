@@ -63,29 +63,75 @@ export type AiConfig = z.infer<typeof aiConfigSchema>;
  *  src/lib/types/ai.ts trong test Task 13. */
 export const AI_CONFIG_FIELD_KEYS = Object.keys(aiConfigSchema.shape) as (keyof AiConfig)[];
 
+/** true nếu baseUrl VÀ model đã cấu hình — điều kiện CHUNG bắt buộc cho CẢ HAI tính năng (chúng
+ *  dùng chung một provider). KHÔNG tự đủ để bật bất kỳ tính năng nào — còn cần killSwitch VÀ
+ *  quota RIÊNG của từng tính năng, xem isReflectionEnabled/isChatEnabled bên dưới. */
+function hasProviderConfigured(config: Pick<AiConfig, "baseUrl" | "model">): boolean {
+  return config.baseUrl !== "" && config.model !== "";
+}
+
+/**
+ * true khi và chỉ khi tính năng PHẢN CHIẾU sẵn sàng phục vụ học sinh — provider đã cấu hình,
+ * `killSwitch.moodReflection` tắt, VÀ `quotaStudentPerDay > 0` (M8, final whole-branch review:
+ * quota mặc định khi ship là 0 — "không lượt nào", không phải "không giới hạn"; thiếu điều kiện
+ * này thì một quota=0 vẫn để tính năng bật, khiến MỌI lượt gọi rớt resource-exhausted ngay lập
+ * tức cho một học sinh chưa dùng lượt nào).
+ *
+ * Giá trị này ghi thẳng vào `systemConfig/aiPublic.reflectionEnabled` (saveAiConfig.ts) —
+ * `ReflectionCard.tsx` gate TRÊN field này (Task 9 fix round 1, Finding 2 — KHÔNG PHẢI trên
+ * `enabled`, xem giải thích ở `isAiEnabled` bên dưới).
+ */
+export function isReflectionEnabled(
+  config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay">,
+): boolean {
+  return (
+    hasProviderConfigured(config) &&
+    config.killSwitch.moodReflection === false &&
+    config.quotaStudentPerDay > 0
+  );
+}
+
+/**
+ * true khi và chỉ khi tính năng CHAT sẵn sàng phục vụ học sinh — cùng điều kiện với
+ * `isReflectionEnabled`, nhưng xét `killSwitch.chat` + `chatQuotaPerDay` RIÊNG (Fix round 1,
+ * Task 5, Finding 2a/2b: chat có killSwitch và quota tách biệt hoàn toàn khỏi phản chiếu).
+ *
+ * Ghi thẳng vào `systemConfig/aiPublic.chatEnabled` — `ChatWindow.tsx` gate TRÊN field này.
+ */
+export function isChatEnabled(
+  config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch" | "chatQuotaPerDay">,
+): boolean {
+  return (
+    hasProviderConfigured(config) &&
+    config.killSwitch.chat === false &&
+    config.chatQuotaPerDay > 0
+  );
+}
+
 /**
  * Bản mirror của isAiEnabled() ở src/lib/firestore/admin-ai.ts — package functions/ không
  * import được src/ (xem giải thích ở đầu file). Dùng bởi Cloud Function saveAiConfig
  * (functions/src/admin/saveAiConfig.ts, fix I4+I5) để derive systemConfig/aiPublic.enabled từ
  * phía Admin SDK.
  *
- * M8 (final whole-branch review): CỘNG thêm quotaStudentPerDay > 0 — quota mặc định khi ship
- * là 0 ("không lượt nào", xem aiConfigSchema). Thiếu điều kiện này, aiPublic.enabled=true dù
- * quota=0 khiến màn hình đồng ý mời học sinh bật một tính năng mà MỌI lượt gọi đều rớt
- * resource-exhausted ngay lập tức.
+ * true khi VÀ CHỈ KHI ÍT NHẤT MỘT trong hai tính năng (phản chiếu HOẶC chat) sẵn sàng — OR,
+ * KHÔNG PHẢI AND (Task 9, task-9-brief.md).
  *
- * Task 9 (task-9-brief.md — quyết định + lý do đầy đủ trong task-9-report.md): giờ có HAI tính
- * năng dùng chung document cấu hình này (phản chiếu + chat), mỗi tính năng có killSwitch VÀ
- * quota riêng. `enabled` = true khi VÀ CHỈ KHI ÍT NHẤT MỘT trong hai sẵn sàng phục vụ — OR,
- * KHÔNG PHẢI AND. Lý do: `aiPublic.enabled` chỉ quyết định MỘT điều — màn hình đồng ý của học
- * sinh (AiConsentSection.tsx) có hiện ô tick "aiOptIn" hay không — và CHÍNH ô tick đó (một field
- * DUY NHẤT trên users/{uid}) gate quyền truy cập CẢ HAI tính năng (generateReflection.ts VÀ
- * sendChatMessage.ts đều tự đọc privacySettings.aiOptIn, độc lập với nhau). Nếu dùng AND, một
- * admin cố ý bật RIÊNG chat trong khi giữ phản chiếu tắt (đúng kịch bản §10 design spec: chờ
- * chuyên gia tâm lý duyệt persona + CRISIS_REPLY_TEXT trước khi bật lại phản chiếu) sẽ khiến
- * `enabled` không bao giờ bật — ô tick không hiện ra, chat KHÔNG học sinh nào bật được dù đã
- * cấu hình và bật đúng công tắc. baseUrl/model vẫn là điều kiện CHUNG bắt buộc (hai tính năng
- * dùng chung một provider) — chỉ killSwitch + quota mới tách theo từng tính năng.
+ * `enabled` KHÔNG PHẢI flag duy nhất gate quyền dùng AI của học sinh — nó CHỈ quyết định đúng
+ * MỘT điều: màn hình đồng ý (AiConsentSection.tsx) có hiện ô tick "aiOptIn" hay không. CHÍNH ô
+ * tick đó (một field DUY NHẤT trên users/{uid}) gate quyền truy cập CẢ HAI tính năng
+ * (generateReflection.ts VÀ sendChatMessage.ts đều tự đọc privacySettings.aiOptIn, độc lập với
+ * nhau) — nên OR là đúng ở ĐÂY: một admin cố ý bật RIÊNG một trong hai tính năng (đúng kịch bản
+ * §10 design spec — chờ chuyên gia tâm lý duyệt tính năng còn lại trước khi bật) vẫn phải hiện
+ * được ô tick, nếu không tính năng admin VỪA bật cũng không học sinh nào chạm tới được.
+ *
+ * Task 9 fix round 1 (Finding 2, CRITICAL — reviewer): bản đầu của quyết định OR này DỪNG ở
+ * `enabled`, nhưng `ReflectionCard.tsx`/`ChatWindow.tsx` cũng đang gate TRỰC TIẾP trên
+ * `aiPublic.enabled` — nghĩa là bật RIÊNG chat (kịch bản §10) làm `enabled=true`, và
+ * ReflectionCard MỞ CỔNG dù killSwitch.moodReflection vẫn tắt: học sinh viết nhật ký, gọi
+ * generateReflection, và mọi lượt đều rớt lỗi — chính lỗi hình dạng M8 tái diễn ở một tầng khác.
+ * SỬA: hai component đó giờ gate trên `reflectionEnabled`/`chatEnabled` RIÊNG (xem trên) —
+ * `enabled` chỉ còn dùng cho ô tick đồng ý.
  */
 export function isAiEnabled(
   config: Pick<
@@ -93,11 +139,7 @@ export function isAiEnabled(
     "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay" | "chatQuotaPerDay"
   >,
 ): boolean {
-  if (config.baseUrl === "" || config.model === "") return false;
-  const moodReflectionReady =
-    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0;
-  const chatReady = config.killSwitch.chat === false && config.chatQuotaPerDay > 0;
-  return moodReflectionReady || chatReady;
+  return isReflectionEnabled(config) || isChatEnabled(config);
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {

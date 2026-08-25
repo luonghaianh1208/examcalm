@@ -47,9 +47,15 @@ export async function seedAiEnabled(providerLabel = "E2E Test Provider"): Promis
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // Task 9 fix round 1, Finding 2: aiPublic giờ mang thêm reflectionEnabled/chatEnabled RIÊNG —
+  // aiConfig ở trên chỉ tắt killSwitch.moodReflection (chat vẫn mặc định tắt), nên chỉ
+  // reflectionEnabled mới true, khớp đúng shape saveAiConfig() thật sự ghi (isReflectionEnabled/
+  // isChatEnabled, functions/src/ai/config.ts) cho đúng cấu hình này.
   await db.collection("systemConfig").doc("aiPublic").set({
     providerLabel,
     enabled: true,
+    reflectionEnabled: true,
+    chatEnabled: false,
   });
 }
 

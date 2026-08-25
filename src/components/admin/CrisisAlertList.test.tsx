@@ -5,6 +5,7 @@ import {
   listCrisisAlerts, markCrisisAlertHandled, reopenCrisisAlert,
   type CrisisAlertRecord,
 } from "@/lib/firestore/admin-crisis";
+import type { UserSummary } from "@/lib/firestore/admin-users";
 import { CrisisAlertList } from "./CrisisAlertList";
 
 // Chỉ mock các hàm gọi Firestore — cùng phong cách AiConfigEditor.test.tsx/UserRoleManager.test.tsx.
@@ -32,9 +33,17 @@ const HANDLED: CrisisAlertRecord = {
   createdAt: new Date("2026-08-23T09:00:00Z"), handledBy: "admin-other", handledAt: new Date("2026-08-23T09:30:00Z"),
 };
 
-async function renderReady(alerts: CrisisAlertRecord[]) {
+// Fix round 1, Finding 1 (CRITICAL): admin-crisis.ts chỉ trả userId — trang phải join sang
+// users/{uid} (qua prop studentsByUid, đổ từ listUsers() ở page.tsx server-side) để thực sự nói
+// được "học sinh nào". student-u2 CỐ Ý không có trong danh bạ này để pin đường fallback (tài
+// khoản đã xoá) — chỉ student-u1 có mặt.
+const STUDENTS: Record<string, UserSummary> = {
+  "student-u1": { uid: "student-u1", nickname: "Mèo con", school: "THPT A", gradeLevel: "12", role: "student" },
+};
+
+async function renderReady(alerts: CrisisAlertRecord[], studentsByUid: Record<string, UserSummary> = STUDENTS) {
   mockedListCrisisAlerts.mockResolvedValue(alerts);
-  render(<CrisisAlertList adminUid="admin-1" />);
+  render(<CrisisAlertList adminUid="admin-1" studentsByUid={studentsByUid} />);
   await waitFor(() => {
     expect(mockedListCrisisAlerts).toHaveBeenCalled();
   });
@@ -56,7 +65,7 @@ describe("CrisisAlertList — liệt kê", () => {
     await renderReady([UNHANDLED_URGENT]);
 
     expect(screen.getByText(/khẩn cấp/i)).toBeInTheDocument();
-    expect(screen.getByText(/student-u1/)).toBeInTheDocument();
+    expect(screen.getByText(/mèo con/i)).toBeInTheDocument();
     // Thời điểm được format — không hiện ISO thô, nhưng phải chứa năm/giờ nào đó trên màn hình.
     expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
@@ -65,7 +74,8 @@ describe("CrisisAlertList — liệt kê", () => {
     await renderReady([UNHANDLED_URGENT, HANDLED]);
 
     const items = screen.getAllByRole("listitem");
-    expect(items[0]).toHaveTextContent("student-u1");
+    expect(items[0]).toHaveTextContent("Mèo con");
+    // student-u2 (HANDLED) không có trong STUDENTS -> fallback hiện mã thô, xem nhóm test bên dưới.
     expect(items[1]).toHaveTextContent("student-u2");
   });
 
@@ -87,6 +97,27 @@ describe("CrisisAlertList — liệt kê", () => {
     await renderReady([leaky]);
 
     expect(screen.queryByText(/NGUYÊN VĂN BÍ MẬT CỦA HỌC SINH/)).not.toBeInTheDocument();
+  });
+});
+
+// Fix round 1, Finding 1 (CRITICAL — reviewer): raw uid là một ngõ cụt trong sản phẩm — không
+// trang admin nào khác (kể cả nguoi-dung/UserRoleManager.tsx) hiện hay tìm được theo uid. Trang
+// này PHẢI hiện được danh tính dùng được (nickname · lớp · trường), fallback về mã thô CHỈ khi
+// join không khớp (tài khoản đã xoá).
+describe("CrisisAlertList — định danh học sinh dùng được (Fix round 1, Finding 1)", () => {
+  it("học sinh có trong danh bạ -> hiện nickname · Lớp · trường, KHÔNG hiện mã uid thô", async () => {
+    await renderReady([UNHANDLED_URGENT]);
+
+    expect(screen.getByText(/mèo con/i)).toBeInTheDocument();
+    expect(screen.getByText(/lớp 12/i)).toBeInTheDocument();
+    expect(screen.getByText(/thpt a/i)).toBeInTheDocument();
+    expect(screen.queryByText("student-u1")).not.toBeInTheDocument();
+  });
+
+  it("học sinh KHÔNG có trong danh bạ (tài khoản đã xoá) -> fallback hiện mã học sinh thô", async () => {
+    await renderReady([HANDLED]); // student-u2 không có trong STUDENTS
+
+    expect(screen.getByText(/student-u2/)).toBeInTheDocument();
   });
 });
 
@@ -117,6 +148,37 @@ describe("CrisisAlertList — đánh dấu đã xử lý (tự nhận bằng ch�
       expect(mockedMarkCrisisAlertHandled).toHaveBeenCalledWith("a-unhandled", "admin-1");
     });
   });
+
+  // Fix round 1, Finding 4: load() sau khi mark/reopen giờ ĐƯỢC AWAIT — nút không được phép bật
+  // lại (disabled=false) trong khi danh sách hiển thị vẫn còn là dòng CŨ (chưa xử lý). Trước
+  // fix, `finally` chạy ngay sau markCrisisAlertHandled() resolve, không đợi load() (fire-and-
+  // forget) — nút nháy bật lại rồi tắt lại khi dòng mới tới.
+  it("Fix round 1, Finding 4: nút vẫn disabled tới khi danh sách MỚI tải xong — không nháy dòng cũ", async () => {
+    mockedListCrisisAlerts.mockResolvedValueOnce([UNHANDLED_URGENT]);
+    let resolveReload!: (value: CrisisAlertRecord[]) => void;
+    mockedListCrisisAlerts.mockImplementationOnce(
+      () => new Promise<CrisisAlertRecord[]>((resolve) => { resolveReload = resolve; }),
+    );
+    mockedMarkCrisisAlertHandled.mockResolvedValue(undefined);
+
+    render(<CrisisAlertList adminUid="admin-1" studentsByUid={STUDENTS} />);
+    await waitFor(() => expect(mockedListCrisisAlerts).toHaveBeenCalledTimes(1));
+
+    const button = screen.getByRole("button", { name: /đánh dấu đã xử lý/i });
+    await userEvent.click(button);
+
+    // markCrisisAlertHandled() đã resolve; load() (lần tải lại) vẫn ĐANG PENDING -> nút PHẢI
+    // vẫn disabled, và dòng hiển thị vẫn là dòng CŨ (chưa xử lý).
+    await waitFor(() => expect(mockedMarkCrisisAlertHandled).toHaveBeenCalled());
+    expect(button).toBeDisabled();
+    expect(screen.getByRole("button", { name: /đánh dấu đã xử lý/i })).toBeInTheDocument();
+
+    resolveReload([{ ...UNHANDLED_URGENT, handledBy: "admin-1", handledAt: new Date("2026-08-24T10:05:00Z") }]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/đã xử lý bởi admin-1/i)).toBeInTheDocument();
+    });
+  });
 });
 
 describe("CrisisAlertList — mở lại (khả dụng cho BẤT KỲ admin nào)", () => {
@@ -144,10 +206,23 @@ describe("CrisisAlertList — mở lại (khả dụng cho BẤT KỲ admin nào
   });
 });
 
+// Fix round 1, Finding 5: timestamp không đọc được (document lệch hình dạng) trước đây rơi về
+// new Date(0) — hiện "1 thg 1, 1970" trên một dòng cảnh báo khủng hoảng, đọc như một thời điểm
+// THẬT chứ không phải "không đọc được". Giờ phải hiện chữ nói rõ KHÔNG rõ thời điểm.
+describe("CrisisAlertList — thời điểm không đọc được (Fix round 1, Finding 5)", () => {
+  it("createdAt là Invalid Date (fallback từ document lệch hình dạng) -> hiện 'Không rõ thời điểm', không crash, không hiện ngày 1970", async () => {
+    const corrupted: CrisisAlertRecord = { ...UNHANDLED_URGENT, id: "a-corrupt", createdAt: new Date(NaN) };
+    await renderReady([corrupted]);
+
+    expect(screen.getByText(/không rõ thời điểm/i)).toBeInTheDocument();
+    expect(screen.queryByText(/1970/)).not.toBeInTheDocument();
+  });
+});
+
 describe("CrisisAlertList — tải lỗi (vd non-admin bị chặn bởi rules)", () => {
   it("listCrisisAlerts thất bại -> hiện thông báo lỗi kèm nút thử lại, không crash", async () => {
     mockedListCrisisAlerts.mockRejectedValue(new Error("permission-denied"));
-    render(<CrisisAlertList adminUid="admin-1" />);
+    render(<CrisisAlertList adminUid="admin-1" studentsByUid={STUDENTS} />);
 
     await waitFor(() => {
       expect(screen.getByText(/chưa tải được/i)).toBeInTheDocument();

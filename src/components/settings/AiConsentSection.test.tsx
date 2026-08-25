@@ -33,7 +33,7 @@ const mockedDeleteAllMyOutputs = vi.mocked(deleteAllMyOutputs);
 beforeEach(() => {
   vi.clearAllMocks();
   mockedUpdateDoc.mockResolvedValue(undefined);
-  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
   mockedDeleteAllMyOutputs.mockResolvedValue(0);
 });
 
@@ -135,7 +135,7 @@ describe("AiConsentSection", () => {
   });
 
   it("aiPublic.enabled=false (chưa cấu hình) -> hiện trạng thái chưa khả dụng, không có nút bật", async () => {
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
     render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
 
     expect(await screen.findByText(/chưa khả dụng/i)).toBeInTheDocument();
@@ -222,7 +222,7 @@ describe("AiConsentSection", () => {
   // chiếu đã lưu — đúng lúc có lý do chính đáng nhất để muốn xoá. Hai test dưới đây khoá lại:
   // đường rút lui phải LUÔN mở, bất kể trạng thái kill switch.
   it("I2: kill switch TẮT nhưng aiOptIn đã BẬT -> vẫn hiện được checkbox và luồng tắt/xoá, không rơi vào 'chưa khả dụng'", async () => {
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
     const user = userEvent.setup();
     render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
 
@@ -244,7 +244,7 @@ describe("AiConsentSection", () => {
   });
 
   it("I2 (provider-change exposure): kill switch TẮT, aiOptIn BẬT -> KHÔNG bịa/giữ lại tên provider cũ khi aiPublic không còn xác nhận nó", async () => {
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
     render(<AiConsentSection uid="u1" initialAiOptIn={true} />);
 
     await screen.findByRole("checkbox");

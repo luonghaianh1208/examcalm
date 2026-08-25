@@ -81,7 +81,29 @@ describe("runSaveAiConfig", () => {
     });
 
     const aiPublicSnap = await db.collection("systemConfig").doc("aiPublic").get();
-    expect(aiPublicSnap.data()).toEqual({ providerLabel: "DeepSeek", enabled: true });
+    // Task 9 fix round 1, Finding 2: aiPublic giờ mang thêm reflectionEnabled/chatEnabled RIÊNG
+    // cho từng tính năng — VALID_CONFIG bật phản chiếu (killSwitch.moodReflection=false), tắt
+    // chat (killSwitch.chat=true).
+    expect(aiPublicSnap.data()).toEqual({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false,
+    });
+  });
+
+  // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): đúng kịch bản §10 design spec — admin
+  // bật RIÊNG chat, giữ phản chiếu tắt. `enabled` phải vẫn true (OR, mở ô tick đồng ý), nhưng
+  // `reflectionEnabled` PHẢI false — nếu không, ReflectionCard sẽ mở cổng dù killSwitch.moodReflection
+  // còn tắt, và một học sinh viết nhật ký sẽ hứng lỗi resource-exhausted ngay lập tức.
+  it("Finding 2: kịch bản §10 (chỉ bật chat) -> enabled=true (ô tick vẫn hiện), reflectionEnabled=false, chatEnabled=true", async () => {
+    await runSaveAiConfig(
+      ADMIN_AUTH,
+      { ...VALID_CONFIG, killSwitch: { moodReflection: true, chat: false } },
+      { db },
+    );
+
+    const aiPublicSnap = await db.collection("systemConfig").doc("aiPublic").get();
+    expect(aiPublicSnap.data()).toEqual({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true,
+    });
   });
 
   it("killSwitch bật -> aiPublic.enabled=false dù baseUrl/model đã điền", async () => {

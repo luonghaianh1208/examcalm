@@ -42,30 +42,69 @@ describe("getAiPublicConfig", () => {
   it("document chưa tồn tại (Task 12 chưa ghi) -> chưa khả dụng", async () => {
     mockedGetDoc.mockResolvedValue(fakeSnap(undefined));
 
-    expect(await getAiPublicConfig()).toEqual({ providerLabel: "", enabled: false });
+    expect(await getAiPublicConfig()).toEqual({
+      providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+    });
   });
 
   it("enabled=false dù có providerLabel -> vẫn chưa khả dụng", async () => {
-    mockedGetDoc.mockResolvedValue(fakeSnap({ providerLabel: "DeepSeek", enabled: false }));
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ providerLabel: "DeepSeek", enabled: false, reflectionEnabled: false, chatEnabled: false }),
+    );
 
-    expect(await getAiPublicConfig()).toEqual({ providerLabel: "", enabled: false });
+    expect(await getAiPublicConfig()).toEqual({
+      providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+    });
   });
 
   it("providerLabel rỗng dù enabled=true -> vẫn chưa khả dụng", async () => {
-    mockedGetDoc.mockResolvedValue(fakeSnap({ providerLabel: "", enabled: true }));
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ providerLabel: "", enabled: true, reflectionEnabled: true, chatEnabled: false }),
+    );
 
-    expect(await getAiPublicConfig()).toEqual({ providerLabel: "", enabled: false });
+    expect(await getAiPublicConfig()).toEqual({
+      providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+    });
   });
 
   it("enabled=true và providerLabel khác rỗng -> trả về đúng, KHÔNG phải chuỗi cứng", async () => {
-    mockedGetDoc.mockResolvedValue(fakeSnap({ providerLabel: "DeepSeek", enabled: true }));
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false }),
+    );
 
-    expect(await getAiPublicConfig()).toEqual({ providerLabel: "DeepSeek", enabled: true });
+    expect(await getAiPublicConfig()).toEqual({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false,
+    });
   });
 
   it("getDoc lỗi -> trả về chưa khả dụng thay vì throw (không chặn màn hình đồng ý)", async () => {
     mockedGetDoc.mockRejectedValue(new Error("mất mạng"));
 
-    await expect(getAiPublicConfig()).resolves.toEqual({ providerLabel: "", enabled: false });
+    await expect(getAiPublicConfig()).resolves.toEqual({
+      providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+    });
+  });
+
+  // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): kịch bản §10 — chỉ chat sẵn sàng,
+  // phản chiếu tắt. `reflectionEnabled` PHẢI đọc đúng false từ document, KHÔNG được suy ra từ
+  // `enabled` (enabled=true ở đây, nhưng reflectionEnabled vẫn phải false).
+  it("kịch bản §10: enabled=true (chỉ chat bật) -> reflectionEnabled=false, chatEnabled=true đọc đúng, không suy diễn từ enabled", async () => {
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true }),
+    );
+
+    expect(await getAiPublicConfig()).toEqual({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true,
+    });
+  });
+
+  it("reflectionEnabled/chatEnabled thiếu hoặc sai kiểu trên document -> fallback an toàn về false, KHÔNG throw", async () => {
+    mockedGetDoc.mockResolvedValue(
+      fakeSnap({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: "yes" }),
+    );
+
+    expect(await getAiPublicConfig()).toEqual({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: false,
+    });
   });
 });

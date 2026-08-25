@@ -68,7 +68,9 @@ beforeEach(() => {
   // Mặc định gate MỞ (aiOptIn bật + aiPublic bật) — các test muốn gate đóng
   // tự override lại trong từng test.
   mockedGetAiOptIn.mockResolvedValue(true);
-  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+  mockedGetAiPublicConfig.mockResolvedValue({
+    providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false,
+  });
 });
 
 describe("ReflectionCard", () => {
@@ -83,7 +85,24 @@ describe("ReflectionCard", () => {
 
   it("aiPublic tắt dù aiOptIn bật (gate đóng): không render gì, không gọi requestReflection", async () => {
     mockedGetAiOptIn.mockResolvedValue(true);
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    mockedGetAiPublicConfig.mockResolvedValue({
+      providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false,
+    });
+    const { container } = render(<ReflectionCard moodLogId="m1" uid="u1" />);
+
+    await waitFor(() => expect(mockedGetAiPublicConfig).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+    expect(mockedRequestReflection).not.toHaveBeenCalled();
+  });
+
+  // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): gate PHẢI khoá theo reflectionEnabled,
+  // KHÔNG PHẢI enabled — đúng kịch bản §10 design spec (chỉ chat được duyệt/bật trước, phản
+  // chiếu vẫn tắt). enabled=true (OR) không được phép mở cổng phản chiếu ở đây.
+  it("Finding 2: enabled=true nhưng reflectionEnabled=false (chỉ chat bật) -> gate vẫn ĐÓNG", async () => {
+    mockedGetAiOptIn.mockResolvedValue(true);
+    mockedGetAiPublicConfig.mockResolvedValue({
+      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true,
+    });
     const { container } = render(<ReflectionCard moodLogId="m1" uid="u1" />);
 
     await waitFor(() => expect(mockedGetAiPublicConfig).toHaveBeenCalled());

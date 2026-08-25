@@ -76,7 +76,11 @@ export function ChatWindow({ uid }: Props) {
       }
       const aiPublic = await getAiPublicConfig();
       if (cancelled) return;
-      setGate(aiPublic.enabled ? "open" : "closed");
+      // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): KHÔNG gate trên `aiPublic.enabled`
+      // — cùng lý do ReflectionCard.tsx (đối xứng): bật RIÊNG phản chiếu trong khi chat vẫn tắt
+      // sẽ làm enabled=true, và gate trên enabled sẽ mở luôn ô nhập chat dù killSwitch.chat vẫn
+      // bật. `chatEnabled` là flag RIÊNG cho đúng tính năng này.
+      setGate(aiPublic.chatEnabled ? "open" : "closed");
     })().catch(() => {
       // Fail-closed tường minh — cùng lý do ReflectionCard.tsx (Fix round 1, Finding 4).
       if (!cancelled) setGate("closed");

@@ -17,7 +17,10 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore";
 import { assertCallerIsAdmin, PermissionDeniedError, type CallerAuth } from "./guards";
-import { aiConfigSchema, DEFAULT_AI_CONFIG, isAiEnabled, type AiConfig } from "../ai/config";
+import {
+  aiConfigSchema, DEFAULT_AI_CONFIG, isAiEnabled, isReflectionEnabled, isChatEnabled,
+  type AiConfig,
+} from "../ai/config";
 import { writeAuditLog } from "../audit/writeAuditLog";
 
 /** Đọc systemConfig/aiConfig HIỆN TẠI để làm "before" cho audit log — doc thiếu hoặc sai hình
@@ -63,9 +66,14 @@ export async function runSaveAiConfig(
     updatedBy: auth!.uid,
     updatedAt: FieldValue.serverTimestamp(),
   });
+  // Task 9 fix round 1 (Finding 2, CRITICAL — reviewer): `enabled` (OR) chỉ đúng cho ô tick
+  // đồng ý. reflectionEnabled/chatEnabled RIÊNG cho ReflectionCard.tsx/ChatWindow.tsx gate đúng
+  // tính năng — ghi CẢ BA trong CÙNG một batch với aiConfig để không bao giờ lệch nhau.
   batch.set(deps.db.collection("systemConfig").doc("aiPublic"), {
     providerLabel: next.providerLabel,
     enabled: isAiEnabled(next),
+    reflectionEnabled: isReflectionEnabled(next),
+    chatEnabled: isChatEnabled(next),
   });
   await batch.commit();
 

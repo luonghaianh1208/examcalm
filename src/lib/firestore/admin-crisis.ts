@@ -21,7 +21,12 @@ function toCrisisAlertRecord(id: string, data: Record<string, unknown>): CrisisA
       data.triggeredBy === "keyword" || data.triggeredBy === "model" || data.triggeredBy === "both"
         ? data.triggeredBy
         : "keyword",
-    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(0),
+    // Fix round 1, Finding 5: fallback KHÔNG được là một ngày THẬT (vd new Date(0) = 1970) —
+    // CrisisAlertList.tsx hiện createdAt trực tiếp trên mỗi dòng, và một epoch date đọc như một
+    // thời điểm thật thay vì "không đọc được". Invalid Date (`new Date(NaN)`) là sentinel duy
+    // nhất phân biệt được bằng `Number.isNaN(d.getTime())` — component render "Không rõ thời
+    // điểm" thay vì gọi formatter trực tiếp lên nó.
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(NaN),
     handledBy: typeof data.handledBy === "string" ? data.handledBy : null,
     handledAt: data.handledAt instanceof Timestamp ? data.handledAt.toDate() : null,
   };

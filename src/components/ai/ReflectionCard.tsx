@@ -62,7 +62,13 @@ export function ReflectionCard({ moodLogId, uid }: Props) {
       }
       const aiPublic = await getAiPublicConfig();
       if (cancelled) return;
-      setGate(aiPublic.enabled ? "open" : "closed");
+      // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): KHÔNG gate trên `aiPublic.enabled`
+      // — đó là OR giữa hai tính năng (chỉ quyết định ô tick đồng ý có hiện hay không), nên bật
+      // RIÊNG chat (killSwitch.chat=false, killSwitch.moodReflection VẪN tắt — đúng kịch bản §10
+      // design spec) sẽ làm enabled=true và mở cổng phản chiếu dù nó chưa sẵn sàng — một học
+      // sinh viết nhật ký sẽ hứng lỗi resource-exhausted ngay lập tức. `reflectionEnabled` là
+      // flag RIÊNG cho đúng tính năng này.
+      setGate(aiPublic.reflectionEnabled ? "open" : "closed");
     })().catch(() => {
       // Fail-closed TƯỜNG MINH: hai hàm đọc ở trên đã tự nuốt lỗi và không
       // bao giờ reject, nhưng nếu điều đó thay đổi trong tương lai, im lặng

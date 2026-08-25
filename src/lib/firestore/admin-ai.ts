@@ -40,12 +40,21 @@ export async function getAiConfig(): Promise<AiConfig> {
  *
  * Task 9 (task-9-brief.md — lý do đầy đủ trong task-9-report.md): giờ có HAI tính năng dùng
  * chung document cấu hình này, mỗi tính năng có killSwitch VÀ quota riêng. `enabled` là OR giữa
- * hai tính năng, KHÔNG PHẢI AND: `aiPublic.enabled` chỉ quyết định MỘT điều — màn hình đồng ý
- * của học sinh (AiConsentSection.tsx) có hiện ô tick "aiOptIn" hay không — và CHÍNH ô tick đó
- * (một field DUY NHẤT trên users/{uid}) gate quyền truy cập CẢ HAI tính năng. Dùng AND sẽ khiến
- * một admin cố ý bật RIÊNG chat trong khi giữ phản chiếu tắt (đúng kịch bản §10 design spec)
- * không bao giờ hiện được ô tick cho học sinh. baseUrl/model vẫn là điều kiện CHUNG bắt buộc
- * (hai tính năng dùng chung một provider).
+ * hai tính năng, KHÔNG PHẢI AND: CHÍNH ô tick "aiOptIn" (một field DUY NHẤT trên users/{uid})
+ * gate quyền truy cập CẢ HAI tính năng, nên dùng AND sẽ khiến một admin cố ý bật RIÊNG chat
+ * trong khi giữ phản chiếu tắt (đúng kịch bản §10 design spec) không bao giờ hiện được ô tick
+ * cho học sinh. baseUrl/model vẫn là điều kiện CHUNG bắt buộc (hai tính năng dùng chung provider).
+ *
+ * SỬA (Task 9 fix round 1, Finding 2 — reviewer, CRITICAL): docstring bản trước nói `enabled`
+ * "chỉ quyết định MỘT điều" (ô tick đồng ý) — SAI. `ReflectionCard.tsx` và `ChatWindow.tsx`
+ * (functions/src/ai/config.ts không với tới hai file này, nhưng bản mirror `enabled` ở đây có
+ * cùng giá trị) từng gate TRỰC TIẾP trên `aiPublic.enabled` — bật RIÊNG chat làm `enabled=true`
+ * và mở luôn cổng phản chiếu dù killSwitch.moodReflection còn tắt. Hai component đó giờ gate
+ * trên `aiPublic.reflectionEnabled`/`aiPublic.chatEnabled` RIÊNG (derive bởi
+ * `isReflectionEnabled`/`isChatEnabled` ở functions/src/ai/config.ts, không mirror ở file này vì
+ * không có component nào phía client tiêu thụ trực tiếp `isAiEnabled` của file này — nó chỉ còn
+ * dùng để xem trước/pin `enabled`, xem đoạn đầu docstring). `enabled` ở đây vẫn đúng — chỉ không
+ * còn là flag DUY NHẤT gate quyền dùng AI nữa.
  */
 export function isAiEnabled(
   config: Pick<

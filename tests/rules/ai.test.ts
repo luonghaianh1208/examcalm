@@ -29,7 +29,11 @@ const AI_CONFIG = { baseUrl: "https://api.example.com", quota: 1000, rateLimitPe
 // src/lib/firestore/ai-public.ts (AiPublicConfig) — Task 12, Decision B: fixture cũ dùng
 // "providerName" (sai tên) và thiếu "enabled", không bị test này bắt vì Security Rules không
 // kiểm tra hình dạng document, nhưng nó ghi sai hợp đồng dữ liệu thật cho người đọc sau.
-const AI_PUBLIC = { providerLabel: "OpenAI", enabled: true };
+// Task 9 fix round 1, Finding 2: aiPublic thật sự mang thêm reflectionEnabled/chatEnabled RIÊNG
+// (saveAiConfig.ts) — thêm vào đây để fixture khớp đúng shape production, dù rules chỉ ràng
+// buộc providerLabel (xem match /systemConfig/aiPublic ở firestore.rules), không ràng buộc hai
+// field này.
+const AI_PUBLIC = { providerLabel: "OpenAI", enabled: true, reflectionEnabled: true, chatEnabled: false };
 
 const PROMPT_TEMPLATE = { id: "pt1", text: "Hãy phản chiếu suy nghĩ sau...", version: 1 };
 

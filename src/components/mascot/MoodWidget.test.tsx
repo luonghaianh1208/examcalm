@@ -33,7 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedSaveMoodLog.mockResolvedValue("mood-1");
   mockedGetAiOptIn.mockResolvedValue(false);
-  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false, reflectionEnabled: false, chatEnabled: false });
 });
 
 describe("MoodWidget", () => {
@@ -71,7 +71,7 @@ describe("MoodWidget", () => {
 
   it("aiOptIn bật + aiPublic bật: sau khi lưu, thẻ phản chiếu xuất hiện trong panel", async () => {
     mockedGetAiOptIn.mockResolvedValue(true);
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
     mockedRequestReflection.mockResolvedValue({ outputId: "output-1" });
     mockedGetOutputForMoodLog.mockResolvedValue({
       id: "output-1",
@@ -98,7 +98,7 @@ describe("MoodWidget", () => {
 
   it("panel KHÔNG tự đóng khi aiOptIn bật; nút đóng tường minh hoạt động", async () => {
     mockedGetAiOptIn.mockResolvedValue(true);
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
     mockedRequestReflection.mockResolvedValue({ outputId: "output-1" });
     mockedGetOutputForMoodLog.mockResolvedValue(null);
 
@@ -135,7 +135,7 @@ describe("MoodWidget", () => {
   // module Firestore/callable ở tầng lá, không mock ReflectionCard.
   it("AI layer hỏng hoàn toàn: mood log vẫn lưu, học sinh vẫn thấy đã lưu, không có gì gợi ý mất dữ liệu", async () => {
     mockedGetAiOptIn.mockResolvedValue(true);
-    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false });
     mockedRequestReflection.mockRejectedValue(new Error("Không thể kết nối AI."));
 
     const user = userEvent.setup();
