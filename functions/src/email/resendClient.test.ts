@@ -88,6 +88,32 @@ describe("sendEmail", () => {
     });
   });
 
+  it("case 3b (Fix round 1, Task 2 Finding 5): có bcc -> body chứa bcc", async () => {
+    let seenInit: RequestInit | null = null;
+    const fetchImpl = fakeFetch((_url, init) => {
+      seenInit = init;
+      return validSuccessResponse();
+    });
+
+    await sendEmail({ ...baseParams, bcc: ["a@x.test", "b@x.test"] }, { fetchImpl });
+
+    const body = JSON.parse(seenInit!.body as string);
+    expect(body.bcc).toEqual(["a@x.test", "b@x.test"]);
+  });
+
+  it("case 3c (Fix round 1, Task 2 Finding 5): không truyền bcc -> body KHÔNG có key bcc (hình dạng cũ giữ nguyên)", async () => {
+    let seenInit: RequestInit | null = null;
+    const fetchImpl = fakeFetch((_url, init) => {
+      seenInit = init;
+      return validSuccessResponse();
+    });
+
+    await sendEmail(baseParams, { fetchImpl });
+
+    const body = JSON.parse(seenInit!.body as string);
+    expect(body).not.toHaveProperty("bcc");
+  });
+
   it("case 4: thành công -> trả { id }", async () => {
     const fetchImpl = fakeFetch(() => validSuccessResponse());
 

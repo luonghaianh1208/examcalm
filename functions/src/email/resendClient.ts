@@ -11,6 +11,10 @@ export type SendEmailParams = {
   apiKey: string;
   from: string;
   to: string[];
+  // Fix round 1 cho Task 2 (Finding 5, coordinator — ExamCalm Spec #5): tuỳ chọn, dùng khi caller
+  // muốn gửi hàng loạt mà không lộ địa chỉ người nhận cho nhau — nếu một người FORWARD lại mail,
+  // header "To:" không liệt kê ai khác. Rỗng/vắng mặt = hành vi cũ (chỉ `to`).
+  bcc?: string[];
   subject: string;
   text: string;
   timeoutMs: number;
@@ -58,6 +62,9 @@ export async function sendEmail(
       body: JSON.stringify({
         from: params.from,
         to: params.to,
+        // Chỉ đưa "bcc" vào body khi caller thật sự truyền — giữ nguyên hình dạng request cũ
+        // (không thêm key rỗng/undefined) khi không dùng, không phá vỡ test/behavior sẵn có.
+        ...(params.bcc && params.bcc.length > 0 ? { bcc: params.bcc } : {}),
         subject: params.subject,
         text: params.text,
       }),

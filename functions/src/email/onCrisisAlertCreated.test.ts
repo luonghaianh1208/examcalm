@@ -1,8 +1,8 @@
-// Test trigger onCrisisAlertCreated (ExamCalm Spec #5, Task 2) trên Firestore emulator. Gọi
-// thẳng `runOnCrisisAlertCreated` (lõi có thể test được, tách khỏi onDocumentCreated thật của
-// Cloud Functions) với dữ liệu document mô phỏng `event.data.data()` và deps GIẢ (listUsers,
-// sendEmail) — không một byte nào ra mạng thật, và KHÔNG cần Auth emulator (listUsers tiêm được
-// qua deps, cùng cách sendChatMessage.ts tiêm callChatCompletion).
+// Test trigger onCrisisAlertCreated (ExamCalm Spec #5, Task 2 + Fix round 1) trên Firestore
+// emulator. Gọi thẳng `runOnCrisisAlertCreated`/`runOnCrisisAlertUpdated` (lõi có thể test được,
+// tách khỏi onDocumentWritten thật của Cloud Functions) với dữ liệu document mô phỏng
+// `event.data.{before,after}.data()` và deps GIẢ (listUsers, sendEmail) — không một byte nào ra
+// mạng thật, không cần Auth emulator (listUsers tiêm được, xem task-2-brief.md).
 //
 // BẮT BUỘC chạy với FIRESTORE_EMULATOR_HOST đã set (`npm test`, xem package.json). File này
 // cũng nằm trong danh sách loại trừ của `test:unit` (cần emulator).
@@ -12,6 +12,7 @@ import { deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, Timestamp, type Firestore } from "firebase-admin/firestore";
 import {
   runOnCrisisAlertCreated,
+  runOnCrisisAlertUpdated,
   type OnCrisisAlertCreatedDeps,
   type AuthUserRecordLike,
 } from "./onCrisisAlertCreated";
@@ -48,6 +49,7 @@ beforeEach(async () => {
 const STUDENT_UID = "student1";
 const ALERT_ID = "alert1";
 const NOW = new Date("2026-08-25T03:00:00Z");
+const CRISIS_EMAIL_FROM = "canhbao@examcalm.test";
 const ADMIN_A_EMAIL = "admin-a@examcalm.test";
 const ADMIN_B_EMAIL = "admin-b@examcalm.test";
 
@@ -55,7 +57,7 @@ async function setAiConfig(overrides: Partial<AiConfig> = {}): Promise<void> {
   const config: AiConfig = {
     ...DEFAULT_AI_CONFIG,
     crisisEmailEnabled: true,
-    crisisEmailFrom: "canhbao@examcalm.test",
+    crisisEmailFrom: CRISIS_EMAIL_FROM,
     ...overrides,
   };
   await db.collection("systemConfig").doc("aiConfig").set(config);
@@ -63,7 +65,7 @@ async function setAiConfig(overrides: Partial<AiConfig> = {}): Promise<void> {
 
 /** Ghi document cảnh báo trực tiếp (bỏ qua writeCrisisAlert của sendChatMessage.ts — file đó
  *  không thuộc phạm vi test này) rồi đọc lại NGUYÊN VĂN — mô phỏng đúng những gì
- *  `event.data.data()` thật trả về (Timestamp thật từ emulator, không phải Date tự tạo). */
+ *  `event.data.after.data()` thật trả về (Timestamp thật từ emulator, không phải Date tự tạo). */
 async function writeAlert(
   overrides: Record<string, unknown> = {},
   alertId: string = ALERT_ID,
@@ -80,6 +82,17 @@ async function writeAlert(
       handledAt: null,
       ...overrides,
     });
+  const snap = await db.collection("crisisAlerts").doc(alertId).get();
+  return snap.data() as Record<string, unknown>;
+}
+
+/** Cập nhật MỘT PHẦN document (mô phỏng `.update()` thật — chỉ đụng field được truyền, các field
+ *  khác giữ nguyên, đúng cách `upgradeCrisisAlert`/`writeEmailStatus` hoạt động) rồi đọc lại. */
+async function patchAlert(
+  patch: Record<string, unknown>,
+  alertId: string = ALERT_ID,
+): Promise<Record<string, unknown>> {
+  await db.collection("crisisAlerts").doc(alertId).update(patch);
   const snap = await db.collection("crisisAlerts").doc(alertId).get();
   return snap.data() as Record<string, unknown>;
 }
@@ -133,7 +146,30 @@ function makeDeps(overrides: Partial<OnCrisisAlertCreatedDeps> = {}): OnCrisisAl
   };
 }
 
-describe("onCrisisAlertCreated", () => {
+/** Bọc `db` thật, CHỈ chặn `.collection("systemConfig").doc(...).get()` để mô phỏng đúng kịch
+ *  bản "Firestore tạm thời không đọc được đúng lúc loadAiConfig chạy" (Fix round 1, Finding 1) —
+ *  mọi collection khác (kể cả `crisisAlerts`, nơi writeEmailStatus phải vẫn ghi được) đi thẳng
+ *  qua `db` thật không đổi gì. Type assertion có chú thích: chỉ mô phỏng đúng bề mặt
+ *  `collection().doc().get()` mà loadAiConfig thực sự gọi tới, không phải toàn bộ SDK (không
+ *  phải `any` không giải thích). */
+function makeDbThrowingOnSystemConfigRead(): Firestore {
+  return {
+    collection: (name: string) => {
+      if (name === "systemConfig") {
+        return {
+          doc: () => ({
+            get: async () => {
+              throw new Error("Firestore tạm thời không truy cập được (mô phỏng test)");
+            },
+          }),
+        };
+      }
+      return db.collection(name);
+    },
+  } as unknown as Firestore;
+}
+
+describe("onCrisisAlertCreated — sự kiện TẠO", () => {
   it("1. crisisEmailEnabled=false → không gọi mạng, ghi emailStatus 'skipped'", async () => {
     await setAiConfig({ crisisEmailEnabled: false });
     const alertData = await writeAlert();
@@ -176,7 +212,7 @@ describe("onCrisisAlertCreated", () => {
     expect((await getAlert()).emailStatus).toBe("skipped");
   });
 
-  it("4. đường thuận: gọi sendEmail một lần với to là mọi email admin, ghi 'sent' + emailedAt", async () => {
+  it("4. đường thuận: gọi sendEmail một lần với bcc là mọi email admin (to = người gửi), ghi 'sent' + emailedAt", async () => {
     await setAiConfig();
     await setStudent();
     const alertData = await writeAlert();
@@ -187,7 +223,10 @@ describe("onCrisisAlertCreated", () => {
 
     expect(sendEmailSpy).toHaveBeenCalledTimes(1);
     const params = sendEmailSpy.mock.calls[0][0];
-    expect([...params.to].sort()).toEqual([ADMIN_A_EMAIL, ADMIN_B_EMAIL].sort());
+    // Fix round 1, Finding 5(d): admin nằm ở BCC (không lộ cho nhau khi forward), `to` chỉ chứa
+    // chính người gửi.
+    expect(params.to).toEqual([CRISIS_EMAIL_FROM]);
+    expect([...(params.bcc ?? [])].sort()).toEqual([ADMIN_A_EMAIL, ADMIN_B_EMAIL].sort());
 
     const alert = await getAlert();
     expect(alert.emailStatus).toBe("sent");
@@ -215,7 +254,7 @@ describe("onCrisisAlertCreated", () => {
     await runOnCrisisAlertCreated(ALERT_ID, alertData, deps);
 
     const params = sendEmailSpy.mock.calls[0][0];
-    expect(params.to).toEqual([ADMIN_A_EMAIL]);
+    expect(params.bcc).toEqual([ADMIN_A_EMAIL]);
   });
 
   it("6. sendEmail ném lỗi → ghi 'failed', trigger KHÔNG ném ra ngoài", async () => {
@@ -234,7 +273,7 @@ describe("onCrisisAlertCreated", () => {
     expect(alert.emailedAt).toBeNull();
   });
 
-  it("7. thân mail chứa biệt danh, lớp, trường, mức độ, thời điểm và link tới /admin/canh-bao", async () => {
+  it("7. thân mail chứa biệt danh, lớp, trường, mức độ, thời điểm (kèm timezone) và link tới /admin/canh-bao", async () => {
     await setAiConfig();
     await setStudent({ nickname: "Mèo con", gradeLevel: "12", school: "THPT Trần Phú" });
     const alertData = await writeAlert({ severity: "concern" });
@@ -250,6 +289,11 @@ describe("onCrisisAlertCreated", () => {
     expect(params.text).toContain("Cần chú ý");
     expect(params.text).toContain("/admin/canh-bao");
     expect(params.text).toMatch(/2026/);
+    expect(params.text).toContain("giờ Việt Nam");
+    // Fix round 1, Finding 5(c): dòng ngữ cảnh giải thích đây là tín hiệu nguy cơ tự hại và vì
+    // sao không có trích đoạn tin nhắn.
+    expect(params.text).toContain("NGUY CƠ TỰ HẠI");
+    expect(params.text).toContain("KHÔNG được đưa vào email này");
   });
 
   it("8. thân mail KHÔNG chứa gì ngoài danh sách field cho phép — không được spread document", async () => {
@@ -314,5 +358,137 @@ describe("onCrisisAlertCreated", () => {
 
     const alert = await getAlert();
     expect(alert.emailStatus).toBe("sent");
+  });
+
+  it("11. loadAiConfig (đọc systemConfig/aiConfig) ném lỗi → vẫn ghi emailStatus 'failed', KHÔNG throw", async () => {
+    await setStudent();
+    const alertData = await writeAlert();
+    const sendEmailSpy = fakeSendEmail();
+    const deps = makeDeps({ db: makeDbThrowingOnSystemConfigRead(), sendEmail: sendEmailSpy });
+
+    await expect(runOnCrisisAlertCreated(ALERT_ID, alertData, deps)).resolves.toBeUndefined();
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+    const alert = await getAlert();
+    expect(alert.emailStatus).toBe("failed");
+    expect(alert.emailedAt).toBeNull();
+  });
+
+  it("12. listUsers() ném lỗi (network Identity Toolkit) → vẫn ghi emailStatus 'failed', KHÔNG throw", async () => {
+    await setAiConfig();
+    const alertData = await writeAlert();
+    const sendEmailSpy = fakeSendEmail();
+    const deps = makeDeps({
+      listUsers: vi.fn(async (): Promise<AuthUserRecordLike[]> => {
+        throw new Error("Identity Toolkit tạm thời lỗi (mô phỏng test)");
+      }),
+      sendEmail: sendEmailSpy,
+    });
+
+    await expect(runOnCrisisAlertCreated(ALERT_ID, alertData, deps)).resolves.toBeUndefined();
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+    const alert = await getAlert();
+    expect(alert.emailStatus).toBe("failed");
+    expect(alert.emailedAt).toBeNull();
+  });
+
+  it("13. systemConfig/aiConfig tồn tại nhưng sai hình dạng (vd deploy trước khi field mới tồn tại) → 'failed', KHÔNG phải 'skipped'", async () => {
+    // Mô phỏng đúng kịch bản deploy: doc cũ được ghi TRƯỚC khi Spec #5 thêm crisisEmailEnabled/
+    // crisisEmailFrom — safeParse thất bại vì thiếu field bắt buộc.
+    await db.collection("systemConfig").doc("aiConfig").set({ providerLabel: "X" });
+    const alertData = await writeAlert();
+    const sendEmailSpy = fakeSendEmail();
+    const deps = makeDeps({ sendEmail: sendEmailSpy });
+
+    await runOnCrisisAlertCreated(ALERT_ID, alertData, deps);
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+    const alert = await getAlert();
+    expect(alert.emailStatus).toBe("failed");
+  });
+});
+
+describe("onCrisisAlertCreated — sự kiện SỬA (escalation concern → urgent)", () => {
+  it("14. leo thang sau khi mail ban đầu đã 'sent' → gửi mail CẬP NHẬT, tiêu đề/thân nêu rõ thay thế cảnh báo trước", async () => {
+    await setAiConfig();
+    await setStudent();
+    const initialData = await writeAlert({ severity: "concern" });
+    const initialSendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertCreated(ALERT_ID, initialData, makeDeps({ sendEmail: initialSendEmailSpy }));
+    expect(initialSendEmailSpy).toHaveBeenCalledTimes(1);
+
+    const beforeSnapData = await getAlert(); // đã có emailStatus "sent" từ bước trên
+    expect(beforeSnapData.emailStatus).toBe("sent");
+
+    // sendChatMessage.ts's upgradeCrisisAlert chỉ update severity + triggeredBy — mô phỏng đúng.
+    const afterSnapData = await patchAlert({ severity: "urgent", triggeredBy: "both" });
+
+    const escalationSendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertUpdated(
+      ALERT_ID,
+      beforeSnapData,
+      afterSnapData,
+      makeDeps({ sendEmail: escalationSendEmailSpy }),
+    );
+
+    expect(escalationSendEmailSpy).toHaveBeenCalledTimes(1);
+    const params = escalationSendEmailSpy.mock.calls[0][0];
+    expect(params.subject).toContain("CẬP NHẬT");
+    expect(params.subject).toContain("KHẨN CẤP");
+    expect(params.subject).not.toContain("Mèo con");
+    expect(params.text).toContain("THAY THẾ");
+    expect(params.text).toContain("Khẩn cấp"); // severity hiển thị giờ là urgent
+
+    const finalAlert = await getAlert();
+    expect(finalAlert.emailStatus).toBe("sent");
+    expect(finalAlert.emailedAt).toBeInstanceOf(Timestamp);
+  });
+
+  it("15. severity KHÔNG đổi (vd chỉ handledBy đổi) → không gửi mail, KHÔNG ghi lại gì (chống tự kích hoạt lặp)", async () => {
+    await setAiConfig();
+    const initialData = await writeAlert({ severity: "concern" });
+    await runOnCrisisAlertCreated(ALERT_ID, initialData, makeDeps());
+    const beforeSnapData = await getAlert();
+
+    const afterSnapData = await patchAlert({ handledBy: "admin-x" });
+
+    const sendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+    const finalAlert = await getAlert();
+    // Không bị viết đè: handledBy vẫn còn nguyên, emailStatus/emailedAt không đổi so với trước.
+    expect(finalAlert.handledBy).toBe("admin-x");
+    expect(finalAlert.emailStatus).toBe(beforeSnapData.emailStatus);
+  });
+
+  it("16. leo thang nhưng mail ban đầu KHÔNG phải 'sent' (vd 'skipped') → không gửi mail CẬP NHẬT", async () => {
+    await setAiConfig({ crisisEmailEnabled: false }); // mail ban đầu sẽ là 'skipped'
+    const initialData = await writeAlert({ severity: "concern" });
+    await runOnCrisisAlertCreated(ALERT_ID, initialData, makeDeps());
+    const beforeSnapData = await getAlert();
+    expect(beforeSnapData.emailStatus).toBe("skipped");
+
+    const afterSnapData = await patchAlert({ severity: "urgent", triggeredBy: "both" });
+
+    const sendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+  });
+
+  it("17. hướng khác concern→urgent (vd urgent → concern, không nên xảy ra theo bất biến hiện tại) → không gửi mail, phòng thủ", async () => {
+    await setAiConfig();
+    const initialData = await writeAlert({ severity: "urgent" });
+    await runOnCrisisAlertCreated(ALERT_ID, initialData, makeDeps());
+    const beforeSnapData = await getAlert();
+
+    const afterSnapData = await patchAlert({ severity: "concern" });
+
+    const sendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
   });
 });
