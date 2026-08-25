@@ -394,9 +394,13 @@ describe("onCrisisAlertCreated — sự kiện TẠO", () => {
   });
 
   it("13. systemConfig/aiConfig tồn tại nhưng sai hình dạng (vd deploy trước khi field mới tồn tại) → 'failed', KHÔNG phải 'skipped'", async () => {
-    // Mô phỏng đúng kịch bản deploy: doc cũ được ghi TRƯỚC khi Spec #5 thêm crisisEmailEnabled/
-    // crisisEmailFrom — safeParse thất bại vì thiếu field bắt buộc.
-    await db.collection("systemConfig").doc("aiConfig").set({ providerLabel: "X" });
+    // Mô phỏng ĐÚNG kịch bản deploy (Fix round 2, Finding 2 — fixture cũ thiếu gần hết field,
+    // không phải kịch bản production mô tả): doc cũ ghi TRƯỚC khi Spec #5 thêm hai field mới —
+    // MỌI field khác đều hợp lệ, CHỈ thiếu đúng crisisEmailEnabled/crisisEmailFrom.
+    const { crisisEmailEnabled, crisisEmailFrom, ...oldShapeConfig } = DEFAULT_AI_CONFIG;
+    void crisisEmailEnabled;
+    void crisisEmailFrom;
+    await db.collection("systemConfig").doc("aiConfig").set(oldShapeConfig);
     const alertData = await writeAlert();
     const sendEmailSpy = fakeSendEmail();
     const deps = makeDeps({ sendEmail: sendEmailSpy });
@@ -438,7 +442,10 @@ describe("onCrisisAlertCreated — sự kiện SỬA (escalation concern → urg
     expect(params.subject).toContain("KHẨN CẤP");
     expect(params.subject).not.toContain("Mèo con");
     expect(params.text).toContain("THAY THẾ");
-    expect(params.text).toContain("Khẩn cấp"); // severity hiển thị giờ là urgent
+    // Fix round 2, Finding 2: khẳng định đúng DÒNG severity, không chỉ chuỗi con "Khẩn cấp" —
+    // đoạn văn escalation ở trên đã tự chứa "Khẩn cấp" nên assertion cũ không chứng minh được
+    // dòng "Mức độ:" thật sự đổi theo severity mới.
+    expect(params.text).toContain("Mức độ: Khẩn cấp");
 
     const finalAlert = await getAlert();
     expect(finalAlert.emailStatus).toBe("sent");
@@ -452,6 +459,10 @@ describe("onCrisisAlertCreated — sự kiện SỬA (escalation concern → urg
     const beforeSnapData = await getAlert();
 
     const afterSnapData = await patchAlert({ handledBy: "admin-x" });
+    // Fix round 2, Finding 2: chụp lại emailedAt TRƯỚC — so `emailStatus` với chính nó (cả hai
+    // đều "sent") LUÔN đúng dù handler có chạy lại hay không, nên không chứng minh được gì; đây
+    // mới là khẳng định mà comment của chính test này đưa ra ("không ghi lại gì").
+    const emailedAtBefore = beforeSnapData.emailedAt;
 
     const sendEmailSpy = fakeSendEmail();
     await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
@@ -461,6 +472,9 @@ describe("onCrisisAlertCreated — sự kiện SỬA (escalation concern → urg
     // Không bị viết đè: handledBy vẫn còn nguyên, emailStatus/emailedAt không đổi so với trước.
     expect(finalAlert.handledBy).toBe("admin-x");
     expect(finalAlert.emailStatus).toBe(beforeSnapData.emailStatus);
+    expect((finalAlert.emailedAt as Timestamp).toDate().getTime()).toBe(
+      (emailedAtBefore as Timestamp).toDate().getTime(),
+    );
   });
 
   it("16. leo thang nhưng mail ban đầu KHÔNG phải 'sent' (vd 'skipped') → không gửi mail CẬP NHẬT", async () => {
@@ -490,5 +504,60 @@ describe("onCrisisAlertCreated — sự kiện SỬA (escalation concern → urg
     await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
 
     expect(sendEmailSpy).not.toHaveBeenCalled();
+  });
+
+  it("18. leo thang khi mail ban đầu 'failed' → gửi mail ĐẦY ĐỦ (kind initial, không phải escalation) để không bỏ sót cảnh báo urgent (Fix round 2, Finding 1a)", async () => {
+    await setAiConfig();
+    await setStudent();
+    const beforeSnapData: Record<string, unknown> = {
+      userId: STUDENT_UID,
+      severity: "concern",
+      triggeredBy: "keyword",
+      createdAt: Timestamp.fromDate(new Date("2026-08-25T02:30:00Z")),
+      handledBy: null,
+      handledAt: null,
+      emailStatus: "failed",
+      emailedAt: null,
+    };
+    const afterSnapData = { ...beforeSnapData, severity: "urgent", triggeredBy: "both" };
+
+    const sendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(1);
+    const params = sendEmailSpy.mock.calls[0][0];
+    // Tiêu đề mail BAN ĐẦU (urgent), KHÔNG phải tiêu đề escalation — thân mail escalation nói
+    // "THAY THẾ đánh giá mức độ trong email trước đó", một lời nói dối khi mail đầu chưa từng
+    // tới nơi.
+    expect(params.subject).toBe("[ExamCalm] Cảnh báo KHẨN CẤP — cần xử lý ngay");
+    expect(params.subject).not.toContain("CẬP NHẬT");
+    expect(params.text).not.toContain("THAY THẾ");
+    expect(params.text).toContain("Mức độ: Khẩn cấp");
+  });
+
+  it("19. leo thang khi mail ban đầu CHƯA kịp ghi trạng thái (emailStatus thiếu — race điều kiện) → vẫn gửi mail ĐẦY ĐỦ, không bỏ sót (Fix round 2, Finding 1b)", async () => {
+    await setAiConfig();
+    await setStudent();
+    // Mô phỏng đúng race: nhánh TẠO chưa kịp writeEmailStatus khi upgradeCrisisAlert đã chạy —
+    // `before` KHÔNG có field emailStatus/emailedAt (không phải null, mà THIẾU HẲN — đúng những
+    // gì event.data.before.data() trả về ngay sau writeCrisisAlert, trước khi trigger TẠO ghi gì).
+    const beforeSnapData: Record<string, unknown> = {
+      userId: STUDENT_UID,
+      severity: "concern",
+      triggeredBy: "keyword",
+      createdAt: Timestamp.fromDate(new Date("2026-08-25T02:30:00Z")),
+      handledBy: null,
+      handledAt: null,
+    };
+    const afterSnapData = { ...beforeSnapData, severity: "urgent", triggeredBy: "both" };
+
+    const sendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertUpdated(ALERT_ID, beforeSnapData, afterSnapData, makeDeps({ sendEmail: sendEmailSpy }));
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(1);
+    const params = sendEmailSpy.mock.calls[0][0];
+    expect(params.subject).toBe("[ExamCalm] Cảnh báo KHẨN CẤP — cần xử lý ngay");
+    expect(params.text).not.toContain("THAY THẾ");
+    expect(params.text).toContain("Mức độ: Khẩn cấp");
   });
 });

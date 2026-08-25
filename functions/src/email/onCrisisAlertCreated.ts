@@ -56,6 +56,31 @@
 // mail có thêm một dòng ngữ cảnh (đây là tín hiệu nguy cơ tự hại, nội dung tin nhắn CỐ Ý không
 // đưa vào); (d) mốc thời gian ghi rõ "(giờ Việt Nam)", và gửi qua `bcc` thay vì `to` — một admin
 // forward lại mail không vô tình lộ toàn bộ email admin khác.
+//
+// ==== Fix round 2 (review từ coordinator) — 1 finding Important + 1 finding Minor ====
+//
+// Finding 1 (Important): guard escalation cũ (`before.emailStatus !== "sent"` → return) có HAI
+// lỗ hổng chung một chỗ sửa — (a) gap đã tự flag ở Fix round 1: mail đầu "failed" rồi severity
+// lên "urgent" → KHÔNG mail nào cho một cảnh báo urgent; (b) một race không thấy trước:
+// `before.emailStatus` là trạng thái TẠI THỜI ĐIỂM `upgradeCrisisAlert` ghi — nếu lần ghi trạng
+// thái của nhánh TẠO CHƯA xong (cửa sổ thời gian THẬT: sendChatMessage.ts đợi trọn một lượt suy
+// luận model giữa lúc tạo alert và lúc nâng cấp), field này là `undefined`, guard cũ return sớm,
+// TRONG KHI nhánh TẠO vẫn đang cầm snapshot "concern" CŨ và sắp gửi "Cần chú ý" rồi ghi "sent" —
+// hộp thư hiểu SAI mức độ vĩnh viễn. SỬA: ba nhánh theo `before.emailStatus` — "skipped" → no-op
+// (tôn trọng lựa chọn tắt); "sent" → gửi CẬP NHẬT (escalation, như cũ); "failed" HOẶC THIẾU
+// (undefined) → gửi mail ĐẦY ĐỦ (kind "initial", đọc `after.severity`) — KHÔNG dùng kind
+// "escalation" cho hai case cuối vì thân mail escalation nói "THAY THẾ đánh giá mức độ trong
+// email trước đó", một lời nói dối khi chưa từng có mail nào chắc chắn tới nơi. Không có nguy cơ
+// lặp vô tận (severity không đổi ở lần ghi tiếp theo); cái giá là khả năng gửi trùng khi race xảy
+// ra — ruling "duplicate beats missing" (Fix round 1) đã chấp nhận đánh đổi này.
+//
+// Finding 2 (Minor): ba chỗ test yếu bị siết lại — test escalation-thành-công giờ khẳng định
+// đúng dòng "Mức độ: Khẩn cấp" (không chỉ chuỗi con "Khẩn cấp", vốn đã có mặt sẵn trong đoạn văn
+// escalation nên không chứng minh được dòng severity thật sự đổi); test chống-tự-kích-hoạt giờ
+// so `emailedAt` TRƯỚC/SAU thay vì so `emailStatus` với chính nó (vốn luôn đúng khi cả hai đều
+// "sent" dù handler có chạy lại hay không); fixture test config-sai-hình-dạng đổi thành ĐÚNG
+// kịch bản production mô tả — spread `DEFAULT_AI_CONFIG` rồi bỏ CHỈ hai field Spec #5, thay vì
+// một object gần như rỗng.
 
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
@@ -426,8 +451,8 @@ export async function runOnCrisisAlertCreated(
 /**
  * Lõi có thể test được cho sự kiện SỬA — Fix round 1, Finding 2: `crisisAlerts` có thể được nâng
  * severity từ "concern" lên "urgent" sau khi mail ban đầu đã gửi (`upgradeCrisisAlert` ở
- * sendChatMessage.ts) — hàm này gửi một mail CẬP NHẬT cho đúng tình huống đó, và KHÔNG làm gì ở
- * mọi tình huống khác.
+ * sendChatMessage.ts) — hàm này gửi một mail phản ánh đúng severity mới cho đúng tình huống đó,
+ * và KHÔNG làm gì ở mọi tình huống khác.
  *
  * Bất biến chống tự-kích-hoạt-lại: một thay đổi không đụng tới `severity` — kể cả CHÍNH việc
  * `writeEmailStatus` ghi `emailStatus`/`emailedAt` ở cuối hàm này (bản thân đó cũng là một sự
@@ -451,12 +476,42 @@ export async function runOnCrisisAlertUpdated(
   // đúng mãi mãi.
   if (beforeSeverity !== "concern" || afterSeverity !== "urgent") return;
 
-  // Chỉ escalate nếu mail BAN ĐẦU đã gửi thành công — nếu chưa (đang "skipped"/"failed"/chưa
-  // ghi), nhánh CREATE (hoặc chính bước ghi trạng thái của nó) chịu trách nhiệm phản ánh severity
-  // hiện tại, không phải nhánh escalation này (ruling coordinator, Fix round 1, Finding 2).
-  if (before.emailStatus !== "sent") return;
+  // Fix round 2, Finding 1: guard cũ ("chỉ escalate nếu emailStatus === 'sent'") có HAI lỗ hổng
+  // coordinator tìm thấy, cùng một chỗ sửa.
+  //
+  // (a) Gap đã tự flag ở Fix round 1: mail đầu "failed" → severity lên "urgent" → guard cũ chặn
+  // → KHÔNG mail nào cho một cảnh báo urgent.
+  //
+  // (b) Race KHÔNG thấy trước: `before.emailStatus` là trạng thái TẠI THỜI ĐIỂM
+  // `upgradeCrisisAlert` ghi — nếu lần ghi `emailStatus` của nhánh TẠO CHƯA xong lúc đó (thực tế:
+  // sendChatMessage.ts đợi trọn một lượt suy luận model giữa lúc tạo alert và lúc nâng cấp, cùng
+  // bậc thời gian với cold start + listAllAuthUsers phân trang + sendEmail timeout 10s của chính
+  // trigger này), field này là `undefined` → guard cũ return sớm — TRONG KHI nhánh TẠO vẫn đang
+  // chạy, cầm snapshot "concern" CŨ, sắp gửi "Cần chú ý" rồi ghi "sent". Hộp thư hiểu SAI mức độ
+  // VĨNH VIỄN — đúng thất bại Finding 2 (Fix round 1) tồn tại để sửa, tái diễn qua một cửa khác.
+  //
+  // SỬA (ruling coordinator, Fix round 2) — ba nhánh thay vì một điều kiện:
+  const priorEmailStatus = before.emailStatus;
 
-  const outcome = await computeOutcomeSafely(after, deps, "escalation");
+  if (priorEmailStatus === "skipped") {
+    // Chủ ý tắt mail (hoặc không có admin) — tôn trọng lựa chọn đó; đánh giá lại chỉ tốn một
+    // lượt ghi vô ích (cấu hình rất có thể vẫn y hệt lúc mail đầu chạy).
+    return;
+  }
+
+  // "sent" → gửi mail CẬP NHẬT (như cũ). "failed" HOẶC THIẾU (undefined — đúng race ở (b)) → gửi
+  // mail ĐẦY ĐỦ (kind "initial", đọc `after.severity` nên hiện đúng "Mức độ: Khẩn cấp"), KHÔNG
+  // phải "escalation": thân mail escalation nói "Email này THAY THẾ đánh giá mức độ trong email
+  // trước đó" — một lời NÓI DỐI khi chưa từng có mail nào tới nơi (case "failed"), hoặc khi mail
+  // đó CÓ THỂ đang trên đường đi nhưng chưa xác nhận (case race). KHÔNG có nguy cơ lặp vô tận:
+  // severity KHÔNG đổi ở lần ghi trạng thái tiếp theo (đã là "urgent" ở `after`), nên sự kiện SỬA
+  // kế tiếp (chính `writeEmailStatus` bên dưới) rơi vào no-op ở đầu hàm này. Cái giá phải trả là
+  // khả năng gửi TRÙNG nếu nhánh TẠO thật ra ĐÃ gửi thành công nhưng chưa kịp ghi "sent" khi race
+  // xảy ra — ruling "duplicate beats missing" (Fix round 1, việc CỐ Ý không xử lý Eventarc
+  // at-least-once) đã chấp nhận đúng đánh đổi này.
+  const kind: EmailKind = priorEmailStatus === "sent" ? "escalation" : "initial";
+
+  const outcome = await computeOutcomeSafely(after, deps, kind);
   await writeEmailStatus(deps.db, alertId, outcome);
 }
 
@@ -481,7 +536,8 @@ export const onCrisisAlertCreated = onDocumentWritten(
       // Sự kiện TẠO — mail ban đầu.
       await runOnCrisisAlertCreated(event.params.alertId, afterData, deps);
     } else {
-      // Sự kiện SỬA — chỉ escalation (concern → urgent, xem guard trong hàm) mới làm gì.
+      // Sự kiện SỬA — chỉ concern → urgent mới làm gì; kind (initial/escalation) và no-op được
+      // quyết định trong hàm dựa trên `before.emailStatus` (xem Fix round 2, Finding 1).
       await runOnCrisisAlertUpdated(event.params.alertId, beforeData, afterData, deps);
     }
   },
