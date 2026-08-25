@@ -59,9 +59,12 @@ export const aiConfigSchema = z.object({
   // sống chung document aiConfig CÓ CHỦ ĐÍCH (lý do đầy đủ ở src/lib/types/ai.ts): cảnh báo chỉ
   // sinh từ chat, chat cần AI, và dùng chung document thì tái dùng được test đồng bộ này, batch
   // ghi atomic, rule, và trang admin đã có thay vì mở một document/rule/đường ghi riêng.
-  crisisEmailEnabled: z.boolean(),
+  // C1 (final whole-branch review): `.default(false)` — lý do đầy đủ ở src/lib/types/ai.ts. Tài
+  // liệu production được ghi TRƯỚC khi hai field này tồn tại thiếu hẳn chúng; không default thì
+  // safeParse rớt cả document ở năm điểm đọc khác nhau (một trong số đó ghi đè toàn bộ document).
+  crisisEmailEnabled: z.boolean().default(false),
   // "" là sentinel "chưa cấu hình" — cùng quy ước baseUrl/model ở trên.
-  crisisEmailFrom: z.string(),
+  crisisEmailFrom: z.string().default(""),
 });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;

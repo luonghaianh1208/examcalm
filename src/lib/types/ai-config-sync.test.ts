@@ -194,6 +194,32 @@ describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/
   it("AI_CONFIG_FIELD_KEYS khớp ĐÚNG Object.keys(functionsSchema.shape) — không lệch khỏi chính schema nó đại diện", () => {
     expect([...AI_CONFIG_FIELD_KEYS].sort()).toEqual(Object.keys(functionsSchema.shape).sort());
   });
+
+  // C1 (final whole-branch review): production `systemConfig/aiConfig` được ghi TRƯỚC khi Spec
+  // #5 thêm crisisEmailEnabled/crisisEmailFrom vào schema — tài liệu thật đó THIẾU HẲN hai field
+  // này (không phải null, mà vắng mặt). Trước fix, hai field khai báo z.boolean()/z.string() KHÔNG
+  // `.default()` khiến safeParse THẤT BẠI cho một tài liệu vốn hợp lệ ở mọi field khác — làm rớt
+  // CẢ document, không chỉ hai field mới, ở NĂM điểm đọc khác nhau (xem final-fix-report.md, C1).
+  // Test này khẳng định tài liệu kiểu-production đó parse THÀNH CÔNG ở CẢ HAI bên, với đúng giá
+  // trị mặc định "tắt, chưa cấu hình" — không phải một object gần như rỗng (đã có phong cách này
+  // ở test #13 sai-hình-dạng của onCrisisAlertCreated.test.ts, Fix round 2 Finding 2).
+  describe("tài liệu production TRƯỚC Spec #5 (C1, final whole-branch review)", () => {
+    it("thiếu crisisEmailEnabled/crisisEmailFrom vẫn parse THÀNH CÔNG ở cả hai schema, với default false/\"\"", () => {
+      const { crisisEmailEnabled, crisisEmailFrom, ...preSpec5Doc } = BASE_VALID;
+      void crisisEmailEnabled;
+      void crisisEmailFrom;
+
+      const srcResult = srcSchema.safeParse(preSpec5Doc);
+      const functionsResult = functionsSchema.safeParse(preSpec5Doc);
+
+      expect(srcResult.success).toBe(true);
+      expect(functionsResult.success).toBe(true);
+      expect(srcResult.success && srcResult.data.crisisEmailEnabled).toBe(false);
+      expect(srcResult.success && srcResult.data.crisisEmailFrom).toBe("");
+      expect(functionsResult.success && functionsResult.data.crisisEmailEnabled).toBe(false);
+      expect(functionsResult.success && functionsResult.data.crisisEmailFrom).toBe("");
+    });
+  });
 });
 
 // Task 4 fix round 1, Finding 4 (review từ coordinator, pre-flight ruling C1): CHAT_WINDOW_SIZE

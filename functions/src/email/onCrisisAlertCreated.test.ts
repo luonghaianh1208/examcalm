@@ -393,14 +393,33 @@ describe("onCrisisAlertCreated — sự kiện TẠO", () => {
     expect(alert.emailedAt).toBeNull();
   });
 
-  it("13. systemConfig/aiConfig tồn tại nhưng sai hình dạng (vd deploy trước khi field mới tồn tại) → 'failed', KHÔNG phải 'skipped'", async () => {
-    // Mô phỏng ĐÚNG kịch bản deploy (Fix round 2, Finding 2 — fixture cũ thiếu gần hết field,
-    // không phải kịch bản production mô tả): doc cũ ghi TRƯỚC khi Spec #5 thêm hai field mới —
-    // MỌI field khác đều hợp lệ, CHỈ thiếu đúng crisisEmailEnabled/crisisEmailFrom.
+  it("13. systemConfig/aiConfig thiếu ĐÚNG hai field Spec #5 (tài liệu production TRƯỚC Spec #5) → 'skipped' nhờ default (C1, final whole-branch review), KHÔNG PHẢI 'failed'", async () => {
+    // C1 (final whole-branch review): trước fix, crisisEmailEnabled/crisisEmailFrom không có
+    // `.default()` khiến safeParse THẤT BẠI cho tài liệu này dù mọi field khác hợp lệ — SAU fix,
+    // `.default()` làm tài liệu này parse THÀNH CÔNG với crisisEmailEnabled=false, nên kết quả
+    // đúng giờ là "skipped" (tính năng THẬT SỰ chưa bật) — SỰ THẬT hơn "failed" (xem
+    // final-fix-report.md, C1). Test này trước đây khẳng định NGƯỢC LẠI ("failed"); đổi kỳ vọng
+    // là chính hành vi mà fix C1 tạo ra, không phải nới lỏng test.
     const { crisisEmailEnabled, crisisEmailFrom, ...oldShapeConfig } = DEFAULT_AI_CONFIG;
     void crisisEmailEnabled;
     void crisisEmailFrom;
     await db.collection("systemConfig").doc("aiConfig").set(oldShapeConfig);
+    const alertData = await writeAlert();
+    const sendEmailSpy = fakeSendEmail();
+    const deps = makeDeps({ sendEmail: sendEmailSpy });
+
+    await runOnCrisisAlertCreated(ALERT_ID, alertData, deps);
+
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+    const alert = await getAlert();
+    expect(alert.emailStatus).toBe("skipped");
+  });
+
+  it("13b. systemConfig/aiConfig THẬT SỰ sai hình dạng (field khác vi phạm ràng buộc, không cứu được bằng default) → vẫn 'failed'", async () => {
+    // C1 chỉ thêm default cho HAI field Spec #5 — một field khác (vd temperature ngoài [0,1])
+    // vẫn phải làm safeParse thất bại thật sự, để phân biệt "tài liệu cũ hợp lệ nhưng thiếu field
+    // mới" (test 13, giờ 'skipped') khỏi "tài liệu THẬT SỰ hỏng" (test này, vẫn phải 'failed').
+    await db.collection("systemConfig").doc("aiConfig").set({ ...DEFAULT_AI_CONFIG, temperature: 5 });
     const alertData = await writeAlert();
     const sendEmailSpy = fakeSendEmail();
     const deps = makeDeps({ sendEmail: sendEmailSpy });

@@ -87,9 +87,18 @@ export const aiConfigSchema = z.object({
   // document riêng nghĩa là một rule riêng, một đường đọc riêng, một đường ghi riêng — chi phí
   // đó không đáng cho hai field. ĐỪNG "dọn" hai field này ra document riêng mà không đọc lại
   // đoạn comment này trước.
-  crisisEmailEnabled: z.boolean(),
+  // C1 (final whole-branch review): `.default(false)` — production `systemConfig/aiConfig` được
+  // ghi TRƯỚC khi hai field này tồn tại, nên tài liệu thật đó THIẾU HẲN chúng (không phải null).
+  // Không có default, safeParse THẤT BẠI cho một tài liệu vốn hợp lệ ở mọi field khác, làm rớt
+  // CẢ document ở năm điểm đọc (xem functions/src/email/onCrisisAlertCreated.ts,
+  // functions/src/ai/sendChatMessage.ts, functions/src/ai/generateReflection.ts,
+  // src/lib/firestore/admin-ai.ts, functions/src/admin/saveAiConfig.ts) — một trong số đó
+  // (saveAiConfig batch.set) là GHI ĐÈ TOÀN BỘ, không phải merge, nên form trống rơi từ đó có thể
+  // XOÁ SẠCH baseUrl/model/quota thật khi admin bấm Lưu. `.default()` không đổi kiểu TypeScript
+  // suy ra (field vẫn bắt buộc ở output) — chỉ đổi INPUT của safeParse thành optional.
+  crisisEmailEnabled: z.boolean().default(false),
   // "" là sentinel "chưa cấu hình" — cùng quy ước với baseUrl/model ở trên. Rỗng vẫn hợp lệ.
-  crisisEmailFrom: z.string(),
+  crisisEmailFrom: z.string().default(""),
 });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;
