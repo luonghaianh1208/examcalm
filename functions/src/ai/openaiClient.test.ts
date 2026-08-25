@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { callChatCompletion, AiProviderError, type ChatCompletionParams } from "./openaiClient";
+import {
+  callChatCompletion,
+  AiProviderError,
+  type ChatCompletionParams,
+  type ChatCompletionMessage,
+} from "./openaiClient";
 
 // Key giả dùng xuyên suốt file test — mọi nhánh lỗi phải được khẳng định KHÔNG echo lại chuỗi này.
 const SECRET_API_KEY = "sk-SECRET-VALUE";
@@ -102,6 +107,38 @@ describe("callChatCompletion", () => {
       max_tokens: baseParams.maxTokens,
       stream: false,
     });
+  });
+
+  // Task 5 (Spec #4): sendChatMessage.ts truyền một mảng `messages` nhiều lượt (dựng sẵn bởi
+  // buildChatMessages) thay vì cặp systemPrompt/userPrompt — callChatCompletion phải gửi thẳng
+  // mảng đó, không tự ý bọc lại thành hai lượt system/user.
+  it("case 3b: params dùng `messages` (nhiều lượt) → body.messages gửi thẳng mảng đó, không phải [system, user]", async () => {
+    let seenInit: RequestInit | null = null;
+    const fetchImpl = fakeFetch((_url, init) => {
+      seenInit = init;
+      return validSuccessResponse();
+    });
+
+    const messages: ChatCompletionMessage[] = [
+      { role: "system", content: "Bạn là trợ lý." },
+      { role: "user", content: "Lượt cũ 1" },
+      { role: "assistant", content: "Trả lời cũ 1" },
+      { role: "user", content: "Tin mới" },
+    ];
+    const params: ChatCompletionParams = {
+      baseUrl: baseParams.baseUrl,
+      apiKey: baseParams.apiKey,
+      model: baseParams.model,
+      temperature: baseParams.temperature,
+      maxTokens: baseParams.maxTokens,
+      timeoutMs: baseParams.timeoutMs,
+      messages,
+    };
+
+    await callChatCompletion(params, { fetchImpl });
+
+    const body = JSON.parse(seenInit!.body as string);
+    expect(body.messages).toEqual(messages);
   });
 
   it("case 4: response hợp lệ → trả text từ choices[0].message.content", async () => {

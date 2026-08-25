@@ -7,3 +7,4 @@ export { deleteUserData } from "./admin/deleteUserData";
 export { saveAiConfig } from "./admin/saveAiConfig";
 export { generateReflection } from "./ai/generateReflection";
 export { testAiConnection } from "./ai/testConnection";
+export { sendChatMessage } from "./ai/sendChatMessage";
