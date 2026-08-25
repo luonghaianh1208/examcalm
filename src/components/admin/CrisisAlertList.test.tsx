@@ -239,6 +239,53 @@ describe("CrisisAlertList — truncated (I6, final whole-branch review)", () => 
   });
 });
 
+// ExamCalm Spec #5, Task 3 (task-3-brief.md, "Bốn trạng thái không quan trọng như nhau"):
+// "failed" phải NỔI BẬT — nghĩa là KHÔNG ai được báo qua mail, và thầy cô chỉ biết nếu tình cờ
+// mở trang này. "skipped" KHÔNG được đọc như "admin đã tắt" (một cấu hình sai hình dạng cũng ra
+// "failed", còn cấu hình THIẾU mới ra "skipped" — hai chữ đó không được lẫn vào nhau). "absent"
+// (field vắng mặt) đọc như "chưa rõ", không phải thành công hay thất bại.
+describe("CrisisAlertList — trạng thái gửi mail (ExamCalm Spec #5, Task 3)", () => {
+  it("emailStatus 'sent' -> hiện 'đã gửi', kèm mốc thời gian emailedAt", async () => {
+    const sent: CrisisAlertRecord = {
+      ...UNHANDLED_URGENT,
+      emailStatus: "sent",
+      emailedAt: new Date("2026-08-24T10:00:05Z"),
+    };
+    await renderReady([sent]);
+
+    expect(screen.getByText(/đã gửi mail cảnh báo lúc.*2026/i)).toBeInTheDocument();
+  });
+
+  it("emailStatus 'failed' -> hiện rõ 'không ai được báo qua mail', và nổi bật hơn các trạng thái khác (không dùng cùng class với 'sent'/'skipped')", async () => {
+    const failed: CrisisAlertRecord = { ...UNHANDLED_URGENT, emailStatus: "failed", emailedAt: null };
+    await renderReady([failed]);
+
+    const failedNode = screen.getByText(/không ai được báo qua mail/i);
+    expect(failedNode).toBeInTheDocument();
+    // "Nổi bật" ở đây nghĩa là dùng một class NGOÀI class trung tính (text-slate-500) mà các
+    // trạng thái khác dùng — pin cụ thể bằng nền màu cảnh báo mạnh (rose), không phải suy đoán
+    // chung chung "trông khác".
+    expect(failedNode.className).toMatch(/rose/);
+  });
+
+  it("emailStatus 'skipped' -> hiện chữ trung tính, KHÔNG khẳng định 'admin đã tắt'", async () => {
+    const skipped: CrisisAlertRecord = { ...UNHANDLED_URGENT, emailStatus: "skipped", emailedAt: null };
+    await renderReady([skipped]);
+
+    expect(screen.getByText(/bỏ qua/i)).toBeInTheDocument();
+    // Chữ không được khẳng định "admin đã tắt" — một cấu hình THIẾU (chưa từng cấu hình) cũng ra
+    // "skipped", không chỉ trường hợp admin chủ ý tắt.
+    expect(screen.queryByText(/admin đã tắt/i)).not.toBeInTheDocument();
+  });
+
+  it("emailStatus vắng mặt (null từ admin-crisis.ts) -> hiện 'chưa rõ', KHÔNG phải 'đã gửi' hay 'gửi hỏng'", async () => {
+    const unknown: CrisisAlertRecord = { ...UNHANDLED_URGENT, emailStatus: null, emailedAt: null };
+    await renderReady([unknown]);
+
+    expect(screen.getByText(/chưa rõ/i)).toBeInTheDocument();
+  });
+});
+
 describe("CrisisAlertList — tải lỗi (vd non-admin bị chặn bởi rules)", () => {
   it("listCrisisAlerts thất bại -> hiện thông báo lỗi kèm nút thử lại, không crash", async () => {
     mockedListCrisisAlerts.mockRejectedValue(new Error("permission-denied"));

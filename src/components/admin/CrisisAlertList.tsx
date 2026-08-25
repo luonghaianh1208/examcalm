@@ -22,6 +22,35 @@ function formatAlertTime(d: Date): string {
   return Number.isNaN(d.getTime()) ? "Không rõ thời điểm" : formatter.format(d);
 }
 
+/** ExamCalm Spec #5, Task 3 (task-3-brief.md, "Bốn trạng thái không quan trọng như nhau"):
+ *  bốn trạng thái mail nghĩa khác nhau, admin phải phân biệt được:
+ *  - "failed" — mail HỎNG, KHÔNG ai được báo qua email. Nổi bật nhất (emailStatusClassName).
+ *  - "skipped" — tính năng đang tắt HOẶC chưa có admin nào — CỐ Ý không nói "admin đã tắt", vì
+ *    một cấu hình THIẾU (chưa từng cấu hình) cũng ra đúng trạng thái này, không chỉ trường hợp
+ *    admin chủ ý tắt (một cấu hình SAI HÌNH DẠNG mới ra "failed" — xem onCrisisAlertCreated.ts).
+ *  - "sent" — đã gửi, kèm mốc thời gian.
+ *  - null (vắng mặt trên document — xem admin-crisis.ts) — "chưa rõ", KHÔNG PHẢI thành công hay
+ *    thất bại: trigger Task 2 có thể chưa chạy, hoặc chết trước khi ghi lại được gì. */
+function formatEmailStatus(status: CrisisAlertRecord["emailStatus"], emailedAt: Date | null): string {
+  if (status === "sent") {
+    return emailedAt ? `Đã gửi mail cảnh báo lúc ${formatAlertTime(emailedAt)}` : "Đã gửi mail cảnh báo";
+  }
+  if (status === "failed") {
+    return "Gửi mail cảnh báo THẤT BẠI — không ai được báo qua mail";
+  }
+  if (status === "skipped") {
+    return "Đã bỏ qua gửi mail (tính năng đang tắt, hoặc chưa có admin nào nhận được)";
+  }
+  return "Chưa rõ trạng thái gửi mail";
+}
+
+function emailStatusClassName(status: CrisisAlertRecord["emailStatus"]): string {
+  if (status === "failed") {
+    return "rounded-lg bg-rose-100 px-2 py-1 text-sm font-semibold text-rose-900";
+  }
+  return "text-sm text-slate-500";
+}
+
 /** Fix round 1, Finding 1 (CRITICAL): `alert.userId` một mình là ngõ cụt trong sản phẩm — không
  *  trang admin nào khác hiện hay tìm được theo uid. `studentsByUid` (đổ từ `listUsers()` ở
  *  `canh-bao/page.tsx`, server-side) join uid sang danh tính DÙNG ĐƯỢC. Không có access delta:
@@ -158,6 +187,9 @@ export function CrisisAlertList({
                 </span>
                 <span className="text-sm text-slate-500">{formatAlertTime(alert.createdAt)}</span>
                 <StudentIdentity userId={alert.userId} student={studentsByUid[alert.userId]} />
+                <span className={emailStatusClassName(alert.emailStatus ?? null)}>
+                  {formatEmailStatus(alert.emailStatus ?? null, alert.emailedAt ?? null)}
+                </span>
 
                 {unhandled ? (
                   <button

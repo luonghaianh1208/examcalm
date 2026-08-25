@@ -13,6 +13,11 @@ import { callTestAiConnection } from "@/lib/firebase/functions-client";
  *  Decision C). Chuỗi này chỉ được phép xuất hiện dưới dạng TEXT HIỂN THỊ trong file này. */
 const AI_API_KEY_SECRET_NAME = "EXAMCALM_AI_API_KEY";
 
+/** Tên secret Resend trong Secret Manager — ExamCalm Spec #5 (task-3-brief.md, mục 5). Cùng kỷ
+ *  luật với AI_API_KEY_SECRET_NAME ở trên: KHÔNG BAO GIỜ có ô nhập cho key này, chỉ text hiển
+ *  thị hướng dẫn CLI. */
+const RESEND_API_KEY_SECRET_NAME = "EXAMCALM_RESEND_API_KEY";
+
 type ConfigFormState = {
   providerLabel: string;
   baseUrl: string;
@@ -101,6 +106,10 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
   const isFeatureToggleDirty = form !== null && savedForm !== null && form.featureEnabled !== savedForm.featureEnabled;
   // Task 9: cùng lý do với isFeatureToggleDirty ở trên, áp cho công tắc chat RIÊNG.
   const isChatToggleDirty = form !== null && savedForm !== null && form.chatEnabled !== savedForm.chatEnabled;
+  // ExamCalm Spec #5 (task-3-brief.md, mục 3): cùng lý do với isFeatureToggleDirty/isChatToggleDirty
+  // ở trên, áp cho công tắc gửi mail cảnh báo khủng hoảng RIÊNG.
+  const isCrisisEmailToggleDirty =
+    form !== null && savedForm !== null && form.crisisEmailEnabled !== savedForm.crisisEmailEnabled;
 
   const [configError, setConfigError] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
@@ -427,6 +436,58 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
               </p>
               <code className="mt-1 block rounded bg-white px-2 py-1 font-mono text-xs">
                 firebase functions:secrets:set {AI_API_KEY_SECRET_NAME}
+              </code>
+            </div>
+
+            {/* ExamCalm Spec #5 (task-3-brief.md, mục 3): crisisEmailFrom giờ dùng làm CẢ from
+                lẫn to (admin nhận qua bcc — xem onCrisisAlertCreated.ts) — mọi mail cảnh báo đều
+                thử gửi tới CHÍNH địa chỉ này. Một no-reply không có hộp thư nhận sẽ bounce cứng
+                trên MỌI lượt gửi, và bounce rate cao kéo dài là lý do Resend khoá/đình chỉ tài
+                khoản — sập luôn đường gửi mail khủng hoảng. Nhãn phải nói rõ điều này TRƯỚC khi
+                admin gõ vào, không phải sau khi sự cố xảy ra. */}
+            <label className="flex flex-col gap-1">
+              <span>
+                Email gửi cảnh báo khủng hoảng cho admin — PHẢI là hộp thư có người thật kiểm
+                tra, KHÔNG được là địa chỉ no-reply (địa chỉ này đóng vai trò CẢ người gửi lẫn
+                người nhận; một no-reply sẽ bounce cứng mọi lượt gửi và có thể khiến Resend khoá
+                tài khoản gửi mail)
+              </span>
+              <input
+                value={form.crisisEmailFrom}
+                onChange={(e) => updateForm("crisisEmailFrom", e.target.value)}
+                placeholder="canh-bao@truong-ban.edu.vn"
+                className="rounded-lg border px-3 py-2"
+              />
+            </label>
+
+            <div className="rounded-lg border p-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.crisisEmailEnabled}
+                  onChange={(e) => updateForm("crisisEmailEnabled", e.target.checked)}
+                />
+                <span>Bật gửi mail cảnh báo khủng hoảng cho mọi admin</span>
+              </label>
+              <p className="mt-1 text-sm font-medium">
+                {isCrisisEmailToggleDirty
+                  ? (form.crisisEmailEnabled
+                    ? "Sẽ bật gửi mail cảnh báo sau khi lưu"
+                    : "Sẽ tắt gửi mail cảnh báo sau khi lưu")
+                  : (form.crisisEmailEnabled
+                    ? "Đang bật gửi mail cảnh báo cho admin"
+                    : "Đang tắt gửi mail cảnh báo")}
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+              <p className="font-medium">Đặt API key Resend bằng CLI</p>
+              <p className="mt-1">
+                Khóa API của Resend (dùng để gửi mail cảnh báo khủng hoảng) không có ô nhập nào
+                ở trang quản trị — nó được lưu trong Secret Manager, đặt bằng lệnh CLI:
+              </p>
+              <code className="mt-1 block rounded bg-white px-2 py-1 font-mono text-xs">
+                firebase functions:secrets:set {RESEND_API_KEY_SECRET_NAME}
               </code>
             </div>
 

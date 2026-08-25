@@ -26,6 +26,17 @@ function fakeFetch(
   }) as unknown as typeof fetch;
 }
 
+/** fetch giả ném MỘT lỗi mạng chung (không phải AbortError) — DNS/connection refused/... Nhánh
+ *  catch này (ride-along, task-3-brief.md) chưa từng có case test riêng: message của lỗi ném ra
+ *  cố tình mang theo API key giả để chứng minh nhánh này KHÔNG bao giờ nội suy `error.message`
+ *  gốc vào EmailError.message — đây là nhánh dễ "mọc" thêm `error.message` nhất trong tương lai,
+ *  và đó là cách phổ biến nhất khiến API key lọt vào log. */
+function networkErrorFetch(secretInErrorMessage: string): typeof fetch {
+  return (async () => {
+    throw new Error(`ECONNREFUSED khi gọi Resend (key=${secretInErrorMessage})`);
+  }) as unknown as typeof fetch;
+}
+
 /** fetch giả chờ vô hạn cho tới khi bị AbortController huỷ — dùng cho test timeout. */
 function neverResolvingFetch(): typeof fetch {
   return (async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -185,6 +196,26 @@ describe("sendEmail", () => {
     await expect(promise).rejects.toMatchObject({ kind: "timeout" });
   });
 
+  // Ride-along (task-3-brief.md): nhánh catch mạng chung (fetch ném lỗi KHÔNG PHẢI AbortError —
+  // DNS, connection refused...) chưa từng có case riêng. kind phải là "server" (không có status
+  // code để phân loại chi tiết hơn), và message KHÔNG BAO GIỜ echo error.message gốc — cố tình
+  // nhét API key giả vào message lỗi gốc để chứng minh code không nội suy nó vào EmailError.
+  it("case 12b: lỗi mạng chung (không phải AbortError) -> kind server, KHÔNG echo message gốc (không lộ apiKey)", async () => {
+    const fetchImpl = networkErrorFetch(SECRET_API_KEY);
+
+    const promise = sendEmail(baseParams, { fetchImpl });
+
+    await expect(promise).rejects.toBeInstanceOf(EmailError);
+    await expect(promise).rejects.toMatchObject({ kind: "server" });
+    let caught: unknown;
+    try {
+      await sendEmail(baseParams, { fetchImpl });
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as EmailError).message).not.toContain(SECRET_API_KEY);
+  });
+
   // Case quan trọng nhất: EmailError.message không bao giờ chứa apiKey, kiểm tra trên MỌI
   // nhánh lỗi chứ không chỉ một nhánh — vì message lỗi vô tình echo lại request/header là cách
   // API key rò rỉ vào log phổ biến nhất (cùng kỷ luật với functions/src/ai/openaiClient.ts).
@@ -236,6 +267,11 @@ describe("sendEmail", () => {
         name: "timeout",
         kind: "timeout",
         fetchImpl: () => neverResolvingFetch(),
+      },
+      {
+        name: "lỗi mạng chung (không phải AbortError) -> server",
+        kind: "server",
+        fetchImpl: () => networkErrorFetch(SECRET_API_KEY),
       },
     ];
 

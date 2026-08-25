@@ -140,19 +140,25 @@ coi là "học sinh bị mất quyền dùng AI" khi nhận được câu hỏi 
 **Đây là dòng quan trọng nhất trong toàn bộ tài liệu này — quan trọng hơn mọi mục ở trên.**
 
 Khi hệ thống phát hiện một học sinh có dấu hiệu tự hại (qua từ khoá hoặc qua chính AI tự đánh
-giá), nó ghi một bản ghi vào `crisisAlerts` — admin xem được ở trang quản trị cảnh báo. **Nhưng
-bản ghi đó, tự nó, không cứu được ai.** Nó chỉ có ý nghĩa nếu có một CON NGƯỜI thật sự đọc nó và
-đi hỏi thăm em học sinh đó. Một hệ thống cảnh báo mà đằng sau không có quy trình con người xử lý
-còn TỆ HƠN không có hệ thống cảnh báo nào cả — nó khiến người thiết kế app tưởng rằng vấn đề đã
+giá), nó ghi một bản ghi vào `crisisAlerts` — admin xem được ở trang quản trị cảnh báo. **Giờ
+đây (ExamCalm Spec #5), MỌI tài khoản admin còn tự động nhận được một email** ngay khi cảnh báo
+được ghi (xem [mục 7 của docs/ai-provider-setup.md](./ai-provider-setup.md) để cắm dịch vụ gửi
+mail này) — nhưng điều đó **không thay đổi câu trả lời mục này phải có**. Mục này vẫn CHẶN, vì
+câu hỏi thật sự nó đặt ra không phải "ai NHẬN được cảnh báo" (giờ email đã tự động trả lời câu
+đó) mà là **trong bao lâu một người phải PHẢN HỒI**, và **ai thay thế khi người đó vắng mặt** —
+một email tự động không trả lời được cả hai câu này. Một hộp thư đầy email cảnh báo mà không ai
+đọc kịp còn TỆ HƠN không có email nào cả — nó khiến người thiết kế app tưởng rằng vấn đề đã
 "được xử lý bằng công nghệ", trong khi thực ra không ai đang theo dõi.
 
 Trước khi bật tính năng trò chuyện, trường bạn PHẢI trả lời rõ ràng bằng văn bản (điền ngay vào
 ô dưới đây, không được để trống hay ghi "sẽ tính sau"):
 
-- **Ai** là người (hoặc những người) chịu trách nhiệm kiểm tra trang cảnh báo? Ghi rõ tên/chức
-  vụ, không ghi chung chung như "ban giám hiệu": `______________________________`
-- **Bao lâu một lần** người đó kiểm tra trang cảnh báo? (Đề xuất: ít nhất 1 lần mỗi buổi học,
-  không phải 1 lần mỗi ngày — mức `urgent` cần được thấy trong vài giờ, không phải qua đêm.)
+- **Ai** là người (hoặc những người) chịu trách nhiệm kiểm tra trang cảnh báo VÀ hộp thư nhận
+  email cảnh báo? Ghi rõ tên/chức vụ, không ghi chung chung như "ban giám hiệu":
+  `______________________________`
+- **Bao lâu một lần** người đó kiểm tra? (Đề xuất: ít nhất 1 lần mỗi buổi học, không phải 1 lần
+  mỗi ngày — mức `urgent` cần được thấy trong vài giờ, không phải qua đêm. Email tự động không tự
+  rút ngắn thời gian này — nó chỉ báo có cảnh báo, không thay người đọc và hành động.)
   `______________________________`
 - Nếu người phụ trách chính **vắng mặt** (nghỉ ốm, đi công tác...), ai là người thay thế?
   `______________________________`
@@ -161,6 +167,15 @@ Trước khi bật tính năng trò chuyện, trường bạn PHẢI trả lời
 
 Chỉ tick mục này khi cả bốn dòng trên đã có câu trả lời cụ thể, có tên người thật, không phải
 một kế hoạch còn để ngỏ.
+
+**Bước kiểm cuối cùng — bắt buộc, làm TRÊN PRODUCTION:** sau khi cắm xong Resend (mục 7 của
+docs/ai-provider-setup.md) và tick "Bật gửi mail cảnh báo khủng hoảng cho mọi admin" ở
+`/admin/ai`, tạo một cảnh báo thử thật (vd dùng tài khoản học sinh thử, gõ một câu chứa từ khoá
+khủng hoảng ở tính năng Trò chuyện) và **xác nhận email THẬT SỰ tới được hộp thư** của người phụ
+trách ghi ở trên — không chỉ tin rằng `emailStatus: "sent"` trên trang `/admin/canh-bao` là đủ
+bằng chứng (mail "sent" từ phía Resend vẫn có thể rơi vào thư mục spam, hoặc bị chặn bởi bộ lọc
+mail của trường). Chỉ tick mục này sau khi người phụ trách xác nhận đã THẤY email đó trong hộp
+thư của chính họ.
 
 ### ☐ 10. Chuyên gia tâm lý học đường duyệt BA văn bản, không phải một
 

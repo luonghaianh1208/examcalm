@@ -29,6 +29,16 @@ function toCrisisAlertRecord(id: string, data: Record<string, unknown>): CrisisA
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(NaN),
     handledBy: typeof data.handledBy === "string" ? data.handledBy : null,
     handledAt: data.handledAt instanceof Timestamp ? data.handledAt.toDate() : null,
+    // ExamCalm Spec #5, Task 3: field VẮNG MẶT (trigger Task 2 chưa chạy, hoặc chết trước khi ghi
+    // lại được gì — xem chat.ts:47-55) và giá trị sai kiểu/lạ đều rơi về CÙNG một fallback null
+    // — "chưa rõ", KHÔNG phải một trong ba trạng thái đã biết ("sent"/"failed"/"skipped"). Coi
+    // hai tình huống đó là một trạng thái duy nhất là ĐÚNG ở đây: cả hai đều có nghĩa "không có
+    // thông tin đáng tin để hiển thị", khác với việc code thật sự từng ghi một trong ba giá trị.
+    emailStatus:
+      data.emailStatus === "sent" || data.emailStatus === "failed" || data.emailStatus === "skipped"
+        ? data.emailStatus
+        : null,
+    emailedAt: data.emailedAt instanceof Timestamp ? data.emailedAt.toDate() : null,
   };
 }
 

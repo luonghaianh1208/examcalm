@@ -84,6 +84,8 @@ describe("listCrisisAlerts", () => {
             createdAt: fakeTimestamp(new Date("2026-08-24T10:00:00Z")),
             handledBy: null,
             handledAt: null,
+            emailStatus: "sent",
+            emailedAt: fakeTimestamp(new Date("2026-08-24T10:00:05Z")),
             // Field NGOÀI crisisAlertSchema — không bao giờ được phép xuất hiện ở đầu ra.
             messageText: "nội dung riêng tư của học sinh",
           },
@@ -94,8 +96,104 @@ describe("listCrisisAlerts", () => {
     const { alerts: result } = await listCrisisAlerts();
 
     expect(Object.keys(result[0]!).sort()).toEqual(
-      ["createdAt", "handledAt", "handledBy", "id", "severity", "triggeredBy", "userId"].sort(),
+      [
+        "createdAt", "emailStatus", "emailedAt", "handledAt", "handledBy", "id", "severity",
+        "triggeredBy", "userId",
+      ].sort(),
     );
+  });
+
+  // ExamCalm Spec #5, Task 3: hai field mới map TƯỜNG MINH, Timestamp -> Date — cùng kỷ luật
+  // với handledAt/createdAt. Bốn trạng thái emailStatus phải phân biệt được (task-3-brief.md):
+  // "sent"/"failed"/"skipped" đọc thẳng từ document, và field VẮNG MẶT (trigger Task 2 chưa
+  // chạy, hoặc chết trước khi ghi lại được gì) map về null — "chưa rõ", KHÔNG phải một trong
+  // ba trạng thái đã biết.
+  describe("emailStatus / emailedAt", () => {
+    it("emailStatus 'sent' kèm emailedAt -> map tường minh, Timestamp -> Date", async () => {
+      const emailedAt = new Date("2026-08-24T10:00:05Z");
+      mockedGetDocs.mockResolvedValue(
+        fakeQuerySnap([
+          {
+            id: "a1",
+            data: {
+              userId: "u1", severity: "urgent", triggeredBy: "keyword",
+              createdAt: fakeTimestamp(new Date("2026-08-24T10:00:00Z")),
+              handledBy: null, handledAt: null,
+              emailStatus: "sent", emailedAt: fakeTimestamp(emailedAt),
+            },
+          },
+        ]),
+      );
+
+      const { alerts: result } = await listCrisisAlerts();
+
+      expect(result[0]?.emailStatus).toBe("sent");
+      expect(result[0]?.emailedAt).toEqual(emailedAt);
+    });
+
+    it.each(["failed", "skipped"] as const)("emailStatus '%s' -> map tường minh, emailedAt null", async (status) => {
+      mockedGetDocs.mockResolvedValue(
+        fakeQuerySnap([
+          {
+            id: "a1",
+            data: {
+              userId: "u1", severity: "concern", triggeredBy: "keyword",
+              createdAt: fakeTimestamp(new Date("2026-08-24T10:00:00Z")),
+              handledBy: null, handledAt: null,
+              emailStatus: status, emailedAt: null,
+            },
+          },
+        ]),
+      );
+
+      const { alerts: result } = await listCrisisAlerts();
+
+      expect(result[0]?.emailStatus).toBe(status);
+      expect(result[0]?.emailedAt).toBeNull();
+    });
+
+    it("emailStatus VẮNG MẶT trên document (trigger Task 2 chưa chạy hoặc chết trước khi ghi) -> map về null, KHÔNG phải 'skipped'/'failed'", async () => {
+      mockedGetDocs.mockResolvedValue(
+        fakeQuerySnap([
+          {
+            id: "a1",
+            data: {
+              userId: "u1", severity: "concern", triggeredBy: "keyword",
+              createdAt: fakeTimestamp(new Date("2026-08-24T10:00:00Z")),
+              handledBy: null, handledAt: null,
+              // KHÔNG có emailStatus/emailedAt — đúng hình dạng document TRƯỚC KHI trigger Task 2
+              // kịp chạy (chat.ts:47-55).
+            },
+          },
+        ]),
+      );
+
+      const { alerts: result } = await listCrisisAlerts();
+
+      expect(result[0]?.emailStatus).toBeNull();
+      expect(result[0]?.emailedAt).toBeNull();
+    });
+
+    it("emailStatus sai kiểu/giá trị lạ -> fallback an toàn về null, KHÔNG throw", async () => {
+      mockedGetDocs.mockResolvedValue(
+        fakeQuerySnap([
+          {
+            id: "a1",
+            data: {
+              userId: "u1", severity: "concern", triggeredBy: "keyword",
+              createdAt: fakeTimestamp(new Date("2026-08-24T10:00:00Z")),
+              handledBy: null, handledAt: null,
+              emailStatus: "linh-tinh", emailedAt: "khong-phai-timestamp",
+            },
+          },
+        ]),
+      );
+
+      const { alerts: result } = await listCrisisAlerts();
+
+      expect(result[0]?.emailStatus).toBeNull();
+      expect(result[0]?.emailedAt).toBeNull();
+    });
   });
 
   it("document lệch hình dạng (field sai kiểu/thiếu) -> fallback an toàn, KHÔNG throw", async () => {

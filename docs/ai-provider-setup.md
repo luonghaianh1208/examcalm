@@ -135,7 +135,83 @@ cảm xúc thật của học sinh nào, và **không** trừ vào lượt (quot
 Nút "Thử kết nối" luôn kiểm tra cấu hình **đã lưu**, không phải các ô đang gõ dở chưa bấm
 "Lưu cấu hình" — nếu vừa sửa gì đó, lưu lại trước khi bấm thử.
 
-## 7. Trước khi bật thật cho học sinh
+## 7. Cắm dịch vụ gửi mail cảnh báo khủng hoảng (Resend)
+
+Đây là một dịch vụ **khác hoàn toàn** với dịch vụ AI ở các mục 1–6 phía trên — không dùng
+chung API key, không dùng chung tài khoản. Mục này chỉ liên quan tới việc **gửi email cho
+admin** khi hệ thống phát hiện một học sinh có dấu hiệu tự hại (ExamCalm dùng
+[Resend](https://resend.com) để gửi mail này). Nếu bạn chưa bật tính năng Trò chuyện (chat) —
+tính năng duy nhất tạo ra cảnh báo khủng hoảng — có thể bỏ qua mục này cho tới khi cần.
+
+### 7.1. Tạo tài khoản Resend và lấy API key
+
+1. Đăng ký tài khoản tại [resend.com](https://resend.com).
+2. **Xác minh (verify) một domain gửi mail** trong dashboard Resend — Resend không cho gửi mail
+   từ một địa chỉ thuộc domain chưa xác minh (thêm bản ghi DNS theo hướng dẫn của Resend cho
+   domain trường bạn, vd `truong-ban.edu.vn`).
+3. Vào **API Keys** trong dashboard, tạo một key mới, sao chép lại (Resend chỉ hiện key này
+   **một lần duy nhất**).
+
+### 7.2. Đặt secret bằng CLI
+
+Giống hệt cách đặt key AI provider ở mục 2, nhưng dùng **tên secret khác**:
+
+```bash
+firebase functions:secrets:set EXAMCALM_RESEND_API_KEY --project examcalm
+```
+
+Dán API key Resend vào khi được hỏi, nhấn Enter. Nếu đây là lần đầu đặt secret này, deploy lại
+Cloud Functions để hệ thống nạp giá trị mới:
+
+```bash
+firebase deploy --only functions --project examcalm
+```
+
+**Tuyệt đối không** có ô nhập nào cho key này ở trang `/admin/ai` — cùng lý do với key AI
+provider ở mục 1: key chỉ đi qua dòng lệnh, không bao giờ qua trình duyệt.
+
+### 7.3. Điền địa chỉ gửi — PHẢI là hộp thư có người thật kiểm tra
+
+Ở `/admin/ai`, ô **"Email gửi cảnh báo khủng hoảng cho admin"** đóng vai trò **CẢ người gửi lẫn
+người nhận** — mọi mail cảnh báo đều gửi TỚI chính địa chỉ này (admin nhận bản sao qua bcc).
+**Đừng dùng một địa chỉ no-reply không có ai đọc.** Nếu địa chỉ đó không có hộp thư nhận thật,
+mọi lượt gửi đều bị trả lại (bounce), và một tỉ lệ bounce cao kéo dài là lý do Resend **khoá
+hoặc đình chỉ tài khoản gửi mail** — lúc đó cả đường gửi cảnh báo khủng hoảng ngừng hoạt động,
+kể cả bản bcc mà admin đáng lẽ nhận được. Dùng một địa chỉ thuộc domain đã xác minh ở bước 7.1
+mà có người thật kiểm tra định kỳ (vd `canh-bao@truong-ban.edu.vn`, hộp thư dùng chung của tổ tư
+vấn học đường).
+
+Sau khi điền, tick **"Bật gửi mail cảnh báo khủng hoảng cho mọi admin"**, bấm **"Lưu cấu
+hình"**.
+
+### 7.4. Xoay (đổi) key Resend
+
+Cùng quy trình với mục 3 (đổi key AI provider), chỉ khác tên secret:
+
+1. Tạo key mới trong dashboard Resend.
+2. `firebase functions:secrets:set EXAMCALM_RESEND_API_KEY --project examcalm` với key mới.
+3. `firebase deploy --only functions --project examcalm`.
+4. Xác nhận hoạt động (xem mục 7.5 — gửi một cảnh báo thử).
+5. Thu hồi (revoke) key cũ trong dashboard Resend.
+
+### 7.5. Tắt khẩn cấp
+
+Nếu cần dừng việc gửi mail cảnh báo **ngay lập tức** (chi phí bất thường, nghi ngờ key bị lộ,
+Resend báo tài khoản gặp vấn đề...):
+
+- **Nhanh nhất:** vào `/admin/ai`, bỏ tick **"Bật gửi mail cảnh báo khủng hoảng cho mọi admin"**,
+  bấm "Lưu cấu hình". Có hiệu lực gần như ngay lập tức, không cần deploy — cảnh báo khủng hoảng
+  **vẫn được ghi vào hệ thống bình thường** (trang `/admin/canh-bao` vẫn hiện đầy đủ), chỉ riêng
+  bước gửi email bị tắt. **Vì vậy khi tắt mail, phải có người kiểm tra trang cảnh báo thủ công
+  thường xuyên hơn** cho tới khi bật lại — xem mục 9 của
+  [checklist go-live](./ai-go-live-checklist.md).
+- **Nếu nghi ngờ chính key Resend đã lộ:** vào thẳng dashboard Resend, thu hồi (revoke) key đó,
+  rồi làm lại theo mục 7.4 với key mới.
+
+Kill switch chặn việc GỬI mail; thu hồi key ở Resend chặn chính key đó hoạt động ở bất kỳ đâu.
+Khi không chắc, làm **cả hai**.
+
+## 8. Trước khi bật thật cho học sinh
 
 Cắm xong provider và "Thử kết nối" thành công **chưa có nghĩa là được bật cho học sinh**.
 Đây là dữ liệu sức khoẻ tinh thần của trẻ vị thành niên — còn một danh sách việc con người

@@ -308,6 +308,72 @@ describe("AiConfigEditor — thông báo lưu nêu tên nhà cung cấp (Fix rou
   });
 });
 
+// ExamCalm Spec #5, Task 3 (task-3-brief.md, mục 3): cấu hình gửi mail cảnh báo khủng hoảng —
+// nhãn phải nói rõ chiều, trạng thái hiện bằng lời, phân biệt "đang" với "sẽ sau khi lưu" —
+// cùng khuôn công tắc phản chiếu/chat đã có ở trên.
+describe("AiConfigEditor — cấu hình mail cảnh báo khủng hoảng (ExamCalm Spec #5, Task 3)", () => {
+  it("nạp đúng giá trị crisisEmailFrom/crisisEmailEnabled đã lưu vào form", async () => {
+    await renderReady({
+      ...CONFIGURED, crisisEmailEnabled: true, crisisEmailFrom: "canh-bao@truong.edu.vn",
+    });
+
+    expect(
+      (screen.getByLabelText(/email gửi cảnh báo khủng hoảng/i) as HTMLInputElement).value,
+    ).toBe("canh-bao@truong.edu.vn");
+    expect(screen.getByText(/đang bật gửi mail cảnh báo/i)).toBeInTheDocument();
+  });
+
+  it("khi crisisEmailEnabled=false (đã lưu) -> hiện chữ 'Đang tắt', không phải khẳng định 'admin đã tắt'", async () => {
+    await renderReady({ ...CONFIGURED, crisisEmailEnabled: false });
+    expect(screen.getByText(/đang tắt gửi mail cảnh báo/i)).toBeInTheDocument();
+  });
+
+  it("tick công tắc gửi mail nhưng CHƯA lưu -> hiện trạng thái TƯƠNG LAI ('Sẽ bật... sau khi lưu'), không khẳng định sai hiện tại", async () => {
+    await renderReady({ ...CONFIGURED, crisisEmailEnabled: false });
+
+    await userEvent.click(screen.getByLabelText(/bật gửi mail cảnh báo khủng hoảng/i));
+
+    expect(screen.getByText(/sẽ bật gửi mail cảnh báo.*sau khi lưu/i)).toBeInTheDocument();
+    expect(screen.queryByText(/đang bật gửi mail cảnh báo/i)).not.toBeInTheDocument();
+    expect(mockedSaveAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("bật công tắc + điền from rồi lưu -> gửi đúng crisisEmailEnabled/crisisEmailFrom", async () => {
+    await renderReady({ ...CONFIGURED, crisisEmailEnabled: false, crisisEmailFrom: "" });
+
+    const fromInput = screen.getByLabelText(/email gửi cảnh báo khủng hoảng/i);
+    await userEvent.type(fromInput, "canh-bao@truong.edu.vn");
+    await userEvent.click(screen.getByLabelText(/bật gửi mail cảnh báo khủng hoảng/i));
+    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
+
+    await waitFor(() => {
+      expect(mockedSaveAiConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          crisisEmailEnabled: true, crisisEmailFrom: "canh-bao@truong.edu.vn",
+        }),
+      );
+    });
+  });
+
+  // task-3-brief.md, "Trường cấu hình có thể làm sập cả hệ thống": crisisEmailFrom giờ dùng làm
+  // CẢ from lẫn to (admin nhận qua bcc) — nhãn phải nói rõ đây PHẢI là hộp thư có người thật
+  // kiểm tra, không phải địa chỉ no-reply, nếu không mọi mail đều bounce cứng và Resend có thể
+  // khoá/đình chỉ tài khoản.
+  it("nhãn ô nhập crisisEmailFrom nói rõ PHẢI là hộp thư thật, KHÔNG được là no-reply", async () => {
+    await renderReady(CONFIGURED);
+
+    const label = screen.getByLabelText(/email gửi cảnh báo khủng hoảng/i).closest("label");
+    expect(label?.textContent).toMatch(/hộp thư/i);
+    expect(label?.textContent).toMatch(/no-reply/i);
+  });
+
+  it("hiện hướng dẫn CLI nêu đúng tên secret EXAMCALM_RESEND_API_KEY và nói rõ không nhập ở đây", async () => {
+    await renderReady(CONFIGURED);
+
+    expect(screen.getByText(/EXAMCALM_RESEND_API_KEY/)).toBeInTheDocument();
+  });
+});
+
 describe("AiConfigEditor — API key KHÔNG nhập ở trang này (Decision C)", () => {
   // Fix round 1, Finding 3: bản trước chỉ soi name/id/placeholder/aria-label — KHÔNG một input
   // nào trong component này đặt các attribute đó (chúng được gắn nhãn theo khuôn cả codebase:
