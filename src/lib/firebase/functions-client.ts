@@ -133,3 +133,27 @@ export async function callSaveAiConfig(config: Record<string, unknown>): Promise
   const result = await fn(config);
   return result.data;
 }
+
+/**
+ * Khớp response thật của Cloud Function `sendChatMessage`
+ * (functions/src/ai/sendChatMessage.ts): trả về id của tin nhắn TRẢ LỜI vừa tạo trong
+ * `chatMessages` (không phải id tin của học sinh). Callable ném HttpsError cho mọi lỗi —
+ * hàm này CỐ Ý không dịch sang tiếng Việt, để nguyên cho caller (src/lib/firestore/chat.ts)
+ * tự dịch, cùng lý do callGenerateReflection ở trên: functions-client.ts chỉ là lớp gọi
+ * callable mỏng, không chứa quyết định UX.
+ */
+export type SendChatMessageResult = { messageId: string };
+
+export async function callSendChatMessage(
+  sessionId: string,
+  text: string,
+): Promise<SendChatMessageResult> {
+  // Đóng race giống các hàm callXxx khác ở trên — xem giải thích ensureAuthReady() ở client.ts.
+  await ensureAuthReady();
+  const fn = httpsCallable<{ sessionId: string; text: string }, SendChatMessageResult>(
+    functionsInstance(),
+    "sendChatMessage",
+  );
+  const result = await fn({ sessionId, text });
+  return result.data;
+}

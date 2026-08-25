@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { callDeleteUserData, callGenerateReflection, callTestAiConnection } from "./functions-client";
+import {
+  callDeleteUserData,
+  callGenerateReflection,
+  callTestAiConnection,
+  callSendChatMessage,
+} from "./functions-client";
 import { ensureAuthReady } from "./client";
 import { httpsCallable } from "firebase/functions";
 
@@ -137,5 +142,44 @@ describe("callTestAiConnection", () => {
     const result = await callTestAiConnection();
 
     expect(result).toEqual({ ok: false, kind: "auth", message: "Xác thực với AI provider thất bại." });
+  });
+});
+
+describe("callSendChatMessage", () => {
+  it("gọi ensureAuthReady TRƯỚC khi gọi callable — đóng race lúc mới đăng nhập", async () => {
+    const order: string[] = [];
+    vi.mocked(ensureAuthReady).mockImplementation(async () => {
+      order.push("ensureAuthReady");
+    });
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => {
+      order.push("httpsCallable");
+      return { data: { messageId: "msg1" } };
+    }));
+
+    await callSendChatMessage("s1", "Em thấy lo lắng quá");
+
+    expect(order).toEqual(["ensureAuthReady", "httpsCallable"]);
+  });
+
+  it("gọi callable sendChatMessage với đúng sessionId/text và trả về nguyên kết quả", async () => {
+    mockedHttpsCallable.mockReturnValue(mockCallable(async (payload) => {
+      expect(payload).toEqual({ sessionId: "s9", text: "Nội dung" });
+      return { data: { messageId: "msg9" } };
+    }));
+
+    const result = await callSendChatMessage("s9", "Nội dung");
+
+    expect(mockedHttpsCallable).toHaveBeenCalledWith(expect.anything(), "sendChatMessage");
+    expect(result).toEqual({ messageId: "msg9" });
+  });
+
+  it("không nuốt lỗi callable — để nguyên cho caller (chat.ts) tự dịch sang tiếng Việt", async () => {
+    mockedHttpsCallable.mockReturnValue(mockCallable(async () => {
+      throw { code: "functions/resource-exhausted" };
+    }));
+
+    await expect(callSendChatMessage("s1", "abc")).rejects.toEqual({
+      code: "functions/resource-exhausted",
+    });
   });
 });
