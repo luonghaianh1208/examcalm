@@ -11,6 +11,14 @@ import {
   DEFAULT_AI_CONFIG as functionsDefault,
   AI_CONFIG_FIELD_KEYS,
 } from "../../../functions/src/ai/config";
+import {
+  CHAT_WINDOW_SIZE as srcChatWindowSize,
+  CHAT_MESSAGE_MAX_CHARS as srcChatMessageMaxChars,
+} from "@/lib/types/chat";
+import {
+  CHAT_WINDOW_SIZE as functionsChatWindowSize,
+  CHAT_MESSAGE_MAX_CHARS as functionsChatMessageMaxChars,
+} from "../../../functions/src/ai/buildChatPrompt";
 
 /**
  * Task 13 (R2 — ruling của reviewer trước khi spec bắt đầu): `functions/src/ai/config.ts` là
@@ -158,6 +166,27 @@ describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/
   // với schema THẬT của chính nó để đóng khe hở đó.
   it("AI_CONFIG_FIELD_KEYS khớp ĐÚNG Object.keys(functionsSchema.shape) — không lệch khỏi chính schema nó đại diện", () => {
     expect([...AI_CONFIG_FIELD_KEYS].sort()).toEqual(Object.keys(functionsSchema.shape).sort());
+  });
+});
+
+// Task 4 fix round 1, Finding 4 (review từ coordinator, pre-flight ruling C1): CHAT_WINDOW_SIZE
+// và CHAT_MESSAGE_MAX_CHARS là một mirror thủ công thứ hai, CÙNG DẠNG với aiConfigSchema ở
+// trên (functions/ không import được src/ ở runtime — xem comment đầu file). Task 1 khai báo
+// hai hằng số ở src/lib/types/chat.ts, Task 4 mirror lại ở functions/src/ai/buildChatPrompt.ts
+// để dùng — không ai canh giữ hai bản đó đồng bộ cho tới bây giờ. Dùng LẠI đúng file test này
+// (theo doctrine đã nêu ở đầu file) thay vì tạo một sync test thứ hai riêng cho chat.
+//
+// Rủi ro cụ thể nếu lệch: nâng CHAT_MESSAGE_MAX_CHARS chỉ ở phía src/ khiến schema chấp nhận
+// tin nhắn dài hơn, được lưu đầy đủ và hiển thị đầy đủ cho học sinh — nhưng sanitizeChatText ở
+// functions/ vẫn âm thầm cắt ở trần CŨ trước khi gửi provider. Không lỗi, không log, không test
+// đỏ nào khác bắt được — model chỉ trả lời nửa tin nhắn, trông y hệt việc model "lười" trả lời.
+describe("CHAT_WINDOW_SIZE / CHAT_MESSAGE_MAX_CHARS — đồng bộ src/lib/types/chat.ts và functions/src/ai/buildChatPrompt.ts", () => {
+  it("CHAT_WINDOW_SIZE giống hệt nhau giữa hai bên", () => {
+    expect(functionsChatWindowSize).toBe(srcChatWindowSize);
+  });
+
+  it("CHAT_MESSAGE_MAX_CHARS giống hệt nhau giữa hai bên", () => {
+    expect(functionsChatMessageMaxChars).toBe(srcChatMessageMaxChars);
   });
 });
 
