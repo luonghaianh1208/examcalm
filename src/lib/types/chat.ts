@@ -44,6 +44,15 @@ export const crisisAlertSchema = z.object({
   createdAt: z.date(),
   handledBy: z.string().min(1).nullable(),
   handledAt: z.date().nullable(),
+  // ExamCalm Spec #5: trạng thái gửi mail cảnh báo cho admin — KHÔNG mang nguyên văn/trích đoạn
+  // gì, chỉ ghi lại việc gửi có thành công hay không (guard bên dưới vẫn áp dụng cho cả hai
+  // field này). null nghĩa là trigger gửi mail (Task 2) đã chạy nhưng không có gì để báo lại
+  // (hoặc chưa từng chạy). `.optional()` THÊM vào `.nullable()` có chủ đích: document được TẠO
+  // bởi sendChatMessage.ts (writeCrisisAlert, Spec #4) TRƯỚC KHI trigger onDocumentCreated (Task
+  // 2) kịp chạy — nên document CÓ THỂ hoàn toàn thiếu hai field này trong khoảng thời gian giữa
+  // hai bước đó, không chỉ mang giá trị null. Field bắt buộc sẽ nói dối về khoảng thời gian đó.
+  emailStatus: z.enum(["sent", "failed", "skipped"]).nullable().optional(),
+  emailedAt: z.date().nullable().optional(),
 });
 
 export type CrisisAlert = z.infer<typeof crisisAlertSchema>;

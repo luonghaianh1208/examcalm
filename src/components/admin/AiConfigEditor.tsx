@@ -37,6 +37,11 @@ type ConfigFormState = {
   // CRISIS_REPLY_TEXT, nên admin bật công tắc này phải biết chắc mình đang bật ĐÚNG tính năng
   // nào. true = tính năng ĐANG BẬT (cùng chiều tích cực với featureEnabled).
   chatEnabled: boolean;
+  // ExamCalm Spec #5 (task-1-brief.md): chỉ PASS-THROUGH ở Task 1 — chưa có ô nhập nào thao
+  // túng được hai field này (Task 3 mới thêm UI). Giữ ở đây để không làm hỏng aiConfigSchema
+  // (giờ bắt buộc cả hai field) khi admin lưu các field KHÁC trên trang này.
+  crisisEmailEnabled: boolean;
+  crisisEmailFrom: string;
 };
 
 function toFormState(config: AiConfig): ConfigFormState {
@@ -52,6 +57,8 @@ function toFormState(config: AiConfig): ConfigFormState {
     chatRateLimitPerMinute: String(config.chatRateLimitPerMinute),
     featureEnabled: !config.killSwitch.moodReflection,
     chatEnabled: !config.killSwitch.chat,
+    crisisEmailEnabled: config.crisisEmailEnabled,
+    crisisEmailFrom: config.crisisEmailFrom,
   };
 }
 
@@ -118,6 +125,8 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
       rateLimitPerMinute: Number(form.rateLimitPerMinute),
       chatRateLimitPerMinute: Number(form.chatRateLimitPerMinute),
       killSwitch: { moodReflection: !form.featureEnabled, chat: !form.chatEnabled },
+      crisisEmailEnabled: form.crisisEmailEnabled,
+      crisisEmailFrom: form.crisisEmailFrom,
     };
 
     const parsed = aiConfigSchema.safeParse(candidate);

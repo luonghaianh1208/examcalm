@@ -30,6 +30,8 @@ const VALID_ALERT = {
   createdAt: new Date(),
   handledBy: null,
   handledAt: null,
+  emailStatus: null,
+  emailedAt: null,
 };
 
 describe("chatMessageSchema", () => {
@@ -123,11 +125,36 @@ describe("crisisAlertSchema", () => {
     );
   });
 
-  it("có đúng 6 field: userId, severity, triggeredBy, createdAt, handledBy, handledAt", () => {
+  it("có đúng 8 field: userId, severity, triggeredBy, createdAt, handledBy, handledAt, emailStatus, emailedAt", () => {
     const fieldNames = Object.keys(crisisAlertSchema.shape).sort();
     expect(fieldNames).toEqual(
-      ["createdAt", "handledAt", "handledBy", "severity", "triggeredBy", "userId"].sort(),
+      [
+        "createdAt", "handledAt", "handledBy", "severity", "triggeredBy", "userId",
+        "emailStatus", "emailedAt",
+      ].sort(),
     );
+  });
+
+  it("emailStatus chỉ nhận 'sent', 'failed', 'skipped', hoặc null", () => {
+    expect(crisisAlertSchema.safeParse({ ...VALID_ALERT, emailStatus: "sent" }).success).toBe(
+      true,
+    );
+    expect(crisisAlertSchema.safeParse({ ...VALID_ALERT, emailStatus: "failed" }).success).toBe(
+      true,
+    );
+    expect(crisisAlertSchema.safeParse({ ...VALID_ALERT, emailStatus: "skipped" }).success).toBe(
+      true,
+    );
+    expect(crisisAlertSchema.safeParse({ ...VALID_ALERT, emailStatus: "pending" }).success).toBe(
+      false,
+    );
+  });
+
+  it("emailedAt chấp nhận Date hoặc null", () => {
+    expect(
+      crisisAlertSchema.safeParse({ ...VALID_ALERT, emailedAt: new Date() }).success,
+    ).toBe(true);
+    expect(crisisAlertSchema.safeParse({ ...VALID_ALERT, emailedAt: null }).success).toBe(true);
   });
 
   // Guard load-bearing (xem design spec §3.4): cảnh báo không được mang nguyên văn học sinh

@@ -63,6 +63,8 @@ export async function runSaveAiConfig(
     rateLimitPerMinute: next.rateLimitPerMinute,
     chatRateLimitPerMinute: next.chatRateLimitPerMinute,
     killSwitch: next.killSwitch,
+    crisisEmailEnabled: next.crisisEmailEnabled,
+    crisisEmailFrom: next.crisisEmailFrom,
     updatedBy: auth!.uid,
     updatedAt: FieldValue.serverTimestamp(),
   });

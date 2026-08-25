@@ -64,6 +64,8 @@ const BASE_VALID: {
   rateLimitPerMinute: number;
   chatRateLimitPerMinute: number;
   killSwitch: { moodReflection: boolean; chat: boolean };
+  crisisEmailEnabled: boolean;
+  crisisEmailFrom: string;
 } = {
   providerLabel: "DeepSeek",
   baseUrl: "https://api.deepseek.com/v1",
@@ -75,6 +77,8 @@ const BASE_VALID: {
   rateLimitPerMinute: 3,
   chatRateLimitPerMinute: 20,
   killSwitch: { moodReflection: true, chat: true },
+  crisisEmailEnabled: false,
+  crisisEmailFrom: "",
 };
 
 /** Mỗi probe là một override ĐÈ LÊN BASE_VALID cho đúng một field — cố tình chọn giá trị biên
@@ -127,6 +131,14 @@ const PROBES: { label: string; override: Record<string, unknown> }[] = [
   // dành riêng cho nó, nếu không toàn bộ probe khác sẽ lệch vì thiếu field bắt buộc).
   { label: "killSwitch.chat = true", override: { killSwitch: { moodReflection: true, chat: true } } },
   { label: "killSwitch.chat = false", override: { killSwitch: { moodReflection: true, chat: false } } },
+
+  // ExamCalm Spec #5 (task-1-brief.md): probe cho hai field vừa thêm — không có ràng buộc số/URL
+  // gì đặc biệt (chỉ boolean/string trơn), nhưng vẫn cần probe để bắt được nếu một bên lỡ thêm
+  // ràng buộc (vd `.min(1)` cho crisisEmailFrom) mà bên kia không có.
+  { label: "crisisEmailEnabled = true", override: { crisisEmailEnabled: true } },
+  { label: "crisisEmailEnabled = false", override: { crisisEmailEnabled: false } },
+  { label: "crisisEmailFrom rỗng (sentinel chưa cấu hình, hợp lệ)", override: { crisisEmailFrom: "" } },
+  { label: "crisisEmailFrom có giá trị", override: { crisisEmailFrom: "canh-bao@examcalm.vn" } },
 ];
 
 describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/ai/config.ts", () => {

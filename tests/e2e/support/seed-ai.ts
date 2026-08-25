@@ -48,6 +48,10 @@ export async function seedAiEnabled(providerLabel = "E2E Test Provider"): Promis
     rateLimitPerMinute: 3,
     chatRateLimitPerMinute: 20,
     killSwitch: { moodReflection: false, chat: true },
+    // Spec #5: cùng lý do M9 ở trên — thiếu hai field này khiến fixture mô tả một cấu hình
+    // aiConfigSchema đòi hỏi nhưng không thật sự có, fail-closed âm thầm về DEFAULT_AI_CONFIG.
+    crisisEmailEnabled: false,
+    crisisEmailFrom: "",
     updatedBy: "e2e-suite",
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -87,6 +91,8 @@ export async function seedChatEnabled(providerLabel = "E2E Chat Test Provider"):
     rateLimitPerMinute: 3,
     chatRateLimitPerMinute: 20,
     killSwitch: { moodReflection: true, chat: false },
+    crisisEmailEnabled: false,
+    crisisEmailFrom: "",
     updatedBy: "e2e-suite",
     updatedAt: FieldValue.serverTimestamp(),
   });

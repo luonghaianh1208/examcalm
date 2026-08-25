@@ -17,6 +17,8 @@ const VALID_AI_CONFIG = {
   rateLimitPerMinute: 3,
   chatRateLimitPerMinute: 20,
   killSwitch: { moodReflection: true, chat: true },
+  crisisEmailEnabled: false,
+  crisisEmailFrom: "",
 };
 
 describe("aiConfigSchema", () => {

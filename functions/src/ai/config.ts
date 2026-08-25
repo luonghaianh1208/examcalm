@@ -55,6 +55,13 @@ export const aiConfigSchema = z.object({
     // mặc định true (tắt). Xem src/lib/types/ai.ts.
     chat: z.boolean(),
   }),
+  // ExamCalm Spec #5: cấu hình gửi mail khi có crisisAlerts — KHÔNG PHẢI cấu hình AI, nhưng
+  // sống chung document aiConfig CÓ CHỦ ĐÍCH (lý do đầy đủ ở src/lib/types/ai.ts): cảnh báo chỉ
+  // sinh từ chat, chat cần AI, và dùng chung document thì tái dùng được test đồng bộ này, batch
+  // ghi atomic, rule, và trang admin đã có thay vì mở một document/rule/đường ghi riêng.
+  crisisEmailEnabled: z.boolean(),
+  // "" là sentinel "chưa cấu hình" — cùng quy ước baseUrl/model ở trên.
+  crisisEmailFrom: z.string(),
 });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;
@@ -163,4 +170,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   chatRateLimitPerMinute: 20,
   // Mặc định hệ thống là im lặng: kill switch true = tính năng đang tắt.
   killSwitch: { moodReflection: true, chat: true },
+  // Spec #5: mặc định TẮT và CHƯA cấu hình — cùng nguyên tắc "hệ thống mặc định im lặng".
+  crisisEmailEnabled: false,
+  crisisEmailFrom: "",
 };

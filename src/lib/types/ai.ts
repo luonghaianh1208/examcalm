@@ -78,6 +78,18 @@ export const aiConfigSchema = z.object({
     // thống mặc định im lặng" của mọi công tắc khác trong dự án này.
     chat: z.boolean(),
   }),
+  // ExamCalm Spec #5 (task-1-brief.md): hai field này KHÔNG PHẢI cấu hình AI — chúng cấu hình
+  // việc GỬI MAIL khi có crisisAlerts. Đặt trong aiConfig là CỐ Ý, không phải tiện đâu bỏ đó:
+  // cảnh báo khủng hoảng chỉ sinh ra từ chat, và chat CẦN AI — nên vòng đời của tính năng gửi
+  // mail luôn đi sau vòng đời của AI. Sống chung document với aiConfig cho phép dùng lại NGUYÊN
+  // VẸN: test đồng bộ cross-package này (ai-config-sync.test.ts), batch ghi atomic cùng
+  // aiPublic (saveAiConfig.ts), firestore.rules đã có, và trang admin đã có. Tách ra một
+  // document riêng nghĩa là một rule riêng, một đường đọc riêng, một đường ghi riêng — chi phí
+  // đó không đáng cho hai field. ĐỪNG "dọn" hai field này ra document riêng mà không đọc lại
+  // đoạn comment này trước.
+  crisisEmailEnabled: z.boolean(),
+  // "" là sentinel "chưa cấu hình" — cùng quy ước với baseUrl/model ở trên. Rỗng vẫn hợp lệ.
+  crisisEmailFrom: z.string(),
 });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;
@@ -105,6 +117,10 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   // Mặc định hệ thống là im lặng: kill switch true = tính năng đang tắt. `chat` mặc định
   // true (tắt) — độc lập với moodReflection (Fix round 1, Task 5, Finding 2b).
   killSwitch: { moodReflection: true, chat: true },
+  // Spec #5: mặc định TẮT và CHƯA cấu hình — cùng nguyên tắc "hệ thống mặc định im lặng" như
+  // mọi field khác ở đây. Admin phải chủ động bật VÀ nhập from thì mail mới gửi (xem Task 2).
+  crisisEmailEnabled: false,
+  crisisEmailFrom: "",
 };
 
 export const promptTemplateSchema = z.object({
