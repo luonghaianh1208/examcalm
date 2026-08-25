@@ -160,6 +160,17 @@ describe("ChatWindow", () => {
     expect(label).toBeVisible();
   });
 
+  // I3 (final whole-branch review): trước fix, màn hình chat không nói gì về việc tin nhắn RỜI
+  // KHỎI hệ thống — chỉ có "Nội dung do AI tạo" và câu an toàn. Phải nói thẳng, kèm tên provider
+  // thật (không phải chuỗi cứng).
+  it("I3: trước tin nhắn đầu tiên, nói rõ nội dung gõ được gửi ra dịch vụ AI bên ngoài, nêu đích danh provider", async () => {
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByLabelText(/nhập tin nhắn/i);
+    expect(screen.getByText(/gửi tới dịch vụ AI bên ngoài/i)).toBeInTheDocument();
+    expect(screen.getByText("DeepSeek")).toBeInTheDocument();
+  });
+
   it("gửi tin: hiện tin của mình ngay, trạng thái đang chờ, rồi tin trả lời", async () => {
     let resolveSend: (v: { messageId: string }) => void = () => {};
     mockedSendMessage.mockReturnValue(

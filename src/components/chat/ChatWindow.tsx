@@ -45,6 +45,9 @@ const GENERIC_SEND_ERROR = "Không thể gửi tin nhắn lúc này, thử lại
  */
 export function ChatWindow({ uid }: Props) {
   const [gate, setGate] = useState<Gate>("checking");
+  // I3 (final whole-branch review): tên provider để hiện câu "nội dung em gõ được gửi ra ngoài"
+  // — không suy diễn, lấy đúng aiPublic.providerLabel (cùng nguồn AiConsentSection.tsx dùng).
+  const [providerLabel, setProviderLabel] = useState("");
   const [initPhase, setInitPhase] = useState<InitPhase>("loading");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageRecord[]>([]);
@@ -76,6 +79,7 @@ export function ChatWindow({ uid }: Props) {
       }
       const aiPublic = await getAiPublicConfig();
       if (cancelled) return;
+      setProviderLabel(aiPublic.providerLabel);
       // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): KHÔNG gate trên `aiPublic.enabled`
       // — cùng lý do ReflectionCard.tsx (đối xứng): bật RIÊNG phản chiếu trong khi chat vẫn tắt
       // sẽ làm enabled=true, và gate trên enabled sẽ mở luôn ô nhập chat dù killSwitch.chat vẫn
@@ -271,6 +275,14 @@ export function ChatWindow({ uid }: Props) {
           hiện thường trực, không ẩn sau khi đã gửi tin nào. */}
       <div className="rounded-xl bg-teal-50 p-3 text-sm">
         <p className="font-medium text-teal-800">Nội dung do AI tạo</p>
+        {/* I3 (final whole-branch review): trước fix, màn hình này không nói gì về việc tin
+            nhắn RỜI KHỎI hệ thống — chỉ nói "nội dung do AI tạo" và câu an toàn. Câu này nói
+            thẳng sự thật trung tâm, cùng câu chữ AiConsentSection.tsx đã dùng cho ghi chú
+            cảm xúc. */}
+        <p className="mt-1 text-slate-700">
+          Những gì em gõ ở đây được gửi tới dịch vụ AI bên ngoài{" "}
+          <strong>{providerLabel}</strong> để tạo câu trả lời.
+        </p>
         <p className="mt-1 text-slate-700">{SAFETY_SENTENCE}</p>
       </div>
 

@@ -65,6 +65,30 @@ describe("AiConsentSection", () => {
     expect(dialog).toHaveTextContent(/tắt.*(bất cứ lúc nào|bất kỳ lúc nào)/i);
   });
 
+  // I3 (final whole-branch review): trước fix, hộp thoại bật CHỈ nói "ghi chú cảm xúc" được gửi
+  // ra ngoài — một ô tick DUY NHẤT ở đây mở CẢ chat, nên câu phải nói rõ nội dung TRÒ CHUYỆN
+  // cũng rời khỏi hệ thống, không chỉ ghi chú cảm xúc.
+  it("I3: hộp thoại bật nói rõ CẢ ghi chú cảm xúc LẪN nội dung trò chuyện đều gửi ra ngoài", async () => {
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+
+    await user.click(await screen.findByRole("checkbox"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/trò chuyện/i);
+    expect(dialog).toHaveTextContent(/ghi chú cảm xúc/i);
+  });
+
+  // I3: thân bài thường trực (không phải hộp thoại) VÀ nhãn ô tick cũng phải nói cả hai — đây
+  // là những gì học sinh thấy khi chưa bấm mở hộp thoại.
+  it("I3: thân bài thường trực và nhãn ô tick đều nhắc tới nội dung trò chuyện, không chỉ ghi chú cảm xúc", async () => {
+    render(<AiConsentSection uid="u1" initialAiOptIn={false} />);
+
+    await screen.findByRole("checkbox");
+    // Cả thân bài VÀ nhãn ô tick đều phải nhắc — đúng hai chỗ, không phải một.
+    expect(screen.getAllByText(/trò chuyện/i).length).toBeGreaterThanOrEqual(2);
+  });
+
   // Task 8 (design spec §3.5): kể từ khi chat có đường cảnh báo khủng hoảng tới thầy cô, và
   // cùng công tắc aiOptIn này mở cả ReflectionCard lẫn ChatWindow, hộp thoại đồng ý PHẢI nói rõ
   // cả hai điều đang được đồng ý — không chỉ "ghi chú gửi tới AI" mà còn "có đường báo an toàn

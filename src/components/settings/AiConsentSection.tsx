@@ -146,10 +146,14 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
           thể tắt và xoá vĩnh viễn các phản chiếu AI đã lưu bất cứ lúc nào.
         </p>
       ) : (
+        // I3 (final whole-branch review): trước fix, câu này chỉ nói "ghi chú cảm xúc" — một
+        // ô tick DUY NHẤT ở đây mở CẢ hai tính năng (phản chiếu + chat), nên câu phải nói rõ
+        // CẢ HAI thứ rời khỏi hệ thống, không chỉ ghi chú cảm xúc.
         <p className="mb-3 text-slate-600">
-          Khi bật, ghi chú cảm xúc bạn viết sẽ được gửi tới dịch vụ AI bên ngoài{" "}
-          <strong>{aiPublic.providerLabel}</strong> để tạo phản chiếu. Tắt tính năng này sẽ
-          xoá vĩnh viễn các phản chiếu đã lưu.
+          Khi bật, ghi chú cảm xúc bạn viết (để tạo phản chiếu) VÀ nội dung bạn gõ khi trò
+          chuyện cùng AI đều được gửi tới dịch vụ AI bên ngoài{" "}
+          <strong>{aiPublic.providerLabel}</strong>. Tắt tính năng này sẽ xoá vĩnh viễn các
+          phản chiếu đã lưu.
         </p>
       )}
 
@@ -161,7 +165,10 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
           disabled={pending}
           className="mt-1"
         />
-        <span>Tôi đồng ý cho AI đọc ghi chú cảm xúc của mình để tạo phản chiếu.</span>
+        <span>
+          Tôi đồng ý gửi ghi chú cảm xúc và nội dung trò chuyện của mình cho AI để tạo phản
+          chiếu và trò chuyện cùng chú mèo.
+        </span>
       </label>
 
       {error && (
@@ -185,10 +192,13 @@ export function AiConsentSection({ uid, initialAiOptIn }: Props) {
                 <h3 id="ai-consent-dialog-title" className="mb-2 text-lg font-semibold">
                   Gửi ghi chú cảm xúc tới AI?
                 </h3>
+                {/* I3 (final whole-branch review): cùng lý do đoạn thân bài ở trên — câu này
+                    trước fix chỉ nói "ghi chú cảm xúc", bỏ sót nội dung trò chuyện. */}
                 <p className="mb-3 text-slate-600">
-                  Ghi chú cảm xúc của bạn sẽ được gửi tới dịch vụ AI bên ngoài{" "}
-                  <strong>{aiPublic.providerLabel}</strong> để tạo phản chiếu. Bạn có thể tắt
-                  tính năng này bất cứ lúc nào trong trang Hồ sơ.
+                  Ghi chú cảm xúc của bạn (để tạo phản chiếu) VÀ nội dung bạn gõ khi trò chuyện
+                  cùng AI đều sẽ được gửi tới dịch vụ AI bên ngoài{" "}
+                  <strong>{aiPublic.providerLabel}</strong>. Bạn có thể tắt tính năng này bất
+                  cứ lúc nào trong trang Hồ sơ.
                 </p>
                 {/* Task 8 (design spec §3.5): cùng công tắc này còn mở tính năng trò chuyện
                     cùng AI, nơi có đường cảnh báo an toàn tới thầy cô — hộp thoại đồng ý phải

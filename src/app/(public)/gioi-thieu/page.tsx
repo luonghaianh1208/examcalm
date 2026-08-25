@@ -37,15 +37,22 @@ export default function Page() {
 
       <section className="mb-8">
         <h2 className="mb-2 text-lg font-medium">Trò chuyện cùng mèo</h2>
+        {/* I3 (final whole-branch review): trước fix, đoạn này nói "riêng tư" rồi liệt kê cảnh
+            báo an toàn là "Ngoại lệ duy nhất" — một học sinh đọc câu đó dễ hiểu nhầm là chữ
+            mình gõ không rời khỏi hệ thống. Sự thật: MỖI tin nhắn đều được gửi ra một dịch vụ AI
+            bên ngoài để tạo câu trả lời. "Riêng tư" ở đây chỉ có nghĩa quản trị viên không đọc
+            được — hai điều khác nhau, phải nói tách bạch. */}
         <p className="text-slate-700">
           Nếu trường bạn đã bật tính năng này và bạn đồng ý dùng, bạn có thể gõ chuyện với chú
-          mèo đồng hành. Cuộc trò chuyện cũng <strong>riêng tư</strong> — quản trị viên không
-          đọc được nội dung bạn gõ. <strong>Ngoại lệ duy nhất:</strong> nếu bạn nói điều gì
-          khiến hệ thống lo cho sự an toàn của bạn, thầy cô phụ trách sẽ được báo để đến hỏi
-          thăm bạn — báo này <strong>không</strong> kèm theo nguyên văn bạn đã viết, chỉ đủ để
-          thầy cô biết cần gặp ai và mức độ khẩn cấp. Điều này luôn được nhắc lại ngay trên màn
-          hình trò chuyện, trước khi bạn gõ chữ đầu tiên, để bạn biết trước chứ không phát hiện
-          sau lưng mình. Bạn xóa được từng tin nhắn hoặc cả cuộc trò chuyện bất cứ lúc nào.
+          mèo đồng hành. <strong>Mỗi tin nhắn bạn gõ được gửi tới một dịch vụ AI bên ngoài</strong>{" "}
+          để tạo câu trả lời — màn hình trò chuyện luôn nhắc lại điều này. Quản trị viên (giáo
+          viên phụ trách) <strong>không đọc được nội dung bạn gõ</strong>.{" "}
+          <strong>Ngoại lệ duy nhất ở phía quản trị viên:</strong> nếu bạn nói điều gì khiến hệ
+          thống lo cho sự an toàn của bạn, thầy cô phụ trách sẽ được báo để đến hỏi thăm bạn —
+          báo này <strong>không</strong> kèm theo nguyên văn bạn đã viết, chỉ đủ để thầy cô biết
+          cần gặp ai và mức độ khẩn cấp. Điều này luôn được nhắc lại ngay trên màn hình trò
+          chuyện, trước khi bạn gõ chữ đầu tiên, để bạn biết trước chứ không phát hiện sau lưng
+          mình. Bạn xóa được từng tin nhắn hoặc cả cuộc trò chuyện bất cứ lúc nào.
         </p>
       </section>
 
