@@ -27,8 +27,15 @@ const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
  * năng tiêu quota độc lập, không giẫm lên nhau. BẮT BUỘC truyền tường minh ở MỌI call site
  * (không có giá trị mặc định) để một người đọc `generateReflection.ts`/`sendChatMessage.ts`
  * thấy ngay tính năng nào đang tiêu quota nào mà không cần lần theo import.
+ *
+ * `"chat_urgent_persist"` (I7, final whole-branch review Spec #4): KHÔNG phải một tính năng
+ * AI — đây là phanh RIÊNG cho việc GHI `chatMessages` trên nhánh Lớp 1 "urgent" (nhánh bỏ qua
+ * mọi cổng vận hành, kể cả `consumeQuota` với feature "chat"). Mượn lại đúng cơ chế đếm/khoá
+ * ngày này chỉ để lấy phần rate-limit của nó — xem `shouldPersistCrisisMessages` ở
+ * sendChatMessage.ts — KHÔNG được tính chung với ngân sách `chatQuotaPerDay` hiển thị cho học
+ * sinh (design spec §6: phản hồi khủng hoảng không tính quota).
  */
-export type QuotaFeature = "reflection" | "chat";
+export type QuotaFeature = "reflection" | "chat" | "chat_urgent_persist";
 
 /** Phần cấu hình quota mà consumeQuota cần — lấy từ AiConfig (systemConfig/aiConfig), chỉ
  *  khai báo đúng hai field dùng tới thay vì phụ thuộc kiểu AiConfig đầy đủ (module này nằm

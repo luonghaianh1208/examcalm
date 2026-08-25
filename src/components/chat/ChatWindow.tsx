@@ -173,12 +173,13 @@ export function ChatWindow({ uid }: Props) {
 
     const createdSessionThisAttempt = sessionId === null;
     let sid = sessionId;
+    let sendResult: { messageId: string; crisisReplyText?: string };
     try {
       if (sid === null) {
         sid = await startChatSession(uid);
         setSessionId(sid);
       }
-      await sendMessage(sid, text);
+      sendResult = await sendMessage(sid, text);
     } catch (err) {
       // Gửi thất bại: trả chữ về ô nhập để học sinh không phải gõ lại — mất một tin nhắn đã
       // lấy hết can đảm để viết còn tệ hơn chính lỗi gửi.
@@ -194,8 +195,43 @@ export function ChatWindow({ uid }: Props) {
       return;
     }
 
-    // sendMessage đã thành công — tin thật sự đã lưu. Từ đây KHÔNG được trả chữ về ô nhập nữa
-    // dù bước tải lại danh sách bên dưới có lỗi, kẻo học sinh gửi trùng lặp.
+    // sendMessage đã thành công — tin thật sự đã lưu (trừ nhánh I7 ngay dưới). Từ đây KHÔNG
+    // được trả chữ về ô nhập nữa dù bước tải lại danh sách bên dưới có lỗi, kẻo học sinh gửi
+    // trùng lặp.
+
+    // I7 (final whole-branch review): server phanh việc GHI (client gọi lặp quá nhanh trên
+    // nhánh khủng hoảng) — KHÔNG document nào được tạo, nên listMessages() bên dưới sẽ không
+    // thấy gì mới. Hiện thẳng CRISIS_REPLY_TEXT server trả kèm, không phụ thuộc đọc lại
+    // Firestore, để học sinh KHÔNG BAO GIỜ mất câu trả lời khủng hoảng chỉ vì bị phanh ghi.
+    const crisisReplyText = sendResult.crisisReplyText;
+    if (crisisReplyText !== undefined) {
+      const now = new Date();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `local-${now.getTime()}-user`,
+          userId: uid,
+          sessionId: sid,
+          role: "user",
+          text,
+          isCrisisResponse: false,
+          createdAt: now,
+        },
+        {
+          id: `local-${now.getTime()}-assistant`,
+          userId: uid,
+          sessionId: sid,
+          role: "assistant",
+          text: crisisReplyText,
+          isCrisisResponse: true,
+          createdAt: now,
+        },
+      ]);
+      setPendingText(null);
+      setSending(false);
+      return;
+    }
+
     try {
       const refreshed = await listMessages(uid, sid);
       setMessages(refreshed);

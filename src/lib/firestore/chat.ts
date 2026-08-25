@@ -255,11 +255,17 @@ function mapSendMessageErrorMessage(err: unknown): string {
   }
 }
 
-/** Gọi callable `sendChatMessage` cho một tin nhắn. */
+/**
+ * Gọi callable `sendChatMessage` cho một tin nhắn.
+ *
+ * I7 (final whole-branch review): `crisisReplyText` (xem functions-client.ts) truyền nguyên vẹn
+ * qua hàm này — không dịch, không xử lý gì thêm, cùng lý do `messageId`: chat.ts chỉ là lớp gọi
+ * mỏng, quyết định hiển thị thuộc về ChatWindow.tsx.
+ */
 export async function sendMessage(
   sessionId: string,
   text: string,
-): Promise<{ messageId: string }> {
+): Promise<{ messageId: string; crisisReplyText?: string }> {
   await ensureAuthReady();
   try {
     return await callSendChatMessage(sessionId, text);

@@ -300,6 +300,34 @@ describe("ChatWindow", () => {
     expect(screen.getByText(/cần trợ giúp ngay/i)).toBeInTheDocument();
   });
 
+  // I7 (final whole-branch review): khi server phanh việc GHI (gọi lặp quá nhanh trên nhánh
+  // khủng hoảng — xem sendChatMessage.ts), `sendMessage` trả về `messageId: ""` kèm
+  // `crisisReplyText` thay vì id thật. ChatWindow phải hiện thẳng câu trả lời đó, KHÔNG gọi
+  // listMessages() (đọc lại sẽ không thấy gì mới vì cố ý không ghi).
+  it("I7: server phanh việc ghi (crisisReplyText kèm theo) → hiện thẳng câu trả lời khủng hoảng, KHÔNG gọi listMessages", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([]);
+    mockedSendMessage.mockResolvedValue({
+      messageId: "",
+      crisisReplyText: "Em hãy gọi ngay Tổng đài 111.",
+    });
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    const input = await screen.findByLabelText(/nhập tin nhắn/i);
+    await user.type(input, "Em muốn tự tử");
+    await user.click(screen.getByRole("button", { name: /^gửi$/i }));
+
+    expect(await screen.findByText("Em muốn tự tử")).toBeInTheDocument();
+    expect(await screen.findByText("Em hãy gọi ngay Tổng đài 111.")).toBeInTheDocument();
+    expect(screen.getByText(/cần trợ giúp ngay/i)).toBeInTheDocument();
+
+    // listMessages chỉ được gọi ở bước tải phiên ban đầu (init effect) — KHÔNG lần nào nữa sau
+    // khi gửi, vì server cố ý không ghi gì để đọc lại.
+    expect(mockedListMessages).toHaveBeenCalledTimes(1);
+  });
+
   it("xoá một tin nhắn: hỏi xác nhận trước, huỷ thì không xoá", async () => {
     mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
     mockedListMessages.mockResolvedValue([makeMessage({ id: "m1", text: "Tin cần xoá" })]);

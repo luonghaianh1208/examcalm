@@ -70,6 +70,48 @@
 // hỏng cả lượt gọi, đúng thứ Finding 4 (round 1) tồn tại để ngăn. FAIL OPEN: mọi lỗi từ
 // findRecentUnhandledAlert đều bị nuốt, coi như "không tìm thấy cảnh báo nào" — tạo cảnh báo
 // mới (chấp nhận trùng) thay vì làm hỏng phản hồi cho một học sinh đang khủng hoảng.
+//
+// ==== Fix round 4 (final whole-branch review) — C1, C2, I5, I7 ====
+//
+// C1 (CRITICAL): checkOutputSafety() chạy TRƯỚC parseConcernLevel() trong bản trước — một câu
+// trả lời model bị bộ lọc an toàn chặn (vd. chứa "trầm cảm"/"tâm thần" từ BANNED_DIAGNOSTIC_
+// KEYWORDS, điều buildChatStructuralInstructions() chủ động dẫn model tới đúng lúc học sinh
+// tuyệt vọng) làm MẤT LUÔN nhãn Lớp 2 kèm theo, kể cả khi nhãn đó là "urgent" — không cảnh báo
+// nào được ghi, học sinh chỉ nhận "Không thể trả lời lúc này". SỬA: bóc nhãn + ghi/nâng cấp
+// cảnh báo LUÔN đứng TRƯỚC nhánh an toàn. Khi combinedSeverity === "urgent", phục vụ thẳng
+// CRISIS_REPLY_TEXT — hằng số tĩnh, an toàn theo cấu trúc, không cần (và không được) đưa qua
+// checkOutputSafety. checkOutputSafety chỉ còn chạy khi câu trả lời THẬT SỰ được dùng.
+//
+// C2 (CRITICAL): writeCrisisAlert() chỉ fail-open ở bước ĐỌC (tìm cảnh báo trùng) — bước GHI
+// (`.add()`/`.update()`) ngay dưới đó KHÔNG được bọc, và đứng TRƯỚC appendChatMessage trên
+// nhánh urgent. Một lỗi Firestore thoáng qua ở đúng bước ghi cảnh báo làm hỏng cả lượt gọi:
+// không tin nào được lưu, học sinh nhận "Không thể trả lời lúc này" KHÔNG kèm marker "saved" —
+// đúng thất bại "khủng hoảng đứng trên trạng thái vận hành" đã sửa ở round 1 lại tái diễn thấp
+// hơn một tầng. SỬA: bọc chính bước ghi/nâng cấp cảnh báo — lỗi bị nuốt (log, không throw),
+// trả về `null` (writeCrisisAlert) hoặc bỏ qua (upgradeCrisisAlert) thay vì để lỗi lan ra ngoài.
+// Cùng finding: appendChatMessage() gọi `chatSessions.doc(sessionId).update()` — Firestore ném
+// NOT_FOUND nếu session cha đã bị chính học sinh xoá ở một tab khác. Tin nhắn (kể cả
+// CRISIS_REPLY_TEXT) đã ghi xong ở dòng trên `.update()` đó — một NOT_FOUND ở bước cập nhật số
+// liệu phụ trợ (messageCount/lastMessageAt) không được phép làm hỏng cả lượt gọi.
+//
+// I5 (Important): sau khi §3.1 được sửa để "concern" đi tiếp qua model, một tin bị Lớp 1 gắn cờ
+// "concern" vẫn rơi thẳng vào các cổng vận hành (kill switch, baseUrl rỗng, quota/rate limit)
+// như một tin bình thường — đúng lúc thiết kế nói "phản hồi khủng hoảng không tính quota" (design
+// spec §6). SỬA: khi Lớp 1 đã phát hiện gì đó (concern HOẶC urgent — urgent đã return sớm ở
+// trên nên trong thực tế chỉ còn "concern" đi tới đây) VÀ một cổng vận hành chặn, phục vụ
+// CRISIS_REPLY_TEXT thay vì ném lỗi — xem serveCrisisReplyBypassingGate.
+//
+// I7 (Important): nhánh Lớp 1 "urgent" bỏ qua MỌI cổng vận hành (Finding 4 round 1) — kể cả
+// consumeQuota — nên không gì giới hạn tần suất một client GỌI LẶP sendChatMessage với văn bản
+// chứa từ khoá urgent để ép ghi hàng loạt vào chatMessages (hai document/lượt, tới 2000 ký tự
+// mỗi document). crisisAlerts đã có phanh dedup 5 phút; chatMessages thì không. SỬA: phanh việc
+// GHI (KHÔNG BAO GIỜ phanh câu trả lời) bằng shouldPersistCrisisMessages — dùng lại consumeQuota
+// với một feature RIÊNG ("chat_urgent_persist", không tính vào chatQuotaPerDay hiển thị cho học
+// sinh) và một ngưỡng CỐ ĐỊNH trong code (CRISIS_WRITE_RATE_LIMIT_PER_MINUTE, KHÔNG đọc từ
+// aiConfig) — nếu đọc ngưỡng từ config.chatRateLimitPerMinute, một admin tắt rate limit chat
+// (rateLimitPerMinute=0 = "không giới hạn", quy ước sẵn có) sẽ vô tình tắt luôn phanh chống-lụt
+// ghi này, đúng lỗ hổng I7 tồn tại để bịt. Khi bị phanh, học sinh VẪN nhận CRISIS_REPLY_TEXT
+// (trả thẳng trong response, không qua chatMessages) — chỉ việc ghi bị bỏ qua.
 
 /** Cửa sổ thời gian coi một cảnh báo CHƯA XỬ LÝ là "vẫn còn mới" — trong cửa sổ này, một cảnh
  *  báo thứ hai cho ĐÚNG học sinh đó không được tạo thêm (Fix round 2, Finding 2). "Vài phút" là
@@ -149,7 +191,12 @@ export type SendChatMessageDeps = {
   ) => Promise<ChatCompletionResult>;
 };
 
-export type SendChatMessageResult = { messageId: string };
+/** I7 (final whole-branch review): `crisisReplyText` chỉ có mặt khi shouldPersistCrisisMessages
+ *  phanh việc ghi (`messageId` là chuỗi rỗng — không document nào được tạo) — client dùng
+ *  trường này để hiện thẳng câu trả lời khủng hoảng mà không cần đọc lại chatMessages (đọc lại
+ *  sẽ không thấy gì mới, vì cố ý không ghi). Vắng mặt (undefined) ở MỌI đường khác — `messageId`
+ *  luôn là id thật của tin trợ lý vừa tạo. */
+export type SendChatMessageResult = { messageId: string; crisisReplyText?: string };
 
 /** Đọc `systemConfig/aiConfig`. Cùng hành vi với loadAiConfig của generateReflection.ts — doc
  *  thiếu hoặc sai hình dạng đều coi như "chưa cấu hình" (an toàn cho học sinh), nhưng log lại
@@ -188,10 +235,30 @@ async function appendChatMessage(
     ...message,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await db.collection("chatSessions").doc(sessionId).update({
-    lastMessageAt: FieldValue.serverTimestamp(),
-    messageCount: FieldValue.increment(1),
-  });
+  try {
+    await db.collection("chatSessions").doc(sessionId).update({
+      lastMessageAt: FieldValue.serverTimestamp(),
+      messageCount: FieldValue.increment(1),
+    });
+  } catch (error) {
+    // C2 (final whole-branch review): NOT_FOUND (mã grpc 5) khi `chatSessions/{sessionId}` cha
+    // đã bị chính học sinh xoá ở một tab khác (Task 7: học sinh xoá được cả hội thoại) đúng lúc
+    // một tin nhắn — có thể là CRISIS_REPLY_TEXT — đang được ghi cho session đó ở tab kia. Tin
+    // nhắn TỰ NÓ đã ghi thành công ở dòng trên (`ref` đã tồn tại) — cập nhật
+    // messageCount/lastMessageAt của session cha chỉ là số liệu phụ trợ cho UI, không phải
+    // nguồn sự thật. Chỉ nuốt NOT_FOUND; các lỗi khác (mất mạng thoáng qua, quyền...) vẫn ném
+    // ra để không âm thầm che một vấn đề thật.
+    const code = (error as { code?: number } | null)?.code;
+    const message = error instanceof Error ? error.message : String(error);
+    if (code !== 5 && !/NOT_FOUND/i.test(message)) {
+      throw error;
+    }
+    console.error(
+      "appendChatMessage: chatSessions cha không tồn tại (NOT_FOUND) — bỏ qua cập nhật " +
+        "messageCount/lastMessageAt, tin nhắn vẫn đã lưu",
+      { message },
+    );
+  }
   return ref.id;
 }
 
@@ -241,6 +308,17 @@ function isMoreSevere(a: "urgent" | "concern", b: "urgent" | "concern"): boolean
  * (log lại để chẩn đoán được, không kèm uid — cùng kỷ luật với các console.error khác trong
  * file này), coi như "không tìm thấy cảnh báo nào" — tạo cảnh báo mới. Một cảnh báo trùng chấp
  * nhận được; một học sinh đang khủng hoảng không nhận được câu trả lời thì không.
+ *
+ * C2 (final whole-branch review, CRITICAL): bước ĐỌC ở trên đã fail-open từ round 3, nhưng bước
+ * GHI (`.add()`/`.update()` ngay dưới) trước fix này KHÔNG được bọc — và trên nhánh urgent, hàm
+ * này chạy TRƯỚC appendChatMessage. Một lỗi Firestore thoáng qua đúng lúc ghi cảnh báo làm hỏng
+ * cả lượt gọi: không tin nào được lưu, học sinh nhận lỗi `internal` KHÔNG kèm marker "saved" —
+ * đúng thất bại "khủng hoảng đứng trên trạng thái vận hành" mà round 1 đã sửa, tái diễn thấp hơn
+ * một tầng. SỬA: bọc luôn bước ghi — lỗi bị nuốt (log, không throw), trả về `null` thay vì ném.
+ * Trả `null` không phân biệt được với "Lớp 1 không phát hiện gì" ở phía caller — ĐÚNG Ý: cả hai
+ * đều có nghĩa "không có id cảnh báo nào biết chắc để nâng cấp sau này", và logic gộp hai lớp
+ * phía dưới (runSendChatMessage) đã xử lý đúng cho cả hai trường hợp (thử tạo mới nếu Lớp 2 sau
+ * đó có tín hiệu, cũng fail-open theo đúng cơ chế này).
  */
 async function writeCrisisAlert(
   db: Firestore,
@@ -248,7 +326,7 @@ async function writeCrisisAlert(
   severity: "urgent" | "concern",
   triggeredBy: "keyword" | "model" | "both",
   now: Date,
-): Promise<string> {
+): Promise<string | null> {
   let existing: { id: string; severity: "urgent" | "concern" } | null = null;
   try {
     existing = await findRecentUnhandledAlert(db, userId, now);
@@ -260,41 +338,136 @@ async function writeCrisisAlert(
     existing = null;
   }
 
-  if (existing === null) {
-    const ref = await db.collection("crisisAlerts").add({
-      userId,
-      severity,
-      triggeredBy,
-      // `Timestamp.fromDate(now)` — KHÔNG dùng FieldValue.serverTimestamp() (khác với
-      // appendChatMessage): findRecentUnhandledAlert so `createdAt` với một cửa sổ tính từ CHÍNH
-      // `now` này — hai đồng hồ khác nhau khiến so sánh cửa sổ vô nghĩa (Fix round 2, Finding 2).
-      createdAt: Timestamp.fromDate(now),
-      handledBy: null,
-      handledAt: null,
-    });
-    return ref.id;
-  }
+  try {
+    if (existing === null) {
+      const ref = await db.collection("crisisAlerts").add({
+        userId,
+        severity,
+        triggeredBy,
+        // `Timestamp.fromDate(now)` — KHÔNG dùng FieldValue.serverTimestamp() (khác với
+        // appendChatMessage): findRecentUnhandledAlert so `createdAt` với một cửa sổ tính từ
+        // CHÍNH `now` này — hai đồng hồ khác nhau khiến so sánh cửa sổ vô nghĩa (Fix round 2,
+        // Finding 2).
+        createdAt: Timestamp.fromDate(now),
+        handledBy: null,
+        handledAt: null,
+      });
+      return ref.id;
+    }
 
-  if (isMoreSevere(severity, existing.severity)) {
-    await db.collection("crisisAlerts").doc(existing.id).update({ severity, triggeredBy });
+    if (isMoreSevere(severity, existing.severity)) {
+      await db.collection("crisisAlerts").doc(existing.id).update({ severity, triggeredBy });
+    }
+    return existing.id;
+  } catch (error) {
+    // C2: fail-open trên chính bước GHI — xem comment lớn ở trên hàm này. KHÔNG kèm uid trong
+    // log, cùng kỷ luật với console.error khác trong file này.
+    console.error(
+      "sendChatMessage: ghi/nâng cấp crisisAlerts thất bại — fail-open, KHÔNG làm hỏng lượt gọi",
+      { message: error instanceof Error ? error.message : String(error) },
+    );
+    return null;
   }
-  return existing.id;
 }
 
 /** NÂNG CẤP một cảnh báo Lớp 1 đã ghi TRƯỚC đó (id đã biết) lên mức độ NẶNG HƠN kèm
  *  `triggeredBy: "both"` — dùng khi Lớp 2 (biết được sau khi model trả lời) cũng phát tín hiệu
  *  trên CHÍNH tin nhắn đã tạo alert đó (Fix round 2, Finding 1). KHÔNG đi qua
  *  hasRecentUnhandledAlert: đây không phải tạo một document mới, mà hoàn thiện đúng một document
- *  đã tồn tại cho đúng tin nhắn này — phanh chống-lụt (Finding 2) chỉ áp cho việc TẠO mới. */
+ *  đã tồn tại cho đúng tin nhắn này — phanh chống-lụt (Finding 2) chỉ áp cho việc TẠO mới.
+ *
+ *  C2 (final whole-branch review): bọc trong try/catch, fail-open — cùng lý do writeCrisisAlert.
+ *  Nếu ghi thất bại, cảnh báo đã có (Lớp 1) vẫn còn nguyên ở mức cũ (không mất tín hiệu, chỉ
+ *  không được nâng cấp) — KHÔNG được phép làm hỏng lượt gọi chỉ vì bước nâng cấp này lỗi. */
 async function upgradeCrisisAlert(
   db: Firestore,
   alertId: string,
   severity: "urgent" | "concern",
 ): Promise<void> {
-  await db.collection("crisisAlerts").doc(alertId).update({
-    severity,
-    triggeredBy: "both",
+  try {
+    await db.collection("crisisAlerts").doc(alertId).update({
+      severity,
+      triggeredBy: "both",
+    });
+  } catch (error) {
+    console.error(
+      "sendChatMessage: upgradeCrisisAlert thất bại — fail-open, KHÔNG làm hỏng lượt gọi",
+      { message: error instanceof Error ? error.message : String(error) },
+    );
+  }
+}
+
+/**
+ * I5 (final whole-branch review, Important): phục vụ CRISIS_REPLY_TEXT thay vì để một cổng vận
+ * hành (kill switch/baseUrl/quota) ném lỗi, khi Lớp 1 đã phát hiện gì đó (concern hoặc urgent)
+ * cho tin nhắn hiện tại. Design spec §6: "Phản hồi khủng hoảng không tính quota" — trước fix
+ * này chỉ "urgent" (đã return sớm, không bao giờ chạm tới các cổng này) được bảo vệ; "concern"
+ * (đi tiếp qua model từ sau sửa §3.1) lại rơi thẳng vào các cổng như một tin bình thường, đúng
+ * lúc nhóm học sinh đó hưởng lợi nhiều nhất từ một câu trả lời thay vì "hết lượt hôm nay".
+ *
+ * Ghi cả tin học sinh LẪN CRISIS_REPLY_TEXT — tại các điểm gọi hàm này (kill switch, baseUrl,
+ * quota), tin học sinh CHƯA từng được ghi (đường thuận chỉ ghi sau khi qua hết ba cổng), nên
+ * không có rủi ro ghi trùng.
+ */
+async function serveCrisisReplyBypassingGate(
+  db: Firestore,
+  sessionId: string,
+  uid: string,
+  text: string,
+): Promise<SendChatMessageResult> {
+  await appendChatMessage(db, sessionId, {
+    userId: uid,
+    sessionId,
+    role: "user",
+    text,
+    isCrisisResponse: false,
   });
+  const assistantMessageId = await appendChatMessage(db, sessionId, {
+    userId: uid,
+    sessionId,
+    role: "assistant",
+    text: CRISIS_REPLY_TEXT,
+    isCrisisResponse: true,
+  });
+  return { messageId: assistantMessageId };
+}
+
+/**
+ * I7 (final whole-branch review, Important): ngưỡng rate-limit CỐ ĐỊNH trong code, KHÔNG đọc từ
+ * `systemConfig/aiConfig` — phanh chống-lụt GHI của nhánh Lớp 1 "urgent" (xem
+ * shouldPersistCrisisMessages) phải luôn có hiệu lực bất kể admin cấu hình
+ * `chatRateLimitPerMinute` thế nào, kể cả 0 ("không giới hạn" cho hội thoại bình thường, quy
+ * ước của aiConfigSchema). Nếu dùng lại giá trị admin cấu hình, một admin tắt rate limit chat vì
+ * lý do vận hành hợp lệ sẽ vô tình tắt luôn phanh chống-lụt ghi này — đúng lỗ hổng I7 tồn tại để
+ * bịt. Giá trị 20/phút khớp DEFAULT_AI_CONFIG.chatRateLimitPerMinute — cùng bậc với ngưỡng bình
+ * thường, không phải một con số tuỳ tiện khác.
+ */
+const CRISIS_WRITE_RATE_LIMIT_PER_MINUTE = 20;
+
+/**
+ * I7: true nếu ĐƯỢC PHÉP ghi cặp tin nhắn (học sinh + CRISIS_REPLY_TEXT) của nhánh Lớp 1
+ * "urgent" vào `chatMessages` — false nếu bị phanh chống-lụt (client gọi lặp quá nhanh). KHÔNG
+ * BAO GIỜ dùng để quyết định có trả CRISIS_REPLY_TEXT hay không — caller LUÔN trả câu trả lời,
+ * chỉ việc GHI phụ thuộc kết quả này (nguyên tắc "brake the persistence, never the reply").
+ *
+ * Dùng lại `consumeQuota` với feature RIÊNG ("chat_urgent_persist") để mượn đúng cơ chế
+ * rate-limit sẵn có mà KHÔNG đụng vào ngân sách `chatQuotaPerDay` hiển thị cho học sinh —
+ * `quotaStudentPerDay` truyền vào lớn tuỳ ý (Number.MAX_SAFE_INTEGER) để nhánh "hết ngân sách
+ * ngày" không bao giờ kích hoạt, chỉ nhánh rate-limit của consumeQuota được dùng tới.
+ */
+async function shouldPersistCrisisMessages(
+  db: Firestore,
+  uid: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await consumeQuota(
+    db,
+    uid,
+    "chat_urgent_persist",
+    { quotaStudentPerDay: Number.MAX_SAFE_INTEGER, rateLimitPerMinute: CRISIS_WRITE_RATE_LIMIT_PER_MINUTE },
+    now,
+  );
+  return result.allowed;
 }
 
 /** Đọc `CHAT_WINDOW_SIZE` lượt gần nhất của một session, trả về theo thứ tự thời gian TĂNG DẦN
@@ -482,6 +655,17 @@ export async function runSendChatMessage(
     // cho đúng học sinh này — tin nhắn vẫn được lưu và CRISIS_REPLY_TEXT vẫn được trả về BÌNH
     // THƯỜNG dù không có document cảnh báo mới nào được tạo.
     await writeCrisisAlert(deps.db, auth.uid, "urgent", "keyword", deps.now);
+
+    // I7 (final whole-branch review): nhánh này bỏ qua MỌI cổng vận hành, kể cả consumeQuota —
+    // shouldPersistCrisisMessages là phanh RIÊNG cho việc GHI (không phải câu trả lời) để một
+    // client gọi lặp không ép ghi hàng loạt vào chatMessages. Bị phanh → KHÔNG ghi gì, nhưng
+    // CRISIS_REPLY_TEXT vẫn trả về thẳng trong response (client hiện trực tiếp, không đọc lại
+    // Firestore — xem comment SendChatMessageResult).
+    const shouldPersist = await shouldPersistCrisisMessages(deps.db, auth.uid, deps.now);
+    if (!shouldPersist) {
+      return { messageId: "", crisisReplyText: CRISIS_REPLY_TEXT };
+    }
+
     await appendChatMessage(deps.db, sessionId, {
       userId: auth.uid,
       sessionId,
@@ -512,13 +696,26 @@ export async function runSendChatMessage(
 
   const config = await loadAiConfig(deps.db);
 
+  // I5 (final whole-branch review): Lớp 1 đã phát hiện gì đó cho tin này (chỉ còn "concern" tới
+  // được đây — "urgent" đã return sớm ở trên) — design spec §6 nói phản hồi khủng hoảng không
+  // tính quota, và cùng lý do đó áp cho MỌI cổng vận hành phía dưới, không riêng quota: một cổng
+  // vận hành (kill switch, baseUrl, quota) không được phép biến một cảnh báo đã ghi thành một
+  // câu "hết lượt hôm nay"/"tính năng đang tắt" cho học sinh.
+  const layer1Detected = layer1Severity !== null;
+
   // 7. Kill switch RIÊNG cho chat (Fix round 1, Finding 2b) — độc lập với killSwitch.moodReflection.
   if (config.killSwitch.chat) {
+    if (layer1Detected) {
+      return serveCrisisReplyBypassingGate(deps.db, sessionId, auth.uid, text);
+    }
     throw new HttpsError("failed-precondition", "Tính năng trò chuyện AI hiện đang tắt.");
   }
 
   // 8. baseUrl chưa cấu hình — trạng thái mặc định của hệ thống là im lặng.
   if (config.baseUrl === "") {
+    if (layer1Detected) {
+      return serveCrisisReplyBypassingGate(deps.db, sessionId, auth.uid, text);
+    }
     throw new HttpsError("failed-precondition", "Tính năng trò chuyện AI chưa sẵn sàng.");
   }
 
@@ -541,6 +738,13 @@ export async function runSendChatMessage(
     deps.now,
   );
   if (!quota.allowed) {
+    // I5 (final whole-branch review): xem comment `layer1Detected` ở trên — hết quota ngày HOẶC
+    // vượt rate limit không được phép biến một tin đã ghi cảnh báo thành "hết lượt hôm nay".
+    // Đây chính là ca §6 design spec nêu tên: "em thấy mình vô dụng, chẳng ai cần em" là tin
+    // thứ 31 trong ngày.
+    if (layer1Detected) {
+      return serveCrisisReplyBypassingGate(deps.db, sessionId, auth.uid, text);
+    }
     // Fix round 1, Finding 2a: thông điệp RIÊNG cho rate limit — "hết lượt hôm nay" sai bản
     // chất khi lý do thực sự là "gửi hơi nhanh", và rate limit là ngưỡng CHI PHỐI với chat
     // (chatRateLimitPerMinute mặc định 20/phút, tức 3 giây/tin) trong khi quota ngày hiếm khi
@@ -599,23 +803,13 @@ export async function runSendChatMessage(
     throw error;
   }
 
-  // Lọc an toàn chạy trên TOÀN BỘ văn bản thô, TRƯỚC khi bóc nhãn Lớp 2 — model có thể chèn
-  // ngôn ngữ chẩn đoán ở phần mở đầu, và nhãn mức độ lo ngại không trùng bất kỳ từ cấm nào
-  // (đã kiểm tra thủ công ở buildChatPrompt.ts) nên không tự kích hoạt bộ lọc.
-  const safety = checkOutputSafety(result.text);
-  if (!safety.safe) {
-    await deps.db.collection("aiSafetyLog").add({
-      triggeredKeyword: safety.keyword ?? "(không xác định — văn bản rỗng)",
-      model: config.model,
-      promptTemplateId: DEFAULT_CHAT_PROMPT_TEMPLATE_ID,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    // Cùng marker "saved" — appendChatMessage(user) đã chạy xong từ lâu tới đây (dòng 560).
-    throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE, { reason: "saved" });
-  }
-
-  // Lớp 2 — model tự đánh giá. "concern" — kể cả fail-closed do nhãn thiếu/sai định dạng (mục
-  // 3, task-5-brief.md) — ánh xạ vào InternalSeverity "concern" để gộp cùng Lớp 1.
+  // C1 (final whole-branch review, CRITICAL): bóc nhãn Lớp 2 + ghi/nâng cấp cảnh báo giờ đứng
+  // TRƯỚC lọc an toàn (trước fix: checkOutputSafety chạy trước, nên một câu trả lời bị chặn —
+  // vd model viết "trầm cảm"/"tâm thần", đúng hướng buildChatStructuralInstructions() chủ động
+  // dẫn model tới khi học sinh tuyệt vọng — làm MẤT LUÔN nhãn "urgent" đi kèm: không cảnh báo
+  // nào được ghi, học sinh chỉ nhận "Không thể trả lời lúc này"). "concern" — kể cả fail-closed
+  // do nhãn thiếu/sai định dạng (mục 3, task-5-brief.md) — ánh xạ vào InternalSeverity "concern"
+  // để gộp cùng Lớp 1.
   const parsedConcern = parseConcernLevel(result.text);
   const layer2Severity: InternalSeverity =
     parsedConcern.level === "urgent"
@@ -647,9 +841,28 @@ export async function runSendChatMessage(
   let isCrisisResponse: boolean;
 
   if (combinedSeverity === "urgent") {
+    // C1: CRISIS_REPLY_TEXT là hằng số tĩnh, an toàn theo cấu trúc — KHÔNG chạy checkOutputSafety
+    // trên `result.text` ở nhánh này (nó không bao giờ được dùng làm câu trả lời hiển thị), nên
+    // một output không an toàn không còn "nuốt mất" tín hiệu urgent nữa.
     assistantText = CRISIS_REPLY_TEXT;
     isCrisisResponse = true;
   } else {
+    // C1: lọc an toàn chỉ chạy khi câu trả lời của model THẬT SỰ sẽ được dùng — chạy trên TOÀN
+    // BỘ văn bản thô, TRƯỚC khi bóc nhãn Lớp 2 khỏi phần hiển thị (model có thể chèn ngôn ngữ
+    // chẩn đoán ở phần mở đầu, và nhãn mức độ lo ngại không trùng bất kỳ từ cấm nào — đã kiểm
+    // tra thủ công ở buildChatPrompt.ts — nên không tự kích hoạt bộ lọc).
+    const safety = checkOutputSafety(result.text);
+    if (!safety.safe) {
+      await deps.db.collection("aiSafetyLog").add({
+        triggeredKeyword: safety.keyword ?? "(không xác định — văn bản rỗng)",
+        model: config.model,
+        promptTemplateId: DEFAULT_CHAT_PROMPT_TEMPLATE_ID,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      // Cùng marker "saved" — appendChatMessage(user) đã chạy xong từ lâu tới đây.
+      throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE, { reason: "saved" });
+    }
+
     if (parsedConcern.strippedText === "") {
       // Cùng triết lý "không đoán mò" của parseReflectionOutput: một câu trả lời rỗng sau khi
       // bóc nhãn (model chỉ trả đúng dòng nhãn, không có nội dung nào khác) không đáng tin để

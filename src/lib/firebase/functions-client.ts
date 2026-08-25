@@ -141,8 +141,13 @@ export async function callSaveAiConfig(config: Record<string, unknown>): Promise
  * hàm này CỐ Ý không dịch sang tiếng Việt, để nguyên cho caller (src/lib/firestore/chat.ts)
  * tự dịch, cùng lý do callGenerateReflection ở trên: functions-client.ts chỉ là lớp gọi
  * callable mỏng, không chứa quyết định UX.
+ *
+ * I7 (final whole-branch review): `crisisReplyText` chỉ có mặt khi server phanh việc GHI vào
+ * `chatMessages` (client gọi lặp quá nhanh trên nhánh Lớp 1 "urgent") — `messageId` khi đó là
+ * chuỗi rỗng, KHÔNG có document nào được tạo. Caller (ChatWindow.tsx) hiện thẳng trường này
+ * thay vì đọc lại chatMessages — đọc lại sẽ không thấy gì mới, vì cố ý không ghi.
  */
-export type SendChatMessageResult = { messageId: string };
+export type SendChatMessageResult = { messageId: string; crisisReplyText?: string };
 
 export async function callSendChatMessage(
   sessionId: string,
