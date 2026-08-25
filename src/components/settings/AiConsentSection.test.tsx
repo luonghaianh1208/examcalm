@@ -159,6 +159,20 @@ describe("AiConsentSection", () => {
     expect(screen.getByRole("checkbox")).not.toBeChecked();
   });
 
+  // M12 (final whole-branch review): handleConfirmOff chỉ xoá phản chiếu (deleteAllMyOutputs) —
+  // hộp thoại phải nói rõ cuộc trò chuyện KHÔNG bị xoá theo, và chỉ đường xoá riêng, thay vì để
+  // học sinh tự cho rằng "tắt AI" đã dọn sạch mọi thứ.
+  it("M12: hộp thoại tắt nói rõ cuộc trò chuyện KHÔNG bị xoá theo, chỉ đường xoá riêng ở màn hình chat", async () => {
+    const user = userEvent.setup();
+    render(<AiConsentSection uid="u1" initialAiOptIn={true} initialAiConsentVersion={CURRENT_AI_CONSENT_VERSION} />);
+
+    await user.click(await screen.findByRole("checkbox"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/trò chuyện/i);
+    expect(dialog).toHaveTextContent(/không.*bị xoá/i);
+  });
+
   // ==== I4 (final whole-branch review) — đồng ý dưới hộp thoại CŨ (thiếu hoặc lệch
   // aiConsentVersion) phải được coi như CHƯA đồng ý cho MỤC ĐÍCH hiện checkbox/mở hộp thoại,
   // dù aiOptIn thô vẫn true (phản chiếu vẫn hoạt động bình thường — không đổi gì ở đó).

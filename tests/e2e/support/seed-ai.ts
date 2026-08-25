@@ -41,8 +41,13 @@ export async function seedAiEnabled(providerLabel = "E2E Test Provider"): Promis
     temperature: 0.7,
     maxTokens: 500,
     quotaStudentPerDay: 5,
+    // M9 (final whole-branch review): ba field chat thiếu ở đây khiến fixture này mô tả một
+    // cấu hình sản phẩm KHÔNG THỂ tồn tại thật (aiConfigSchema đòi cả ba field này) — dùng
+    // safeParse ở phía đọc sẽ fail-closed về DEFAULT_AI_CONFIG một cách âm thầm.
+    chatQuotaPerDay: 0,
     rateLimitPerMinute: 3,
-    killSwitch: { moodReflection: false },
+    chatRateLimitPerMinute: 20,
+    killSwitch: { moodReflection: false, chat: true },
     updatedBy: "e2e-suite",
     updatedAt: FieldValue.serverTimestamp(),
   });

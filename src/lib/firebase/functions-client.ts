@@ -47,8 +47,13 @@ export async function callSetUserRole(
 /**
  * Khớp response thật của Cloud Function `deleteUserData`
  * (functions/src/admin/deleteUserData.ts): mỗi field là số document đã xóa ở
- * từng collection — `aiJournalOutputs`/`aiUsage` thêm vào ở fix C1 (final
- * whole-branch review) để cascade xóa cùng lúc với moodLogs/cbtSessions.
+ * từng collection — danh sách MƯỜI field này đi thẳng theo
+ * `collectDeletionTargets()` (functions/src/admin/deleteUserData.logic.ts,
+ * trừ "users/{uid}" xử lý riêng). M10 (final whole-branch review): type này
+ * từng chỉ có 5/10 field (thiếu `answers`, `cbtSessions`, `chatSessions`,
+ * `chatMessages`, `crisisAlerts` — rơi rớt sau các lần thêm collection ở
+ * Spec #2/#4) — không ảnh hưởng runtime (không có call site nào đọc field
+ * riêng lẻ), nhưng khiến type không còn khớp thật, gây hiểu nhầm khi đọc mã.
  * `authDeleteFailed` chỉ xuất hiện khi dữ liệu Firestore đã xóa xong nhưng bản
  * ghi Auth (đăng nhập) chưa xóa được vì lý do khác "đã xóa từ trước" (thiếu
  * quyền, hết quota, mất kết nối...) — hàm KHÔNG throw trong trường hợp đó, vì
@@ -57,7 +62,18 @@ export async function callSetUserRole(
  */
 export type DeleteUserDataResult = {
   ok: true;
-  deleted: { attempts: number; moods: number; aiJournalOutputs: number; aiUsage: number; favorites: number };
+  deleted: {
+    attempts: number;
+    answers: number;
+    moods: number;
+    cbtSessions: number;
+    aiJournalOutputs: number;
+    aiUsage: number;
+    chatSessions: number;
+    chatMessages: number;
+    crisisAlerts: number;
+    favorites: number;
+  };
   authDeleteFailed?: boolean;
 };
 

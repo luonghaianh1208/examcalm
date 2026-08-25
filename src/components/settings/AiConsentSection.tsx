@@ -250,10 +250,19 @@ export function AiConsentSection({ uid, initialAiOptIn, initialAiConsentVersion 
                 <h3 id="ai-consent-dialog-title" className="mb-2 text-lg font-semibold">
                   Tắt tính năng AI và xoá dữ liệu?
                 </h3>
-                <p className="mb-6 text-slate-600">
+                <p className="mb-3 text-slate-600">
                   Tắt tính năng này sẽ <strong>xoá vĩnh viễn</strong> toàn bộ phản chiếu AI đã
                   lưu của bạn — không thể khôi phục lại. Ghi chú cảm xúc gốc của bạn không bị
                   ảnh hưởng.
+                </p>
+                {/* M12 (final whole-branch review): trước fix, câu này im lặng về cuộc trò
+                    chuyện — một học sinh tắt AI hợp lý mong đợi cả cuộc trò chuyện cũng bị xoá,
+                    nhưng thao tác này CHỈ xoá phản chiếu (deleteAllMyOutputs). Nói thẳng nó CÒN
+                    LẠI và chỉ đường xoá riêng, thay vì để học sinh phát hiện sau. */}
+                <p className="mb-6 text-slate-600">
+                  Cuộc trò chuyện cùng AI (nếu có) <strong>KHÔNG</strong> bị xoá bởi thao tác
+                  này. Vào màn hình trò chuyện để xoá từng tin nhắn hoặc cả cuộc trò chuyện nếu
+                  bạn muốn xoá luôn.
                 </p>
                 <div className="flex gap-2">
                   <button

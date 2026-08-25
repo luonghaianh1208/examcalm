@@ -63,7 +63,13 @@ describe("DeleteAccountSection", () => {
   // sinh hiểu lầm rằng dữ liệu vẫn còn và có thể thử xóa lại.
   it("khi xóa THÀNH CÔNG nhưng đăng xuất thất bại: báo đã xóa xong (status), KHÔNG báo lỗi xóa (alert)", async () => {
     mockedCallDeleteUserData.mockResolvedValue({
-      ok: true, deleted: { attempts: 1, moods: 1, aiJournalOutputs: 1, aiUsage: 1, favorites: 1 },
+      ok: true,
+      // M10 (final whole-branch review): mười field khớp ĐÚNG collectDeletionTargets() thật —
+      // xem giải thích ở functions-client.ts::DeleteUserDataResult.
+      deleted: {
+        attempts: 1, answers: 1, moods: 1, cbtSessions: 1, aiJournalOutputs: 1, aiUsage: 1,
+        chatSessions: 1, chatMessages: 1, crisisAlerts: 1, favorites: 1,
+      },
     });
     mockedSignOutEverywhere.mockRejectedValue(new Error("mất kết nối"));
     const user = userEvent.setup();
