@@ -51,7 +51,17 @@ Mọi quyết định trong spec này xuất phát từ câu đó.
 
 **Lớp 2 — model tự đánh giá.** Prompt yêu cầu model trả thêm một nhãn mức độ lo ngại trong cùng lượt gọi. Không tốn thêm tiền.
 
-Bắt được ở lớp 1 thì **không gọi model** — trả thẳng phản hồi khủng hoảng. Không có lý do gửi câu đó ra provider.
+**Chỉ mức `urgent` mới chặn lời gọi model** — trả thẳng phản hồi khủng hoảng, không gửi câu đó ra provider.
+
+Mức `concern` **vẫn ghi cảnh báo**, nhưng cuộc trò chuyện tiếp tục bình thường.
+
+> **Sửa ngày 2026-08-25.** Bản đầu cho cả hai mức cùng chặn. Đó là sai, vì hai tình huống khác nhau:
+>
+> Một em bày tỏ tuyệt vọng mà chưa có ý định thì **được lợi từ một cuộc trò chuyện**. Cắt ngang rồi hiện số điện thoại không rõ là tốt hơn một câu đáp tử tế — và cảnh báo vẫn tới thầy cô trong cả hai trường hợp.
+>
+> Một em bày tỏ ý định thì cần số 111 ngay, và cần câu chữ của em **không** được gửi sang bên thứ ba.
+>
+> Hệ quả thứ hai, quan trọng không kém: danh sách từ khoá sẽ **không bao giờ đầy đủ và cũng không bao giờ hết va chạm**. Với quy tắc mới, một lần bắt nhầm ở mức `concern` chỉ tốn một cảnh báo thừa — quay lại đúng phía an toàn của đánh đổi — thay vì cướp mất cuộc trò chuyện của một em đang cần nó.
 
 ### 3.2. Chiều sai lầm được chọn có chủ đích — có một ngoại lệ
 
