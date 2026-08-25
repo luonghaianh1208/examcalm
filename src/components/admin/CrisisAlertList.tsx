@@ -44,6 +44,10 @@ export function CrisisAlertList({
   adminUid, studentsByUid,
 }: { adminUid: string; studentsByUid: Record<string, UserSummary> }) {
   const [alerts, setAlerts] = useState<CrisisAlertRecord[] | null>(null);
+  // I6 (final whole-branch review): true khi danh sách "gần đây" (không phải phần chưa xử lý —
+  // xem comment listCrisisAlerts) có thể đã bị cắt bởi trần `max`. Cảnh báo CHƯA xử lý không
+  // bao giờ khiến cờ này bật vì lý do "chỉ là bị cắt hiển thị" — xem admin-crisis.ts.
+  const [truncated, setTruncated] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -53,7 +57,8 @@ export function CrisisAlertList({
   const load = useCallback(() => {
     return listCrisisAlerts()
       .then((result) => {
-        setAlerts(result);
+        setAlerts(result.alerts);
+        setTruncated(result.truncated);
         setLoadFailed(false);
       })
       .catch(() => setLoadFailed(true));
@@ -105,6 +110,16 @@ export function CrisisAlertList({
 
       {actionError && (
         <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{actionError}</p>
+      )}
+
+      {/* I6 (final whole-branch review): cảnh báo CHƯA xử lý không bao giờ bị cắt (xem
+          admin-crisis.ts) — cờ này chỉ có nghĩa "một số cảnh báo ĐÃ xử lý cũ hơn có thể không
+          hiện ở đây", để không ai hiểu nhầm là còn cảnh báo chưa xử lý bị giấu. */}
+      {truncated && (
+        <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">
+          Danh sách này có thể chưa hiện hết các cảnh báo ĐÃ xử lý cũ hơn — mọi cảnh báo CHƯA xử
+          lý đều chắc chắn hiện đầy đủ ở đây.
+        </p>
       )}
 
       {loadFailed ? (

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getDocs, updateDoc, Timestamp } from "firebase/firestore";
+import { getDocs, updateDoc, Timestamp, where } from "firebase/firestore";
 import { ensureAuthReady } from "@/lib/firebase/client";
 import { listCrisisAlerts, markCrisisAlertHandled, reopenCrisisAlert, isAlertUnhandled } from "./admin-crisis";
 
@@ -14,6 +14,7 @@ vi.mock("firebase/firestore", () => ({
   doc: vi.fn((..._args: unknown[]) => ({ id: "mock-doc" })),
   getDocs: vi.fn(),
   query: vi.fn((...args: unknown[]) => args),
+  where: vi.fn((...args: unknown[]) => ["WHERE", ...args]),
   orderBy: vi.fn((...args: unknown[]) => ["ORDER_BY", ...args]),
   limit: vi.fn((...args: unknown[]) => ["LIMIT", ...args]),
   updateDoc: vi.fn(),
@@ -28,6 +29,12 @@ vi.mock("firebase/firestore", () => ({
 
 const mockedGetDocs = vi.mocked(getDocs);
 const mockedUpdateDoc = vi.mocked(updateDoc);
+const mockedWhere = vi.mocked(where);
+
+/** Hầu hết test dùng CÙNG một fixture cho CẢ HAI truy vấn song song (listCrisisAlerts giờ gọi
+ *  getDocs hai lần — chưa xử lý + gần đây) — mockResolvedValue áp cho mọi lần gọi, nên dedup
+ *  theo id sẽ tự nhiên cho ra đúng tập cũ (không có gì mới, không có gì thiếu) khi cả hai truy
+ *  vấn trả về cùng một fixture. Test I6 riêng bên dưới mới cố tình cho hai truy vấn khác nhau. */
 
 function fakeQuerySnap(docs: Array<{ id: string; data: Record<string, unknown> }>) {
   return {
@@ -56,7 +63,9 @@ describe("listCrisisAlerts", () => {
 
     await listCrisisAlerts();
 
-    expect(order).toEqual(["ensureAuthReady", "getDocs"]);
+    // I6 (final whole-branch review): listCrisisAlerts giờ chạy HAI truy vấn song song
+    // (chưa-xử-lý + gần-đây) — cả hai vẫn phải đứng SAU ensureAuthReady.
+    expect(order).toEqual(["ensureAuthReady", "getDocs", "getDocs"]);
   });
 
   // Guard load-bearing (task-9-brief.md, mục "Never {...(doc.data() as T)}"): document lệch
@@ -82,7 +91,7 @@ describe("listCrisisAlerts", () => {
       ]),
     );
 
-    const result = await listCrisisAlerts();
+    const { alerts: result } = await listCrisisAlerts();
 
     expect(Object.keys(result[0]!).sort()).toEqual(
       ["createdAt", "handledAt", "handledBy", "id", "severity", "triggeredBy", "userId"].sort(),
@@ -94,7 +103,7 @@ describe("listCrisisAlerts", () => {
       fakeQuerySnap([{ id: "bad1", data: { severity: "linh-tinh", triggeredBy: 123 } }]),
     );
 
-    const result = await listCrisisAlerts();
+    const { alerts: result } = await listCrisisAlerts();
 
     expect(result[0]).toMatchObject({
       id: "bad1", userId: "", severity: "concern", triggeredBy: "keyword",
@@ -110,7 +119,7 @@ describe("listCrisisAlerts", () => {
       fakeQuerySnap([{ id: "bad-date", data: { userId: "u1", severity: "concern", triggeredBy: "keyword" } }]),
     );
 
-    const result = await listCrisisAlerts();
+    const { alerts: result } = await listCrisisAlerts();
 
     expect(Number.isNaN(result[0]!.createdAt.getTime())).toBe(true);
     expect(result[0]!.createdAt.getTime()).not.toBe(new Date(0).getTime());
@@ -132,7 +141,7 @@ describe("listCrisisAlerts", () => {
       ]),
     );
 
-    const result = await listCrisisAlerts();
+    const { alerts: result } = await listCrisisAlerts();
 
     expect(result[0]?.createdAt).toEqual(createdAt);
     expect(result[0]?.handledAt).toEqual(handledAt);
@@ -174,7 +183,7 @@ describe("listCrisisAlerts", () => {
       ]),
     );
 
-    const result = await listCrisisAlerts();
+    const { alerts: result } = await listCrisisAlerts();
 
     expect(result.map((a) => a.id)).toEqual(["unhandled-newest", "unhandled-older", "handled-newest"]);
   });
@@ -207,10 +216,95 @@ describe("listCrisisAlerts", () => {
       ]),
     );
 
-    const result = await listCrisisAlerts();
+    const { alerts: result } = await listCrisisAlerts();
 
     expect(result.map((a) => a.id)).toEqual(["reopened", "still-handled"]);
     expect(isAlertUnhandled(result[0]!)).toBe(true);
+  });
+
+  // ==== I6 (final whole-branch review) — cảnh báo CHƯA xử lý không được rơi ra khỏi trần
+  // `max` của truy vấn "gần đây" nữa: chạy HAI truy vấn song song, gộp lại.
+  it("I6: gọi getDocs ĐÚNG HAI lần — một truy vấn lọc where(handledBy, ==, null), một truy vấn 'gần đây' không lọc theo trạng thái", async () => {
+    mockedGetDocs.mockResolvedValue(fakeQuerySnap([]));
+
+    await listCrisisAlerts();
+
+    expect(mockedGetDocs).toHaveBeenCalledTimes(2);
+    expect(mockedWhere).toHaveBeenCalledWith("handledBy", "==", null);
+    expect(mockedWhere).toHaveBeenCalledTimes(1); // truy vấn "gần đây" KHÔNG lọc theo trạng thái
+  });
+
+  it("I6: cảnh báo CHƯA xử lý CŨ (rớt khỏi truy vấn 'gần đây' vì có limit) VẪN xuất hiện trong kết quả", async () => {
+    const oldUnhandled = {
+      id: "old-unhandled",
+      data: {
+        userId: "u-old", severity: "urgent", triggeredBy: "keyword",
+        // Rất cũ — kịch bản đúng thứ I6 mô tả: một cảnh báo bị bỏ sót trong tuần thi cử bận rộn.
+        createdAt: fakeTimestamp(new Date("2020-01-01T00:00:00Z")),
+        handledBy: null, handledAt: null,
+      },
+    };
+    const recentHandled = {
+      id: "recent-handled",
+      data: {
+        userId: "u-new", severity: "concern", triggeredBy: "keyword",
+        createdAt: fakeTimestamp(new Date("2026-08-24T12:00:00Z")),
+        handledBy: "admin-1", handledAt: fakeTimestamp(new Date("2026-08-24T12:30:00Z")),
+      },
+    };
+    // Lần gọi getDocs THỨ NHẤT = truy vấn chưa-xử-lý (trả về cảnh báo cũ đó, KHÔNG bị limit vì
+    // đây chính là truy vấn RIÊNG cho trạng thái này). Lần THỨ HAI = truy vấn "gần đây" — cảnh
+    // báo cũ đã rớt khỏi cửa sổ limit(max) của nó từ lâu, chỉ còn cảnh báo mới.
+    mockedGetDocs
+      .mockResolvedValueOnce(fakeQuerySnap([oldUnhandled]))
+      .mockResolvedValueOnce(fakeQuerySnap([recentHandled]));
+
+    const { alerts: result } = await listCrisisAlerts();
+
+    expect(result.map((a) => a.id)).toContain("old-unhandled");
+    expect(result.map((a) => a.id)).toEqual(["old-unhandled", "recent-handled"]);
+  });
+
+  it("I6: truncated=false khi cả hai truy vấn trả về ÍT HƠN max", async () => {
+    mockedGetDocs.mockResolvedValue(fakeQuerySnap([{ id: "a1", data: { userId: "u1", severity: "concern", triggeredBy: "keyword", createdAt: fakeTimestamp(new Date()), handledBy: null, handledAt: null } }]));
+
+    const result = await listCrisisAlerts(200);
+
+    expect(result.truncated).toBe(false);
+  });
+
+  it("I6: truncated=true khi truy vấn 'gần đây' CHẠM ĐÚNG trần max (có thể còn cảnh báo đã xử lý cũ hơn chưa lấy được)", async () => {
+    const makeDoc = (id: string) => ({
+      id,
+      data: {
+        userId: "u1", severity: "concern", triggeredBy: "keyword",
+        createdAt: fakeTimestamp(new Date()), handledBy: "admin-1", handledAt: fakeTimestamp(new Date()),
+      },
+    });
+    mockedGetDocs
+      .mockResolvedValueOnce(fakeQuerySnap([])) // truy vấn chưa-xử-lý: rỗng
+      .mockResolvedValueOnce(fakeQuerySnap([makeDoc("a1"), makeDoc("a2")])); // "gần đây": đúng max=2
+
+    const result = await listCrisisAlerts(2);
+
+    expect(result.truncated).toBe(true);
+  });
+
+  it("I6: truncated=true khi truy vấn CHƯA XỬ LÝ chạm đúng trần max (bản thân số lượng chưa xử lý đã vượt max — khủng hoảng vận hành thật)", async () => {
+    const makeUnhandled = (id: string) => ({
+      id,
+      data: {
+        userId: "u1", severity: "urgent", triggeredBy: "keyword",
+        createdAt: fakeTimestamp(new Date()), handledBy: null, handledAt: null,
+      },
+    });
+    mockedGetDocs
+      .mockResolvedValueOnce(fakeQuerySnap([makeUnhandled("a1"), makeUnhandled("a2")])) // đúng max=2
+      .mockResolvedValueOnce(fakeQuerySnap([]));
+
+    const result = await listCrisisAlerts(2);
+
+    expect(result.truncated).toBe(true);
   });
 });
 

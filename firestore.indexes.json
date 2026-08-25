@@ -48,6 +48,14 @@
         { "fieldPath": "handledBy", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "crisisAlerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "handledBy", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

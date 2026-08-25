@@ -42,7 +42,7 @@ const STUDENTS: Record<string, UserSummary> = {
 };
 
 async function renderReady(alerts: CrisisAlertRecord[], studentsByUid: Record<string, UserSummary> = STUDENTS) {
-  mockedListCrisisAlerts.mockResolvedValue(alerts);
+  mockedListCrisisAlerts.mockResolvedValue({ alerts, truncated: false });
   render(<CrisisAlertList adminUid="admin-1" studentsByUid={studentsByUid} />);
   await waitFor(() => {
     expect(mockedListCrisisAlerts).toHaveBeenCalled();
@@ -154,10 +154,10 @@ describe("CrisisAlertList — đánh dấu đã xử lý (tự nhận bằng ch�
   // fix, `finally` chạy ngay sau markCrisisAlertHandled() resolve, không đợi load() (fire-and-
   // forget) — nút nháy bật lại rồi tắt lại khi dòng mới tới.
   it("Fix round 1, Finding 4: nút vẫn disabled tới khi danh sách MỚI tải xong — không nháy dòng cũ", async () => {
-    mockedListCrisisAlerts.mockResolvedValueOnce([UNHANDLED_URGENT]);
-    let resolveReload!: (value: CrisisAlertRecord[]) => void;
+    mockedListCrisisAlerts.mockResolvedValueOnce({ alerts: [UNHANDLED_URGENT], truncated: false });
+    let resolveReload!: (value: { alerts: CrisisAlertRecord[]; truncated: boolean }) => void;
     mockedListCrisisAlerts.mockImplementationOnce(
-      () => new Promise<CrisisAlertRecord[]>((resolve) => { resolveReload = resolve; }),
+      () => new Promise<{ alerts: CrisisAlertRecord[]; truncated: boolean }>((resolve) => { resolveReload = resolve; }),
     );
     mockedMarkCrisisAlertHandled.mockResolvedValue(undefined);
 
@@ -173,7 +173,10 @@ describe("CrisisAlertList — đánh dấu đã xử lý (tự nhận bằng ch�
     expect(button).toBeDisabled();
     expect(screen.getByRole("button", { name: /đánh dấu đã xử lý/i })).toBeInTheDocument();
 
-    resolveReload([{ ...UNHANDLED_URGENT, handledBy: "admin-1", handledAt: new Date("2026-08-24T10:05:00Z") }]);
+    resolveReload({
+      alerts: [{ ...UNHANDLED_URGENT, handledBy: "admin-1", handledAt: new Date("2026-08-24T10:05:00Z") }],
+      truncated: false,
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/đã xử lý bởi admin-1/i)).toBeInTheDocument();
@@ -216,6 +219,23 @@ describe("CrisisAlertList — thời điểm không đọc được (Fix round 1
 
     expect(screen.getByText(/không rõ thời điểm/i)).toBeInTheDocument();
     expect(screen.queryByText(/1970/)).not.toBeInTheDocument();
+  });
+});
+
+// I6 (final whole-branch review): danh sách "gần đây" có thể bị cắt bởi trần max — trang phải
+// nói rõ điều đó thay vì trông gọn gàng như đã hiện đủ mọi cảnh báo.
+describe("CrisisAlertList — truncated (I6, final whole-branch review)", () => {
+  it("truncated=true -> hiện dòng cảnh báo về danh sách có thể chưa đầy đủ", async () => {
+    mockedListCrisisAlerts.mockResolvedValue({ alerts: [UNHANDLED_URGENT], truncated: true });
+    render(<CrisisAlertList adminUid="admin-1" studentsByUid={STUDENTS} />);
+
+    await waitFor(() => expect(mockedListCrisisAlerts).toHaveBeenCalled());
+    expect(await screen.findByText(/có thể chưa hiện hết/i)).toBeInTheDocument();
+  });
+
+  it("truncated=false -> KHÔNG hiện dòng cảnh báo đó", async () => {
+    await renderReady([UNHANDLED_URGENT]);
+    expect(screen.queryByText(/có thể chưa hiện hết/i)).not.toBeInTheDocument();
   });
 });
 

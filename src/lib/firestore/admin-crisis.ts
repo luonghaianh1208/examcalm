@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  collection, doc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, updateDoc,
+  collection, doc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, updateDoc, where,
 } from "firebase/firestore";
 import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import type { CrisisAlert } from "@/lib/types/chat";
@@ -41,23 +41,71 @@ export function isAlertUnhandled(alert: Pick<CrisisAlertRecord, "handledBy">): b
   return alert.handledBy === null;
 }
 
-/** Liệt kê cảnh báo khủng hoảng cho admin — CHƯA xử lý lên đầu, mới nhất trên cùng trong mỗi
- *  nhóm (task-9-brief.md, Step 1, mục 1). `orderBy("createdAt", "desc")` trong query CHỈ để giới
- *  hạn `limit` lấy đúng các document mới nhất — thứ tự HIỂN THỊ cuối cùng vẫn tự sắp lại tường
- *  minh ở đây (khoá chính: trạng thái xử lý qua `isAlertUnhandled` — theo `handledBy`, KHÔNG
- *  BAO GIỜ `handledAt`; khoá phụ: `createdAt` giảm dần), không dựa vào thứ tự Firestore trả sẵn
- *  đã đúng ý muốn hiển thị. */
-export async function listCrisisAlerts(max = 200): Promise<CrisisAlertRecord[]> {
+export type ListCrisisAlertsResult = {
+  alerts: CrisisAlertRecord[];
+  /** I6 (final whole-branch review): true nếu CÓ THỂ còn cảnh báo ĐÃ XỬ LÝ không nằm trong
+   *  danh sách này — xảy ra khi số cảnh báo GẦN ĐÂY (bất kể trạng thái) vượt quá `max`. Cảnh
+   *  báo CHƯA xử lý KHÔNG BAO GIỜ bị cắt bởi giới hạn này (xem truy vấn riêng bên dưới) —
+   *  `truncated` chỉ cảnh báo về phần "đã xử lý, hiện thêm cho ngữ cảnh". */
+  truncated: boolean;
+};
+
+/**
+ * Liệt kê cảnh báo khủng hoảng cho admin — CHƯA xử lý lên đầu, mới nhất trên cùng trong mỗi
+ * nhóm (task-9-brief.md, Step 1, mục 1).
+ *
+ * I6 (final whole-branch review, Important): bản trước CHỈ chạy một truy vấn
+ * `orderBy("createdAt", "desc").limit(200)` rồi sắp chưa-xử-lý-lên-đầu TRONG BỘ NHỚ — nghĩa là
+ * 200 "chỗ" đó bị CẢ cảnh báo đã xử lý lẫn chưa xử lý cùng tranh nhau. Một cảnh báo bị bỏ sót
+ * trong tuần thi cử bận rộn rơi hẳn ra khỏi kết quả một khi đủ 200 cảnh báo MỚI HƠN (kể cả đã xử
+ * lý) tích luỹ — không phân trang, không dấu hiệu bị cắt, trang admin trông gọn gàng trong khi
+ * đúng cảnh báo cần thấy nhất đã biến mất. Đây là design risk R2 (design spec §9) thành hiện
+ * thực trong code.
+ *
+ * SỬA: chạy HAI truy vấn song song — (1) MỌI cảnh báo CHƯA xử lý (`where("handledBy", "==",
+ * null)`, không giới hạn theo `createdAt` gần đây — một cảnh báo chưa xử lý dù cũ tới đâu vẫn
+ * PHẢI hiện), và (2) `max` cảnh báo GẦN ĐÂY NHẤT bất kể trạng thái (giữ hành vi cũ, cho ngữ cảnh
+ * "gần đây có gì"). Gộp theo id (không trùng lặp), sắp lại đúng quy tắc cũ. Cảnh báo CHƯA xử lý
+ * giờ chỉ bị thiếu nếu bản thân SỐ LƯỢNG cảnh báo chưa xử lý vượt `max` — một tình huống chính nó
+ * đã là một khủng hoảng vận hành (quá nhiều cảnh báo chưa ai xử lý), không phải một lỗ hổng
+ * hiển thị âm thầm.
+ *
+ * Chú ý index: truy vấn (1) đòi composite index RIÊNG (`handledBy` ASC + `createdAt` DESC) —
+ * index `crisisAlerts` sẵn có trong `firestore.indexes.json` (`userId` + `handledBy` +
+ * `createdAt`) phục vụ `findRecentUnhandledAlert` (functions/src/ai/sendChatMessage.ts), KHÔNG
+ * phục vụ truy vấn này (không lọc theo `userId`).
+ */
+export async function listCrisisAlerts(max = 200): Promise<ListCrisisAlertsResult> {
   await ensureAuthReady();
-  const snap = await getDocs(
-    query(collection(getDb(), "crisisAlerts"), orderBy("createdAt", "desc"), limit(max)),
-  );
-  const records = snap.docs.map((d) => toCrisisAlertRecord(d.id, d.data()));
-  return records.sort((a, b) => {
+  const db = getDb();
+  const alertsCollection = collection(db, "crisisAlerts");
+
+  const [unhandledSnap, recentSnap] = await Promise.all([
+    getDocs(
+      query(alertsCollection, where("handledBy", "==", null), orderBy("createdAt", "desc"), limit(max)),
+    ),
+    getDocs(query(alertsCollection, orderBy("createdAt", "desc"), limit(max))),
+  ]);
+
+  const byId = new Map<string, CrisisAlertRecord>();
+  for (const d of unhandledSnap.docs) {
+    byId.set(d.id, toCrisisAlertRecord(d.id, d.data()));
+  }
+  for (const d of recentSnap.docs) {
+    if (!byId.has(d.id)) byId.set(d.id, toCrisisAlertRecord(d.id, d.data()));
+  }
+
+  const alerts = Array.from(byId.values()).sort((a, b) => {
     const handledDiff = Number(!isAlertUnhandled(a)) - Number(!isAlertUnhandled(b));
     if (handledDiff !== 0) return handledDiff;
     return b.createdAt.getTime() - a.createdAt.getTime();
   });
+
+  // "Chạm trần" ở MỘT trong hai truy vấn là tín hiệu đáng tin có thể còn document chưa lấy được
+  // — một truy vấn trả về ÍT HƠN `max` nghĩa là chắc chắn đã lấy hết phần của nó.
+  const truncated = unhandledSnap.docs.length >= max || recentSnap.docs.length >= max;
+
+  return { alerts, truncated };
 }
 
 /** Tự nhận xử lý một cảnh báo BẰNG CHÍNH admin đang gọi — `adminUid` luôn là uid của người gọi,
