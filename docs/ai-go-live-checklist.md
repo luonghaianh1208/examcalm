@@ -173,13 +173,19 @@ thiếu một trong ba là chưa đạt yêu cầu của mục này:
    [docs/crisis-keyword-rationale.md](./crisis-keyword-rationale.md) để không phải đọc mã nguồn.
 2. **`CRISIS_REPLY_TEXT`** — câu trả lời cố định học sinh nhận khi hệ thống xác định mức
    `urgent` (nguyên văn đã trích sẵn trong tài liệu ở mục 1).
-3. **System prompt của cuộc trò chuyện bình thường** (`buildChatStructuralInstructions()` trong
-   `functions/src/ai/buildChatPrompt.ts`, cộng phần persona ở `/admin/ai`) — **đây là mục dễ bị
-   bỏ sót nhất.** Sau một lần sửa thiết kế, chỉ mức `urgent` mới nhận câu cố định ở mục 2 —
-   mức `concern` (tuyệt vọng nhưng chưa nêu ý định cụ thể) vẫn để chính AI tiếp tục trò chuyện,
-   dựa theo chỉ dẫn trong hàm này. Nghĩa là câu chữ một học sinh tuyệt vọng thật sự đọc được là
-   do AI tự soạn theo chỉ dẫn đó, không phải một câu đã duyệt sẵn — nên chỉ dẫn đó cũng cần được
-   duyệt như một văn bản các em sẽ đọc, không phải chỉ là "cấu hình kỹ thuật".
+3. **System prompt của cuộc trò chuyện bình thường** — CẢ HAI hằng số sau, đều nằm trong
+   `functions/src/ai/buildChatPrompt.ts` và đều là **hằng số biên dịch cứng trong mã nguồn,
+   KHÔNG sửa được qua `/admin/ai` hay bất kỳ trang admin nào** (I8, final whole-branch review —
+   đính chính một sai sót trước đây của chính tài liệu này, xem thêm ở cuối mục này):
+   - `DEFAULT_CHAT_TEMPLATE.systemPrompt` — giọng "ấm áp, gần gũi" của chú mèo đồng hành.
+   - `buildChatStructuralInstructions()` — quy tắc an toàn cố định (cấm chẩn đoán, không giả vờ
+     là người, không hứa giữ bí mật, hướng dẫn khi học sinh tuyệt vọng...).
+
+   **Đây là mục dễ bị bỏ sót nhất.** Sau một lần sửa thiết kế, chỉ mức `urgent` mới nhận câu cố
+   định ở mục 2 — mức `concern` (tuyệt vọng nhưng chưa nêu ý định cụ thể) vẫn để chính AI tiếp
+   tục trò chuyện, dựa theo hai hằng số trên. Nghĩa là câu chữ một học sinh tuyệt vọng thật sự
+   đọc được là do AI tự soạn theo chỉ dẫn đó, không phải một câu đã duyệt sẵn — nên chỉ dẫn đó
+   cũng cần được duyệt như một văn bản các em sẽ đọc, không phải chỉ là "cấu hình kỹ thuật".
 
 Nhờ người phụ trách kỹ thuật in/gửi nguyên văn cả ba cho chuyên gia tâm lý, chỉ tick mục này sau
 khi người đó xác nhận cả ba đều ổn (hoặc sau khi các góp ý đã được sửa và người đó xác nhận lại).
@@ -207,21 +213,29 @@ phù hợp). Người quyết định: `______________________` Ngày: `________
 
 ---
 
-## 💬 Câu hỏi cần chủ sản phẩm trả lời (không chặn bật tính năng, nhưng nên quyết trước khi sửa persona)
+## ℹ️ Đính chính (I8, final whole-branch review): persona của Trò chuyện KHÔNG admin-sửa-được
 
-Giọng nói "ấm áp, gần gũi" mà học sinh nghe từ chú mèo đồng hành trong cuộc trò chuyện nằm ở
-`DEFAULT_CHAT_TEMPLATE` (`functions/src/ai/buildChatPrompt.ts`) — phần **admin sửa được** qua
-ô "System prompt" ở `/admin/ai`. Phần AN TOÀN (cấm chẩn đoán, không giả vờ là người, không hứa
-giữ bí mật, hướng dẫn khi học sinh tuyệt vọng...) nằm ở một hàm KHÁC, cố định, admin **không**
-sửa được qua giao diện — toàn bộ phần đó là quy tắc, không có câu nào tạo cảm giác ấm áp/lắng
-nghe.
+Một phiên bản trước của tài liệu này có một mục "Câu hỏi cần chủ sản phẩm trả lời" dựa trên tiền
+đề **sai**: rằng giọng nói "ấm áp, gần gũi" của chú mèo đồng hành trong cuộc **trò chuyện**
+(`DEFAULT_CHAT_TEMPLATE.systemPrompt`, `functions/src/ai/buildChatPrompt.ts`) là phần admin sửa
+được qua ô "System prompt" ở `/admin/ai`, và đặt câu hỏi liệu điều đó có nên bị siết lại như mục
+10 hay không.
 
-**Câu hỏi:** một admin trường (không được đào tạo lâm sàng) có nên được tự do đổi GIỌNG mà học
-sinh nghe (persona) mà không cần ai duyệt lại — trong khi mục 10 ở trên lại đòi hỏi một chuyên
-gia tâm lý duyệt kỹ ba văn bản an toàn? Nói cách khác: phần "ấm áp" của con mèo có đang được bảo
-vệ ở cùng mức nghiêm ngặt với phần "an toàn" hay không? Đây không phải lỗi kỹ thuật cần sửa
-ngay — là một câu hỏi thiết kế sản phẩm cần chủ sản phẩm cân nhắc và quyết định (ví dụ: có nên
-đòi một vòng duyệt tương tự mục 10 mỗi khi sửa System prompt của chat, khác với phản chiếu?).
+**Sự thật:** `sendChatMessage.ts` (Cloud Function phục vụ tính năng Trò chuyện) KHÔNG BAO GIỜ
+đọc `promptTemplates` — `buildChatMessages()` luôn được gọi mà không kèm template, nên LUÔN dùng
+thẳng `DEFAULT_CHAT_TEMPLATE` cứng trong mã nguồn. Ô "System prompt" ở `/admin/ai` (mục 8 phía
+trên) chỉ ghi vào `promptTemplates` với `name: "mood_reflection"` — tài liệu này chỉ được
+`generateReflection.ts` (tính năng **Phản chiếu**) đọc. Một admin sửa ô đó và publish tin rằng
+mình vừa đổi giọng chú mèo TRÒ CHUYỆN thực ra đang đổi văn bản của PHẢN CHIẾU, sống ngay lập tức
+với học sinh — một rủi ro hình dạng khác, ngược hướng với câu hỏi đã đặt sai ở trên (AiConfigEditor.tsx
+giờ đã có dòng chú thích ngay tại trang để tránh nhầm lẫn này).
+
+Vì persona của Trò chuyện là hằng số biên dịch, thay đổi nó LUÔN đi qua review code + deploy —
+đã chặt hơn một ô nhập liệu admin có thể sửa bất cứ lúc nào, nên câu hỏi "có nên siết thêm một
+vòng duyệt" không còn tiền đề để đặt ra nữa. Mục 10 ở trên vẫn yêu cầu chuyên gia tâm lý duyệt cả
+`DEFAULT_CHAT_TEMPLATE` lẫn `buildChatStructuralInstructions()` trước lần đầu go-live; bất kỳ lần
+sửa nào sau đó với hai hằng số này là một thay đổi mã nguồn, nên đi qua đúng quy trình review code
+của đội kỹ thuật.
 
 ---
 

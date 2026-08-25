@@ -460,6 +460,18 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
 
       <section>
         <h2 className="mb-3 text-lg font-medium">Danh sách prompt template</h2>
+        {/* I8 (final whole-branch review): trước fix, không có gì ở đây nói rõ các template này
+            CHỈ dùng cho "Phản chiếu" — sendChatMessage.ts (tính năng Trò chuyện) KHÔNG BAO GIỜ
+            đọc promptTemplates (buildChatMessages luôn gọi không kèm template, dùng thẳng một
+            persona cố định trong mã nguồn). Một admin sửa "System prompt" ở đây tin rằng mình
+            đang chỉnh giọng nói của chú mèo trò chuyện — thực ra đang sửa văn bản của Phản
+            chiếu, một thay đổi sống động ảnh hưởng học sinh ngay lập tức mà không ai ngờ tới. */}
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Các prompt template dưới đây chỉ áp dụng cho tính năng <strong>Phản chiếu</strong>{" "}
+          (viết lại ghi chú cảm xúc). Tính năng <strong>Trò chuyện</strong> KHÔNG đọc bất kỳ
+          template nào ở đây — giọng nói của chú mèo trò chuyện là một đoạn văn bản cố định
+          trong mã nguồn (không sửa được qua trang này).
+        </p>
         {templatesFailed ? (
           <div className="rounded-xl bg-amber-50 px-4 py-6 text-amber-900">
             <p>Chưa tải được danh sách prompt template lúc này — có thể do mạng chập chờn thôi.</p>

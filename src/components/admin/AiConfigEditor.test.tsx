@@ -425,6 +425,18 @@ describe("AiConfigEditor — soạn prompt: draft → preview → publish", () =
     expect(screen.getByText(/mood_reflection/)).toBeInTheDocument();
   });
 
+  // I8 (final whole-branch review): sendChatMessage.ts KHÔNG BAO GIỜ đọc promptTemplates — chỉ
+  // generateReflection.ts (Phản chiếu) dùng. Trang phải nói rõ điều đó, nếu không admin sửa
+  // "System prompt" tin rằng mình đang chỉnh giọng chú mèo TRÒ CHUYỆN.
+  it("I8: nói rõ prompt template chỉ áp dụng cho Phản chiếu, Trò chuyện KHÔNG đọc gì ở đây", async () => {
+    await renderReady(CONFIGURED, []);
+    // Hai đoạn văn bản nằm ở HAI text node riêng (bị "Phản chiếu"/"Trò chuyện" tô đậm ở giữa
+    // ngắt ra) — khớp từng mảnh KHÔNG cắt ngang thẻ <strong>, tránh getByText khớp nhầm ở một
+    // ancestor bọc ngoài rộng hơn (textContent gộp cả hai câu).
+    expect(screen.getByText(/chỉ áp dụng cho tính năng/i)).toBeInTheDocument();
+    expect(screen.getByText(/không đọc bất kỳ template nào/i)).toBeInTheDocument();
+  });
+
   it("soạn draft mới rồi lưu -> gọi saveDraftPromptTemplate với status draft", async () => {
     mockedSaveDraftPromptTemplate.mockResolvedValue("new-pt-id");
     await renderReady(CONFIGURED, []);
