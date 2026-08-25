@@ -30,8 +30,33 @@ function formatAlertTime(d: Date): string {
  *    admin chủ ý tắt (một cấu hình SAI HÌNH DẠNG mới ra "failed" — xem onCrisisAlertCreated.ts).
  *  - "sent" — đã gửi, kèm mốc thời gian.
  *  - null (vắng mặt trên document — xem admin-crisis.ts) — "chưa rõ", KHÔNG PHẢI thành công hay
- *    thất bại: trigger Task 2 có thể chưa chạy, hoặc chết trước khi ghi lại được gì. */
-function formatEmailStatus(status: CrisisAlertRecord["emailStatus"], emailedAt: Date | null): string {
+ *    thất bại: trigger Task 2 có thể chưa chạy, hoặc chết trước khi ghi lại được gì. I2 (final
+ *    whole-branch review): "chưa rõ" một mình là trạng thái ÍT NỔI BẬT NHẤT trên trang (xám nhạt)
+ *    — đúng cho một cảnh báo vài giây tuổi, nhưng SAI cho một cảnh báo urgent BA NGÀY tuổi mà
+ *    trigger chưa từng chạm tới. Quá STALE_TRIGGER_THRESHOLD_MS, "chưa rõ" phải nổi bật lên thành
+ *    một cảnh báo vận hành riêng — xem isTriggerStale bên dưới. */
+/** I2 (final whole-branch review): ngưỡng coi một `emailStatus` VẮNG MẶT là "trigger chưa phản
+ *  hồi" thay vì "còn mới, đang chờ". 5 phút: độ trễ thật TỆ NHẤT của trigger (cold start Cloud
+ *  Functions vài chục giây + `listAllAuthUsers` phân trang + timeout gửi mail 10s của
+ *  onCrisisAlertCreated.ts) vẫn nằm gọn dưới 1 phút, nên ngưỡng này đủ RỘNG để không báo động giả
+ *  cho một cảnh báo vài giây/vài chục giây tuổi — nhưng đủ HẸP để một trigger CHẾT (thiếu secret,
+ *  crash trước khi vào code, hoặc chính writeEmailStatus lỗi — bị nuốt im lặng có chủ đích) không
+ *  im lặng hàng giờ/ngày trước khi ai tình cờ nhận ra. */
+const STALE_TRIGGER_THRESHOLD_MS = 5 * 60 * 1000;
+
+/** true nếu một `emailStatus` vắng mặt đã ĐỦ LÂU để coi là "trigger chưa phản hồi" thay vì "còn
+ *  mới, đang chờ" — xem STALE_TRIGGER_THRESHOLD_MS. `createdAt` NaN (Invalid Date, xem
+ *  admin-crisis.ts) rơi về false — không suy diễn "cũ" từ một thời điểm không đọc được. */
+function isTriggerStale(createdAt: Date): boolean {
+  const ageMs = Date.now() - createdAt.getTime();
+  return !Number.isNaN(ageMs) && ageMs > STALE_TRIGGER_THRESHOLD_MS;
+}
+
+function formatEmailStatus(
+  status: CrisisAlertRecord["emailStatus"],
+  emailedAt: Date | null,
+  createdAt: Date,
+): string {
   if (status === "sent") {
     return emailedAt ? `Đã gửi mail cảnh báo lúc ${formatAlertTime(emailedAt)}` : "Đã gửi mail cảnh báo";
   }
@@ -41,12 +66,22 @@ function formatEmailStatus(status: CrisisAlertRecord["emailStatus"], emailedAt: 
   if (status === "skipped") {
     return "Đã bỏ qua gửi mail (tính năng đang tắt, hoặc chưa có admin nào nhận được)";
   }
-  return "Chưa rõ trạng thái gửi mail";
+  // status vắng mặt — giữ nguyên chữ "Chưa rõ trạng thái gửi mail" trong CẢ hai nhánh (không đổi
+  // hẳn sang chữ khác) để không mất đi ý nghĩa gốc "không biết chắc điều gì đã xảy ra"; nhánh cũ
+  // (I2) chỉ THÊM một câu cảnh báo khi đã đủ lâu để nghi ngờ trigger đã chết.
+  return isTriggerStale(createdAt)
+    ? "Chưa rõ trạng thái gửi mail — trigger CHƯA PHẢN HỒI sau nhiều phút, có thể đã lỗi, kiểm tra ngay"
+    : "Chưa rõ trạng thái gửi mail";
 }
 
-function emailStatusClassName(status: CrisisAlertRecord["emailStatus"]): string {
+function emailStatusClassName(status: CrisisAlertRecord["emailStatus"], createdAt: Date): string {
   if (status === "failed") {
     return "rounded-lg bg-rose-100 px-2 py-1 text-sm font-semibold text-rose-900";
+  }
+  // I2: status vắng mặt VÀ đã đủ lâu — nổi bật bằng amber (cảnh báo vận hành), KHÔNG dùng rose
+  // (đã dành riêng cho "failed" — hai mức độ nghiêm trọng khác nhau không được lẫn vào nhau).
+  if (status == null && isTriggerStale(createdAt)) {
+    return "rounded-lg bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-900";
   }
   return "text-sm text-slate-500";
 }
@@ -187,8 +222,8 @@ export function CrisisAlertList({
                 </span>
                 <span className="text-sm text-slate-500">{formatAlertTime(alert.createdAt)}</span>
                 <StudentIdentity userId={alert.userId} student={studentsByUid[alert.userId]} />
-                <span className={emailStatusClassName(alert.emailStatus ?? null)}>
-                  {formatEmailStatus(alert.emailStatus ?? null, alert.emailedAt ?? null)}
+                <span className={emailStatusClassName(alert.emailStatus ?? null, alert.createdAt)}>
+                  {formatEmailStatus(alert.emailStatus ?? null, alert.emailedAt ?? null, alert.createdAt)}
                 </span>
 
                 {unhandled ? (

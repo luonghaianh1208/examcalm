@@ -286,6 +286,47 @@ describe("CrisisAlertList — trạng thái gửi mail (ExamCalm Spec #5, Task 3
   });
 });
 
+// I2 (final whole-branch review): một emailStatus VẮNG MẶT là trạng thái mail ÍT NỔI BẬT nhất
+// trên trang (xám nhạt, cùng class với "skipped") — đúng cho một cảnh báo vài giây tuổi (trigger
+// chưa kịp chạy), nhưng cũng là NGUYÊN VẸN giao diện đó cho một cảnh báo urgent BA NGÀY tuổi mà
+// trigger chưa từng chạm tới (trigger lỗi deploy, crash trước khi vào code, hoặc chính
+// writeEmailStatus lỗi — bị nuốt im lặng có chủ đích). Ngưỡng 5 PHÚT (xem
+// STALE_TRIGGER_THRESHOLD_MS): độ trễ thật tệ nhất của trigger (cold start Cloud Functions vài
+// chục giây + listAllAuthUsers phân trang + timeout gửi mail 10s của onCrisisAlertCreated.ts) vẫn
+// nằm gọn dưới 1 phút, nên 5 phút đủ rộng để không báo động giả — nhưng đủ hẹp để một trigger CHẾT
+// không im lặng hàng giờ/ngày trước khi ai nhận ra, đúng khoảng "vài phút" mà task-brief mô tả.
+describe("CrisisAlertList — trigger chưa phản hồi (I2, final whole-branch review)", () => {
+  it("emailStatus vắng mặt, cảnh báo còn mới (1 phút tuổi) -> CHỈ hiện 'chưa rõ' trung tính, KHÔNG hiện cảnh báo trigger chết", async () => {
+    const fresh: CrisisAlertRecord = {
+      ...UNHANDLED_URGENT,
+      createdAt: new Date(Date.now() - 60_000),
+      emailStatus: null,
+      emailedAt: null,
+    };
+    await renderReady([fresh]);
+
+    expect(screen.getByText(/chưa rõ/i)).toBeInTheDocument();
+    expect(screen.queryByText(/chưa phản hồi/i)).not.toBeInTheDocument();
+  });
+
+  it("emailStatus vắng mặt, cảnh báo ĐÃ CŨ (10 phút tuổi, vượt ngưỡng) -> hiện cảnh báo trigger CHƯA PHẢN HỒI, nổi bật khác 'chưa rõ' thường", async () => {
+    const stale: CrisisAlertRecord = {
+      ...UNHANDLED_URGENT,
+      createdAt: new Date(Date.now() - 10 * 60_000),
+      emailStatus: null,
+      emailedAt: null,
+    };
+    await renderReady([stale]);
+
+    const staleNode = screen.getByText(/chưa phản hồi/i);
+    expect(staleNode).toBeInTheDocument();
+    // Nổi bật khác "chưa rõ" thường (text-slate-500) — pin bằng một nền màu cảnh báo (amber),
+    // KHÔNG dùng rose (đã dành riêng cho "failed" — không được lẫn hai mức độ nghiêm trọng).
+    expect(staleNode.className).toMatch(/amber/);
+    expect(staleNode.className).not.toMatch(/rose/);
+  });
+});
+
 describe("CrisisAlertList — tải lỗi (vd non-admin bị chặn bởi rules)", () => {
   it("listCrisisAlerts thất bại -> hiện thông báo lỗi kèm nút thử lại, không crash", async () => {
     mockedListCrisisAlerts.mockRejectedValue(new Error("permission-denied"));
