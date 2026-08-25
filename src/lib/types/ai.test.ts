@@ -15,7 +15,8 @@ const VALID_AI_CONFIG = {
   quotaStudentPerDay: 5,
   chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
-  killSwitch: { moodReflection: true },
+  chatRateLimitPerMinute: 20,
+  killSwitch: { moodReflection: true, chat: true },
 };
 
 describe("aiConfigSchema", () => {
@@ -73,6 +74,42 @@ describe("aiConfigSchema", () => {
     ).toBe(false);
     expect(
       aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatQuotaPerDay: 2.5 }).success,
+    ).toBe(false);
+  });
+
+  it("chatRateLimitPerMinute phải là số nguyên >= 0, 0 hợp lệ nghĩa là KHÔNG áp rate limit " +
+    "(cùng quy ước với rateLimitPerMinute)", () => {
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatRateLimitPerMinute: 0 }).success,
+    ).toBe(true);
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatRateLimitPerMinute: -1 }).success,
+    ).toBe(false);
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, chatRateLimitPerMinute: 1.5 }).success,
+    ).toBe(false);
+  });
+
+  it("killSwitch.chat là công tắc RIÊNG với killSwitch.moodReflection — bật một cái không " +
+    "đụng cái kia", () => {
+    expect(
+      aiConfigSchema.safeParse({
+        ...VALID_AI_CONFIG,
+        killSwitch: { moodReflection: false, chat: true },
+      }).success,
+    ).toBe(true);
+    expect(
+      aiConfigSchema.safeParse({
+        ...VALID_AI_CONFIG,
+        killSwitch: { moodReflection: true, chat: false },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("killSwitch thiếu field chat -> từ chối (chat là field bắt buộc, không phải tuỳ chọn)", () => {
+    const { chat: _chat, ...killSwitchWithoutChat } = { moodReflection: true, chat: true };
+    expect(
+      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, killSwitch: killSwitchWithoutChat }).success,
     ).toBe(false);
   });
 
@@ -137,6 +174,16 @@ describe("DEFAULT_AI_CONFIG", () => {
     "như quotaStudentPerDay: baseUrl rỗng và killSwitch bật đã tắt toàn bộ tính năng, " +
     "chatQuotaPerDay chỉ cần sẵn một ngân sách hợp lý cho lúc admin bật tính năng)", () => {
     expect(DEFAULT_AI_CONFIG.chatQuotaPerDay).toBe(30);
+  });
+
+  it("chatRateLimitPerMinute mặc định là 20 (một tin mỗi 3 giây — Fix round 1, Task 5, " +
+    "Finding 2a)", () => {
+    expect(DEFAULT_AI_CONFIG.chatRateLimitPerMinute).toBe(20);
+  });
+
+  it("killSwitch.chat mặc định true (tắt) — độc lập với moodReflection (Fix round 1, Task 5, " +
+    "Finding 2b: một admin bật lại phản chiếu không được vô tình mở luôn chat)", () => {
+    expect(DEFAULT_AI_CONFIG.killSwitch.chat).toBe(true);
   });
 
   it("tự khớp với aiConfigSchema của chính nó", () => {

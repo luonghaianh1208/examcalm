@@ -49,7 +49,8 @@ const VALID_CONFIG: AiConfig = {
   quotaStudentPerDay: 5,
   chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
-  killSwitch: { moodReflection: false },
+  chatRateLimitPerMinute: 20,
+  killSwitch: { moodReflection: false, chat: true },
 };
 
 describe("runSaveAiConfig", () => {
@@ -86,7 +87,7 @@ describe("runSaveAiConfig", () => {
   it("killSwitch bật -> aiPublic.enabled=false dù baseUrl/model đã điền", async () => {
     await runSaveAiConfig(
       ADMIN_AUTH,
-      { ...VALID_CONFIG, killSwitch: { moodReflection: true } },
+      { ...VALID_CONFIG, killSwitch: { moodReflection: true, chat: true } },
       { db },
     );
 
@@ -111,7 +112,7 @@ describe("runSaveAiConfig", () => {
       ...DEFAULT_AI_CONFIG,
       providerLabel: "OldProvider",
       baseUrl: "https://old.example.com/v1",
-      killSwitch: { moodReflection: true },
+      killSwitch: { moodReflection: true, chat: true },
     });
 
     await runSaveAiConfig(
@@ -127,12 +128,12 @@ describe("runSaveAiConfig", () => {
     expect(entry?.before).toEqual({
       baseUrl: "https://old.example.com/v1",
       providerLabel: "OldProvider",
-      killSwitch: { moodReflection: true },
+      killSwitch: { moodReflection: true, chat: true },
     });
     expect(entry?.after).toEqual({
       baseUrl: "https://api.deepseek.com/v1",
       providerLabel: "DeepSeek",
-      killSwitch: { moodReflection: false },
+      killSwitch: { moodReflection: false, chat: true },
     });
   });
 

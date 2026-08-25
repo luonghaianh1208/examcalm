@@ -80,7 +80,8 @@ const VALID_CONFIG: AiConfig = {
   quotaStudentPerDay: 10,
   chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
-  killSwitch: { moodReflection: false },
+  chatRateLimitPerMinute: 20,
+  killSwitch: { moodReflection: false, chat: true },
 };
 
 beforeEach(() => {
@@ -125,7 +126,7 @@ describe("isAiEnabled", () => {
     expect(
       isAiEnabled({
         baseUrl: "https://a.test", model: "m",
-        killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
       }),
     ).toBe(true);
   });
@@ -133,7 +134,7 @@ describe("isAiEnabled", () => {
   it("false khi baseUrl rỗng", () => {
     expect(
       isAiEnabled({
-        baseUrl: "", model: "m", killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+        baseUrl: "", model: "m", killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
       }),
     ).toBe(false);
   });
@@ -141,7 +142,7 @@ describe("isAiEnabled", () => {
   it("false khi model rỗng", () => {
     expect(
       isAiEnabled({
-        baseUrl: "https://a.test", model: "", killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+        baseUrl: "https://a.test", model: "", killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
       }),
     ).toBe(false);
   });
@@ -149,7 +150,7 @@ describe("isAiEnabled", () => {
   it("false khi killSwitch đang bật (true = tính năng TẮT)", () => {
     expect(
       isAiEnabled({
-        baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: true }, quotaStudentPerDay: 5,
+        baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: true, chat: true }, quotaStudentPerDay: 5,
       }),
     ).toBe(false);
   });
@@ -163,7 +164,7 @@ describe("isAiEnabled", () => {
     expect(
       isAiEnabled({
         baseUrl: "https://a.test", model: "m",
-        killSwitch: { moodReflection: false }, quotaStudentPerDay: 0,
+        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 0,
       }),
     ).toBe(false);
   });
@@ -172,7 +173,7 @@ describe("isAiEnabled", () => {
     expect(
       isAiEnabled({
         baseUrl: "https://a.test", model: "m",
-        killSwitch: { moodReflection: false }, quotaStudentPerDay: 5,
+        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
       }),
     ).toBe(true);
   });

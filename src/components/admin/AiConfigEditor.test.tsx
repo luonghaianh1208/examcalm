@@ -45,7 +45,8 @@ const CONFIGURED: AiConfig = {
   quotaStudentPerDay: 10,
   chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
-  killSwitch: { moodReflection: false },
+  chatRateLimitPerMinute: 20,
+  killSwitch: { moodReflection: false, chat: true },
 };
 
 const TEMPLATE_DRAFT: PromptTemplateRecord = {
@@ -151,12 +152,12 @@ describe("AiConfigEditor — kill switch (Decision D)", () => {
   });
 
   it("khi tính năng đang tắt (killSwitch=true) -> hiện chữ 'Đang tắt'", async () => {
-    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true } });
+    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true, chat: true } });
     expect(screen.getByText(/^đang tắt$/i)).toBeInTheDocument();
   });
 
   it("bật công tắc trong form rồi lưu -> gửi killSwitch.moodReflection=false", async () => {
-    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true } });
+    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true, chat: true } });
 
     const toggle = screen.getByLabelText(/bật tính năng phản chiếu ai cho học sinh/i);
     await userEvent.click(toggle);
@@ -164,7 +165,7 @@ describe("AiConfigEditor — kill switch (Decision D)", () => {
 
     await waitFor(() => {
       expect(mockedSaveAiConfig).toHaveBeenCalledWith(
-        expect.objectContaining({ killSwitch: { moodReflection: false } }),
+        expect.objectContaining({ killSwitch: { moodReflection: false, chat: true } }),
       );
     });
   });
@@ -185,7 +186,7 @@ describe("AiConfigEditor — kill switch (Decision D)", () => {
   });
 
   it("bật công tắc nhưng CHƯA lưu -> hiện trạng thái TƯƠNG LAI ('Sẽ bật sau khi lưu')", async () => {
-    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true } }); // đã lưu: tắt
+    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: true, chat: true } }); // đã lưu: tắt
 
     const toggle = screen.getByLabelText(/bật tính năng phản chiếu ai cho học sinh/i);
     await userEvent.click(toggle); // tick -> dirty, muốn bật

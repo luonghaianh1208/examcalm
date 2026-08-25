@@ -15,6 +15,21 @@ import { Timestamp, type Firestore } from "firebase-admin/firestore";
  *  học sinh không hiểu vì sao. */
 const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 
+/**
+ * Fix round 1 cho Task 5 (Finding 1, CRITICAL — spec ❌): trước fix này, MỌI caller dùng
+ * chung một document `aiUsage/{uid}_{date}`, bất kể tính năng nào tiêu thụ. Hậu quả: 5 tin
+ * chat tiêu hết ngân sách 5 lượt/ngày của phản chiếu, hay ngược lại — hai `quotaStudentPerDay`
+ * và `chatQuotaPerDay` không còn nghĩa là "N lượt của TÍNH NĂNG NÀY mỗi ngày" nữa, mà là "một
+ * ngân sách chung, ai tiêu trước người đó dùng". Đây là một thay đổi hành vi lên tính năng ĐÃ
+ * SHIP (generateReflection.ts) chỉ vì thêm chat.
+ *
+ * `feature` là phần THỨ HAI của khoá document (`aiUsage/{uid}_{feature}_{date}`) — mỗi tính
+ * năng tiêu quota độc lập, không giẫm lên nhau. BẮT BUỘC truyền tường minh ở MỌI call site
+ * (không có giá trị mặc định) để một người đọc `generateReflection.ts`/`sendChatMessage.ts`
+ * thấy ngay tính năng nào đang tiêu quota nào mà không cần lần theo import.
+ */
+export type QuotaFeature = "reflection" | "chat";
+
 /** Phần cấu hình quota mà consumeQuota cần — lấy từ AiConfig (systemConfig/aiConfig), chỉ
  *  khai báo đúng hai field dùng tới thay vì phụ thuộc kiểu AiConfig đầy đủ (module này nằm
  *  trong package functions/, tách biệt package web app chứa AiConfig). */
@@ -28,9 +43,12 @@ export type ConsumeQuotaResult = {
   reason: "quota" | "rate_limit" | null;
 };
 
-/** Hình dạng document aiUsage/{uid}_{yyyy-mm-dd}. */
+/** Hình dạng document aiUsage/{uid}_{feature}_{yyyy-mm-dd}. `feature` được lưu lại (dù đã
+ *  nằm sẵn trong id document) — cùng lý do `uid`/`date` cũng được lưu lại dù nằm trong id:
+ *  đọc log/console Firestore không phải lúc nào cũng tiện parse ngược lại id. */
 type AiUsageDoc = {
   uid: string;
+  feature: QuotaFeature;
   date: string;
   count: number;
   updatedAt: Timestamp;
@@ -53,15 +71,20 @@ function vietnamDateKey(now: Date): string {
  *
  * `now` nhận qua tham số (không dùng `new Date()` trong hàm) để test kiểm soát được cả
  * khoá ngày (giờ VN) lẫn khoảng cách rate limit một cách xác định.
+ *
+ * `feature` khoá document theo TỪNG tính năng riêng (`aiUsage/{uid}_{feature}_{date}`) — hai
+ * tính năng gọi `consumeQuota` với `feature` khác nhau không bao giờ tiêu chung một ngân
+ * sách (Fix round 1, Task 5, Finding 1).
  */
 export async function consumeQuota(
   db: Firestore,
   uid: string,
+  feature: QuotaFeature,
   config: QuotaConfig,
   now: Date,
 ): Promise<ConsumeQuotaResult> {
   const date = vietnamDateKey(now);
-  const docRef = db.collection("aiUsage").doc(`${uid}_${date}`);
+  const docRef = db.collection("aiUsage").doc(`${uid}_${feature}_${date}`);
 
   return db.runTransaction(async (tx): Promise<ConsumeQuotaResult> => {
     const snap = await tx.get(docRef);
@@ -104,6 +127,7 @@ export async function consumeQuota(
 
     const nextDoc: AiUsageDoc = {
       uid,
+      feature,
       date,
       count: currentCount + 1,
       updatedAt: Timestamp.fromDate(now),

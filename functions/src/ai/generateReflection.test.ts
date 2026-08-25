@@ -73,7 +73,7 @@ async function setAiConfig(overrides: Partial<AiConfig> = {}): Promise<void> {
     providerLabel: "FakeProvider",
     quotaStudentPerDay: 5,
     rateLimitPerMinute: 0, // tắt rate limit để các test không phụ thuộc khoảng cách thời gian
-    killSwitch: { moodReflection: false },
+    killSwitch: { moodReflection: false, chat: true },
     ...overrides,
   };
   await db.collection("systemConfig").doc("aiConfig").set(config);
@@ -135,7 +135,7 @@ describe("generateReflection", () => {
   });
 
   it("3. killSwitch.moodReflection === true → failed-precondition, callChatCompletion KHÔNG được gọi", async () => {
-    await setAiConfig({ killSwitch: { moodReflection: true } });
+    await setAiConfig({ killSwitch: { moodReflection: true, chat: true } });
     await setUser(STUDENT_UID, true);
     await setMoodLog("m1", STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
@@ -181,8 +181,14 @@ describe("generateReflection", () => {
     // Đã dùng hết lượt duy nhất trong ngày trước khi gọi.
     await db
       .collection("aiUsage")
-      .doc(`${STUDENT_UID}_2026-08-24`)
-      .set({ uid: STUDENT_UID, date: "2026-08-24", count: 1, updatedAt: Timestamp.fromDate(now) });
+      .doc(`${STUDENT_UID}_reflection_2026-08-24`)
+      .set({
+        uid: STUDENT_UID,
+        feature: "reflection",
+        date: "2026-08-24",
+        count: 1,
+        updatedAt: Timestamp.fromDate(now),
+      });
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
 
     await expect(
@@ -413,7 +419,7 @@ describe("generateReflection", () => {
   });
 
   it("13. quota chỉ bị trừ khi thực sự gọi model — kill switch bật → aiUsage không đổi", async () => {
-    await setAiConfig({ killSwitch: { moodReflection: true } });
+    await setAiConfig({ killSwitch: { moodReflection: true, chat: true } });
     await setUser(STUDENT_UID, true);
     await setMoodLog("m1", STUDENT_UID);
     const now = new Date("2026-08-24T02:00:00Z");
@@ -422,7 +428,7 @@ describe("generateReflection", () => {
       runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps({ now })),
     ).rejects.toMatchObject({ code: "failed-precondition" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_reflection_2026-08-24`).get();
     expect(usageSnap.exists).toBe(false);
   });
 
@@ -437,7 +443,7 @@ describe("generateReflection", () => {
       runGenerateReflection(AUTH_OK, { moodLogId: "does-not-exist" }, makeDeps({ now })),
     ).rejects.toMatchObject({ code: "not-found" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_reflection_2026-08-24`).get();
     expect(usageSnap.exists).toBe(false);
   });
 
@@ -451,7 +457,7 @@ describe("generateReflection", () => {
       runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps({ now })),
     ).rejects.toMatchObject({ code: "permission-denied" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_reflection_2026-08-24`).get();
     expect(usageSnap.exists).toBe(false);
   });
 
@@ -470,7 +476,7 @@ describe("generateReflection", () => {
       runGenerateReflection(AUTH_OK, { moodLogId: "m1" }, makeDeps({ now, callChatCompletion: fake })),
     ).rejects.toMatchObject({ code: "internal" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_reflection_2026-08-24`).get();
     expect(usageSnap.exists).toBe(true);
     expect(usageSnap.data()?.count).toBe(1);
   });

@@ -9,6 +9,11 @@
 //   npm run test:quota   (script trong functions/package.json, tự bọc emulator)
 // hoặc thủ công nếu emulator Firestore đã chạy sẵn ở nơi khác:
 //   npx vitest run src/ai/quota.test.ts
+//
+// Fix round 1 cho Task 5 (Finding 1, CRITICAL): consumeQuota() giờ nhận thêm tham số
+// `feature` ("reflection" | "chat") — mọi test dưới đây dùng "reflection" cho các phép thử
+// thuần cơ chế (không quan tâm tính năng nào), TRỪ describe cuối file, chuyên kiểm chứng
+// đúng bất biến MỚI: hai feature khác nhau không thể làm cạn quota của nhau.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
@@ -47,16 +52,18 @@ describe("consumeQuota", () => {
     const result = await consumeQuota(
       db,
       "u1",
+      "reflection",
       { quotaStudentPerDay: 5, rateLimitPerMinute: 60 },
       now,
     );
 
     expect(result).toEqual({ allowed: true, reason: null });
 
-    const snap = await db.collection("aiUsage").doc("u1_2026-08-24").get();
+    const snap = await db.collection("aiUsage").doc("u1_reflection_2026-08-24").get();
     expect(snap.exists).toBe(true);
     expect(snap.data()?.count).toBe(1);
     expect(snap.data()?.uid).toBe("u1");
+    expect(snap.data()?.feature).toBe("reflection");
     expect(snap.data()?.date).toBe("2026-08-24");
   });
 
@@ -66,22 +73,22 @@ describe("consumeQuota", () => {
     const nowAt = (i: number) => new Date(base + i * 60_000); // cách nhau 1 phút, xa ngưỡng rate limit
 
     for (let i = 0; i < 3; i++) {
-      const result = await consumeQuota(db, "u2", config, nowAt(i));
+      const result = await consumeQuota(db, "u2", "reflection", config, nowAt(i));
       expect(result).toEqual({ allowed: true, reason: null });
     }
 
-    const denied = await consumeQuota(db, "u2", config, nowAt(3));
+    const denied = await consumeQuota(db, "u2", "reflection", config, nowAt(3));
     expect(denied).toEqual({ allowed: false, reason: "quota" });
 
-    const snapAfterFirstDenial = await db.collection("aiUsage").doc("u2_2026-08-24").get();
+    const snapAfterFirstDenial = await db.collection("aiUsage").doc("u2_reflection_2026-08-24").get();
     expect(snapAfterFirstDenial.data()?.count).toBe(3);
 
     // Gọi thêm lần nữa sau khi đã bị từ chối — vẫn bị từ chối, count vẫn dừng ở 3.
     // Đây là phép thử trực tiếp cho yêu cầu: một lượt bị từ chối KHÔNG được tiêu quota.
-    const deniedAgain = await consumeQuota(db, "u2", config, nowAt(4));
+    const deniedAgain = await consumeQuota(db, "u2", "reflection", config, nowAt(4));
     expect(deniedAgain).toEqual({ allowed: false, reason: "quota" });
 
-    const snapAfterSecondDenial = await db.collection("aiUsage").doc("u2_2026-08-24").get();
+    const snapAfterSecondDenial = await db.collection("aiUsage").doc("u2_reflection_2026-08-24").get();
     expect(snapAfterSecondDenial.data()?.count).toBe(3);
   });
 
@@ -90,13 +97,14 @@ describe("consumeQuota", () => {
     const result = await consumeQuota(
       db,
       "u3",
+      "reflection",
       { quotaStudentPerDay: 0, rateLimitPerMinute: 60 },
       now,
     );
 
     expect(result).toEqual({ allowed: false, reason: "quota" });
 
-    const snap = await db.collection("aiUsage").doc("u3_2026-08-24").get();
+    const snap = await db.collection("aiUsage").doc("u3_reflection_2026-08-24").get();
     expect(snap.exists).toBe(false); // bị từ chối ngay từ transaction đầu tiên, chưa từng ghi doc
   });
 
@@ -105,16 +113,17 @@ describe("consumeQuota", () => {
     const result = await consumeQuota(
       db,
       "u4",
+      "reflection",
       { quotaStudentPerDay: 5, rateLimitPerMinute: 60 },
       now,
     );
 
     expect(result.allowed).toBe(true);
 
-    const wrongDay = await db.collection("aiUsage").doc("u4_2026-08-24").get();
+    const wrongDay = await db.collection("aiUsage").doc("u4_reflection_2026-08-24").get();
     expect(wrongDay.exists).toBe(false);
 
-    const rightDay = await db.collection("aiUsage").doc("u4_2026-08-25").get();
+    const rightDay = await db.collection("aiUsage").doc("u4_reflection_2026-08-25").get();
     expect(rightDay.exists).toBe(true);
     expect(rightDay.data()?.date).toBe("2026-08-25");
   });
@@ -124,20 +133,20 @@ describe("consumeQuota", () => {
     const t1 = new Date("2026-08-24T02:00:00.000Z");
     const t2 = new Date("2026-08-24T02:00:00.500Z"); // 500ms sau — dưới ngưỡng 1000ms
 
-    const first = await consumeQuota(db, "u5", config, t1);
+    const first = await consumeQuota(db, "u5", "reflection", config, t1);
     expect(first).toEqual({ allowed: true, reason: null });
 
-    const second = await consumeQuota(db, "u5", config, t2);
+    const second = await consumeQuota(db, "u5", "reflection", config, t2);
     expect(second).toEqual({ allowed: false, reason: "rate_limit" });
 
-    const snap = await db.collection("aiUsage").doc("u5_2026-08-24").get();
+    const snap = await db.collection("aiUsage").doc("u5_reflection_2026-08-24").get();
     expect(snap.data()?.count).toBe(1); // lượt bị rate-limit không tăng count
 
     // t3 cách t1 đúng 1200ms (>= ngưỡng 1000ms) nhưng chỉ cách t2 700ms (< ngưỡng).
     // Nếu lượt bị từ chối ở trên (t2) LỠ cập nhật updatedAt, t3 sẽ vẫn bị từ chối —
     // phép thử này bắt được đúng lỗi đó.
     const t3 = new Date("2026-08-24T02:00:01.200Z");
-    const third = await consumeQuota(db, "u5", config, t3);
+    const third = await consumeQuota(db, "u5", "reflection", config, t3);
     expect(third).toEqual({ allowed: true, reason: null });
   });
 
@@ -147,13 +156,13 @@ describe("consumeQuota", () => {
     const t1 = new Date("2026-08-24T02:00:00.000Z");
     const t2 = new Date("2026-08-24T02:00:00.000Z"); // cùng một mốc — cách nhau 0ms
 
-    const first = await consumeQuota(db, "u7", config, t1);
+    const first = await consumeQuota(db, "u7", "reflection", config, t1);
     expect(first).toEqual({ allowed: true, reason: null });
 
-    const second = await consumeQuota(db, "u7", config, t2);
+    const second = await consumeQuota(db, "u7", "reflection", config, t2);
     expect(second).toEqual({ allowed: true, reason: null });
 
-    const snap = await db.collection("aiUsage").doc("u7_2026-08-24").get();
+    const snap = await db.collection("aiUsage").doc("u7_reflection_2026-08-24").get();
     expect(snap.data()?.count).toBe(2); // cả hai lượt đều tiêu quota, không lượt nào bị chặn
   });
 
@@ -170,13 +179,13 @@ describe("consumeQuota", () => {
     // phép thử này CHỈ còn kiểm tra đúng một điều: transaction tăng count có mất lượt
     // dưới truy cập đồng thời hay không. Đọc-rồi-ghi không transaction sẽ làm test này đỏ.
     const calls = Array.from({ length: N }, (_, i) =>
-      consumeQuota(db, "u6", config, new Date(base + i * 1000)),
+      consumeQuota(db, "u6", "reflection", config, new Date(base + i * 1000)),
     );
 
     const results = await Promise.all(calls);
     expect(results.every((r) => r.allowed === true)).toBe(true);
 
-    const snap = await db.collection("aiUsage").doc("u6_2026-08-24").get();
+    const snap = await db.collection("aiUsage").doc("u6_reflection_2026-08-24").get();
     expect(snap.data()?.count).toBe(N);
   }, 20_000);
 
@@ -195,14 +204,93 @@ describe("consumeQuota", () => {
     // Mỗi lượt cách nhau 1s (>> ngưỡng rate limit 10ms) để CHỈ còn kiểm tra đúng bất biến
     // quota dưới truy cập đồng thời, không lẫn với rate limit.
     const calls = Array.from({ length: N_CALLERS }, (_, i) =>
-      consumeQuota(db, "u8", config, new Date(base + i * 1000)),
+      consumeQuota(db, "u8", "reflection", config, new Date(base + i * 1000)),
     );
 
     const results = await Promise.all(calls);
     const allowedCount = results.filter((r) => r.allowed).length;
     expect(allowedCount).toBe(QUOTA);
 
-    const snap = await db.collection("aiUsage").doc("u8_2026-08-24").get();
+    const snap = await db.collection("aiUsage").doc("u8_reflection_2026-08-24").get();
     expect(snap.data()?.count).toBe(QUOTA);
   }, 20_000);
+});
+
+// Fix round 1 cho Task 5 (Finding 1, CRITICAL): bằng chứng trực tiếp rằng hai tính năng
+// không còn tiêu chung một ngân sách — trước fix, cùng uid/cùng ngày nghĩa là cùng MỘT
+// document `aiUsage/{uid}_{date}`, nên "5 chat messages" và "3 reflections" cộng dồn vào
+// đúng một count. Sau fix, `feature` là một phần của khoá document, nên hai counter độc
+// lập hoàn toàn — cạn quota bên này không đụng gì tới bên kia.
+describe("consumeQuota — cách ly theo feature (Fix round 1, Finding 1)", () => {
+  it("reflection cạn quota (5/5) KHÔNG ảnh hưởng gì tới chat — chat vẫn còn nguyên 30 lượt", async () => {
+    const uid = "student-both-features";
+    const base = new Date("2026-08-24T02:00:00Z").getTime();
+
+    // Dùng hết 5/5 lượt reflection.
+    for (let i = 0; i < 5; i++) {
+      const result = await consumeQuota(
+        db,
+        uid,
+        "reflection",
+        { quotaStudentPerDay: 5, rateLimitPerMinute: 0 },
+        new Date(base + i * 1000),
+      );
+      expect(result.allowed).toBe(true);
+    }
+    const reflectionDenied = await consumeQuota(
+      db,
+      uid,
+      "reflection",
+      { quotaStudentPerDay: 5, rateLimitPerMinute: 0 },
+      new Date(base + 5000),
+    );
+    expect(reflectionDenied).toEqual({ allowed: false, reason: "quota" });
+
+    // Chat, CÙNG uid, CÙNG ngày — nếu hai feature còn giẫm lên nhau, lượt này sẽ bị từ chối
+    // vì count đã ở mức 5 (bằng quotaStudentPerDay của reflection). Với fix, chat có counter
+    // riêng, bắt đầu từ 0, và ngân sách 30 của riêng nó.
+    const chatResult = await consumeQuota(
+      db,
+      uid,
+      "chat",
+      { quotaStudentPerDay: 30, rateLimitPerMinute: 0 },
+      new Date(base + 6000),
+    );
+    expect(chatResult).toEqual({ allowed: true, reason: null });
+
+    const reflectionDoc = await db.collection("aiUsage").doc(`${uid}_reflection_2026-08-24`).get();
+    const chatDoc = await db.collection("aiUsage").doc(`${uid}_chat_2026-08-24`).get();
+    expect(reflectionDoc.data()?.count).toBe(5);
+    expect(chatDoc.data()?.count).toBe(1);
+  });
+
+  it("chat 27 lượt (gần cạn ngân sách 30) KHÔNG làm reflection thấy count > 0 — reflection vẫn còn nguyên 5/5", async () => {
+    const uid = "student-both-features-2";
+    const base = new Date("2026-08-24T02:00:00Z").getTime();
+
+    for (let i = 0; i < 27; i++) {
+      const result = await consumeQuota(
+        db,
+        uid,
+        "chat",
+        { quotaStudentPerDay: 30, rateLimitPerMinute: 0 },
+        new Date(base + i * 1000),
+      );
+      expect(result.allowed).toBe(true);
+    }
+
+    // Reflection, cùng uid, cùng ngày — nếu còn giẫm lên nhau, count hiện tại (27) đã vượt
+    // quotaStudentPerDay (5) của reflection, và lượt này sẽ bị từ chối oan.
+    const reflectionResult = await consumeQuota(
+      db,
+      uid,
+      "reflection",
+      { quotaStudentPerDay: 5, rateLimitPerMinute: 0 },
+      new Date(base + 27_000),
+    );
+    expect(reflectionResult).toEqual({ allowed: true, reason: null });
+
+    const reflectionDoc = await db.collection("aiUsage").doc(`${uid}_reflection_2026-08-24`).get();
+    expect(reflectionDoc.data()?.count).toBe(1);
+  });
 });

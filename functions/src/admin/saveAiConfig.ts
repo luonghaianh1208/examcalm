@@ -58,6 +58,7 @@ export async function runSaveAiConfig(
     quotaStudentPerDay: next.quotaStudentPerDay,
     chatQuotaPerDay: next.chatQuotaPerDay,
     rateLimitPerMinute: next.rateLimitPerMinute,
+    chatRateLimitPerMinute: next.chatRateLimitPerMinute,
     killSwitch: next.killSwitch,
     updatedBy: auth!.uid,
     updatedAt: FieldValue.serverTimestamp(),

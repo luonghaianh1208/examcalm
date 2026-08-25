@@ -4,6 +4,12 @@
 //
 // BẮT BUỘC chạy với FIRESTORE_EMULATOR_HOST đã set (do `firebase emulators:exec` set tự
 // động, xem script "test" trong package.json). Chạy bằng: `npm test`.
+//
+// Fix round 1 (review từ coordinator) — các test dưới đây phản ánh guard order MỚI:
+// chưa đăng nhập → email chưa xác thực → input parse → aiOptIn tắt → session không tồn tại →
+// session không sở hữu → LỚP 1 → kill switch (RIÊNG cho chat) → baseUrl rỗng → quota (RIÊNG
+// cho chat, cả ngân sách ngày lẫn rate limit) → provider. Và một quyết định cảnh báo GỘP (một
+// document, không phải mỗi lớp một document).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
@@ -67,8 +73,10 @@ async function setAiConfig(overrides: Partial<AiConfig> = {}): Promise<void> {
     model: "fake-model-v1",
     providerLabel: "FakeProvider",
     chatQuotaPerDay: 30,
-    rateLimitPerMinute: 0, // tắt rate limit để các test không phụ thuộc khoảng cách thời gian
-    killSwitch: { moodReflection: false },
+    rateLimitPerMinute: 0,
+    chatRateLimitPerMinute: 0, // tắt rate limit chat mặc định để đa số test không phụ thuộc thời gian
+    // chat BẬT (killSwitch.chat=false) mặc định trong test — kịch bản "tắt" test riêng.
+    killSwitch: { moodReflection: false, chat: false },
     ...overrides,
   };
   await db.collection("systemConfig").doc("aiConfig").set(config);
@@ -116,6 +124,8 @@ async function getSessionMessagesAsc(sessionId: string) {
   return snap.docs.map((d) => d.data());
 }
 
+const CHAT_USAGE_DOC = (uid: string, date: string) => `${uid}_chat_${date}`;
+
 describe("sendChatMessage", () => {
   it("1. chưa đăng nhập → unauthenticated", async () => {
     await expect(
@@ -136,42 +146,9 @@ describe("sendChatMessage", () => {
     });
   });
 
-  it("3. killSwitch.moodReflection === true → failed-precondition, callChatCompletion KHÔNG được gọi", async () => {
-    await setAiConfig({ killSwitch: { moodReflection: true } });
-    await setUser(STUDENT_UID, true);
-    await setChatSession(SESSION_ID, STUDENT_UID);
-    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
-
-    await expect(
-      runSendChatMessage(
-        AUTH_OK,
-        { sessionId: SESSION_ID, text: "Xin chào" },
-        makeDeps({ callChatCompletion: fake }),
-      ),
-    ).rejects.toMatchObject({ code: "failed-precondition" });
-    expect(fake).not.toHaveBeenCalled();
-  });
-
-  it("4. aiConfig.baseUrl rỗng (chưa cấu hình) → failed-precondition, không gọi mạng", async () => {
-    await setAiConfig({ baseUrl: "" });
-    await setUser(STUDENT_UID, true);
-    await setChatSession(SESSION_ID, STUDENT_UID);
-    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
-
-    await expect(
-      runSendChatMessage(
-        AUTH_OK,
-        { sessionId: SESSION_ID, text: "Xin chào" },
-        makeDeps({ callChatCompletion: fake }),
-      ),
-    ).rejects.toMatchObject({ code: "failed-precondition" });
-    expect(fake).not.toHaveBeenCalled();
-  });
-
-  it("5. privacySettings.aiOptIn === false → permission-denied, details.reason = ai_opt_in, callChatCompletion KHÔNG được gọi", async () => {
+  it("3. privacySettings.aiOptIn === false → permission-denied, details.reason = ai_opt_in, callChatCompletion KHÔNG được gọi (guard đứng TRƯỚC session — không cần tạo session)", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, false);
-    await setChatSession(SESSION_ID, STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
 
     await expect(
@@ -187,7 +164,7 @@ describe("sendChatMessage", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
-  it("6a. sessionId không tồn tại → not-found", async () => {
+  it("4. sessionId không tồn tại → not-found", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
 
@@ -196,7 +173,7 @@ describe("sendChatMessage", () => {
     ).rejects.toMatchObject({ code: "not-found" });
   });
 
-  it("6b. session của người khác → permission-denied, KHÔNG kèm details", async () => {
+  it("5. session của người khác → permission-denied, KHÔNG kèm details", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, OTHER_UID);
@@ -212,7 +189,7 @@ describe("sendChatMessage", () => {
     expect((caught as { details?: unknown }).details).toBeUndefined();
   });
 
-  it("7. Lớp 1 bắt được mức urgent → ghi crisisAlerts + chatMessages(user + CRISIS_REPLY_TEXT), KHÔNG gọi callChatCompletion, KHÔNG trừ quota", async () => {
+  it("6. Lớp 1 mức urgent → ghi crisisAlerts + chatMessages(user + CRISIS_REPLY_TEXT), KHÔNG gọi callChatCompletion, KHÔNG trừ quota", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -248,15 +225,53 @@ describe("sendChatMessage", () => {
       isCrisisResponse: true,
     });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.exists).toBe(false);
   });
 
-  it("7b. Lớp 1 mức concern → ghi crisisAlerts NHƯNG vẫn gọi model, dùng phản hồi của nó, VẪN trừ quota", async () => {
-    await setAiConfig();
+  // Fix round 1, Finding 4 (ruling của coordinator): Lớp 1 giờ đứng TRÊN kill switch — một tin
+  // urgent phải được phục vụ NGAY CẢ KHI killSwitch.chat đang bật (tính năng "đang tắt" theo
+  // nghĩa vận hành thông thường). Đây là bằng chứng trực tiếp cho fix đó.
+  it("6b. Lớp 1 urgent VẪN được phục vụ khi killSwitch.chat = true (tắt tính năng) — không bị failed-precondition", async () => {
+    await setAiConfig({ killSwitch: { moodReflection: false, chat: true } });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    const result = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em muốn tự tử" },
+      makeDeps({ callChatCompletion: fake }),
+    );
+
+    expect(result.messageId).toBeTruthy();
+    expect(fake).not.toHaveBeenCalled();
+    const messages = await getSessionMessagesAsc(SESSION_ID);
+    expect(messages[1]).toMatchObject({ text: CRISIS_REPLY_TEXT, isCrisisResponse: true });
+  });
+
+  // Cùng tinh thần 6b: baseUrl rỗng cũng không được chặn một tin urgent.
+  it("6c. Lớp 1 urgent VẪN được phục vụ khi baseUrl rỗng (chưa cấu hình provider)", async () => {
+    await setAiConfig({ baseUrl: "" });
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    const result = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em muốn tự tử" },
+      makeDeps({ callChatCompletion: fake }),
+    );
+
+    expect(result.messageId).toBeTruthy();
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("7. Lớp 1 mức concern (một mình, không có tín hiệu Lớp 2) → MỘT alert triggeredBy=keyword, vẫn gọi model, dùng phản hồi của nó, VẪN trừ quota", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT); // model tự chấm "none"
     const now = new Date("2026-08-24T02:00:00Z");
 
     await runSendChatMessage(
@@ -274,11 +289,43 @@ describe("sendChatMessage", () => {
     const messages = await getSessionMessagesAsc(SESSION_ID);
     expect(messages[1]).toMatchObject({ role: "assistant", text: NORMAL_REPLY_TEXT, isCrisisResponse: false });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.data()?.count).toBe(1);
   });
 
-  it("8. hết quota → resource-exhausted, không gọi mạng", async () => {
+  it("8. killSwitch.chat = true → failed-precondition, callChatCompletion KHÔNG được gọi (moodReflection có thể vẫn bật)", async () => {
+    await setAiConfig({ killSwitch: { moodReflection: false, chat: true } });
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Xin chào" },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("9. aiConfig.baseUrl rỗng (chưa cấu hình) → failed-precondition, không gọi mạng", async () => {
+    await setAiConfig({ baseUrl: "" });
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Xin chào" },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("10. hết quota NGÀY → resource-exhausted (thông điệp 'hết lượt hôm nay'), không gọi mạng", async () => {
     await setAiConfig({ chatQuotaPerDay: 1 });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -286,24 +333,66 @@ describe("sendChatMessage", () => {
     // Đã dùng hết lượt duy nhất trong ngày trước khi gọi.
     await db
       .collection("aiUsage")
-      .doc(`${STUDENT_UID}_2026-08-24`)
-      .set({ uid: STUDENT_UID, date: "2026-08-24", count: 1, updatedAt: now });
+      .doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24"))
+      .set({ uid: STUDENT_UID, feature: "chat", date: "2026-08-24", count: 1, updatedAt: now });
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
 
-    await expect(
-      runSendChatMessage(
+    let caught: unknown;
+    try {
+      await runSendChatMessage(
         AUTH_OK,
         { sessionId: SESSION_ID, text: "Xin chào" },
         makeDeps({ now, callChatCompletion: fake }),
-      ),
-    ).rejects.toMatchObject({ code: "resource-exhausted" });
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: "resource-exhausted" });
+    expect((caught as Error).message).toMatch(/hôm nay/);
     expect(fake).not.toHaveBeenCalled();
 
     const messages = await getSessionMessagesAsc(SESSION_ID);
     expect(messages.length).toBe(0);
   });
 
-  it("9. đường thuận: ghi tin học sinh, gọi model, ghi tin trợ lý, cập nhật lastMessageAt/messageCount", async () => {
+  // Fix round 1, Finding 2a: rate limit RIÊNG cho chat, thông điệp RIÊNG (không lẫn với "hết
+  // lượt hôm nay" — nguyên nhân khác hẳn, và ngưỡng ngày còn rất xa).
+  it("10b. vượt rate limit RIÊNG của chat → resource-exhausted với thông điệp KHÁC ('gửi hơi nhanh'), không gọi mạng, không trừ quota ngày", async () => {
+    await setAiConfig({ chatQuotaPerDay: 30, chatRateLimitPerMinute: 20 }); // ngưỡng 3 giây/tin
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00.000Z");
+    const t2 = new Date("2026-08-24T02:00:00.500Z"); // 500ms sau — dưới ngưỡng 3000ms
+
+    const fake1 = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Tin 1" },
+      makeDeps({ now: t1, callChatCompletion: fake1 }),
+    );
+    expect(fake1).toHaveBeenCalledTimes(1);
+
+    const fake2 = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    let caught: unknown;
+    try {
+      await runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Tin 2" },
+        makeDeps({ now: t2, callChatCompletion: fake2 }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: "resource-exhausted" });
+    expect((caught as Error).message).toMatch(/nhanh/);
+    expect((caught as Error).message).not.toMatch(/hôm nay/);
+    expect(fake2).not.toHaveBeenCalled();
+
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
+    expect(usageSnap.data()?.count).toBe(1); // lượt bị rate-limit không tăng count
+  });
+
+  it("11. đường thuận: ghi tin học sinh, gọi model, ghi tin trợ lý, cập nhật lastMessageAt/messageCount", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -343,7 +432,7 @@ describe("sendChatMessage", () => {
     expect(alerts.empty).toBe(true);
   });
 
-  it("10. Lớp 2 bắt được (model tự trả nhãn urgent) → vẫn ghi crisisAlerts, tin trợ lý là CRISIS_REPLY_TEXT chứ không phải nội dung model sinh ra", async () => {
+  it("12. Lớp 2 một mình trả nhãn urgent → MỘT alert triggeredBy=model, severity=urgent, tin trợ lý là CRISIS_REPLY_TEXT chứ không phải nội dung model sinh ra", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -369,11 +458,11 @@ describe("sendChatMessage", () => {
     expect(messages[1].text).not.toContain("Mình nghe thấy em đang rất đau khổ");
 
     // Model VẪN được gọi (không phải lớp 1 chặn) nên quota vẫn bị trừ.
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.data()?.count).toBe(1);
   });
 
-  it("10b. Lớp 2 trả nhãn concern → ghi crisisAlerts nhưng tin trợ lý VẪN là nội dung model sinh ra (đã bóc nhãn)", async () => {
+  it("12b. Lớp 2 một mình trả nhãn concern → MỘT alert triggeredBy=model, tin trợ lý VẪN là nội dung model sinh ra (đã bóc nhãn)", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -394,7 +483,51 @@ describe("sendChatMessage", () => {
     expect(messages[1]).toMatchObject({ role: "assistant", text: NORMAL_REPLY_TEXT, isCrisisResponse: false });
   });
 
-  it("10c. Nhãn thiếu/sai định dạng → fail-closed về concern (vẫn ghi crisisAlerts), không ném lỗi", async () => {
+  // Fix round 1, Finding 5 — cả hai lớp cùng phát tín hiệu trên MỘT tin nhắn.
+  it("12c. Lớp 1 concern + Lớp 2 urgent → MỘT alert duy nhất triggeredBy='both', severity=urgent (mức NẶNG HƠN), tin trợ lý là CRISIS_REPLY_TEXT", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    // "tuyệt vọng" khớp Lớp 1 mức concern.
+    const modelReply = ["Mình rất lo cho em.", "", `${CONCERN_LEVEL_LABEL} urgent`].join("\n");
+    const fake = fakeCallChatCompletion(modelReply);
+
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+      makeDeps({ callChatCompletion: fake }),
+    );
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1); // KHÔNG phải 2 — một document GỘP
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "urgent", triggeredBy: "both" });
+
+    const messages = await getSessionMessagesAsc(SESSION_ID);
+    expect(messages[1]).toMatchObject({ role: "assistant", text: CRISIS_REPLY_TEXT, isCrisisResponse: true });
+  });
+
+  it("12d. Lớp 1 concern + Lớp 2 concern → MỘT alert duy nhất triggeredBy='both', severity=concern, tin trợ lý VẪN là nội dung model", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const modelReply = [NORMAL_REPLY_TEXT, "", `${CONCERN_LEVEL_LABEL} concern`].join("\n");
+    const fake = fakeCallChatCompletion(modelReply);
+
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+      makeDeps({ callChatCompletion: fake }),
+    );
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "both" });
+
+    const messages = await getSessionMessagesAsc(SESSION_ID);
+    expect(messages[1]).toMatchObject({ role: "assistant", text: NORMAL_REPLY_TEXT, isCrisisResponse: false });
+  });
+
+  it("12e. Nhãn thiếu hoàn toàn → fail-closed về concern (vẫn ghi crisisAlerts), không ném lỗi", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -412,34 +545,43 @@ describe("sendChatMessage", () => {
     expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "model" });
   });
 
-  it("10d. Nhãn bị học sinh gõ biến thể khoảng trắng (2 dấu cách) trong chính output model → KHÔNG được nhận diện là nhãn thật, dòng cuối hợp lệ mới được dùng", async () => {
-    await setAiConfig();
-    await setUser(STUDENT_UID, true);
-    await setChatSession(SESSION_ID, STUDENT_UID);
-    // Dòng đầu là một biến thể khoảng trắng (2 dấu cách giữa MỨC và ĐỘ) — không được khớp
-    // strict. Dòng CUỐI mới là nhãn thật, hợp lệ, phải được dùng làm kết quả.
-    const modelReply = [
-      NORMAL_REPLY_TEXT,
-      `MỨC  ĐỘ LO NGẠI: urgent`,
-      `${CONCERN_LEVEL_LABEL} none`,
-    ].join("\n");
-    const fake = fakeCallChatCompletion(modelReply);
+  // Fix round 1, Finding 3 — bốn hình dạng SAI ĐỊNH DẠNG mà review đã chạy tay: đều fail-closed
+  // ĐÚNG như thiết kế (không đoán mò mức độ), NHƯNG đều phải bị BÓC khỏi văn bản hiển thị —
+  // trước fix, dòng nhãn nguyên văn (kể cả sai định dạng) sẽ lọt tới học sinh.
+  const MALFORMED_LABEL_CASES: { name: string; line: string }[] = [
+    { name: "dấu chấm cuối câu", line: `${CONCERN_LEVEL_LABEL} urgent.` },
+    { name: "giá trị viết hoa", line: `${CONCERN_LEVEL_LABEL} Urgent` },
+    { name: "có gạch đầu dòng", line: `- ${CONCERN_LEVEL_LABEL} urgent` },
+    { name: "ba dấu sao thay vì hai", line: `***${CONCERN_LEVEL_LABEL}*** urgent***` },
+  ];
 
-    await runSendChatMessage(
-      AUTH_OK,
-      { sessionId: SESSION_ID, text: "Hôm nay em thấy ổn." },
-      makeDeps({ callChatCompletion: fake }),
-    );
+  it.each(MALFORMED_LABEL_CASES)(
+    "12f. nhãn sai định dạng ($name) → fail-closed về concern NHƯNG vẫn bị bóc khỏi văn bản hiển thị",
+    async ({ line }) => {
+      await setAiConfig();
+      await setUser(STUDENT_UID, true);
+      await setChatSession(SESSION_ID, STUDENT_UID);
+      const modelReply = ["Mình hiểu cảm giác đó.", "", line].join("\n");
+      const fake = fakeCallChatCompletion(modelReply);
 
-    const alerts = await db.collection("crisisAlerts").get();
-    expect(alerts.empty).toBe(true);
+      await runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Hôm nay em thấy ổn." },
+        makeDeps({ callChatCompletion: fake }),
+      );
 
-    const messages = await getSessionMessagesAsc(SESSION_ID);
-    expect(messages[1].role).toBe("assistant");
-    expect(messages[1].isCrisisResponse).toBe(false);
-  });
+      const alerts = await db.collection("crisisAlerts").get();
+      expect(alerts.size).toBe(1);
+      expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "model" });
 
-  it("10e. Nhãn có markdown bold, khoảng trắng thừa, và bị lặp lại → tất cả các dòng nhãn hợp lệ đều bị bóc khỏi văn bản hiển thị", async () => {
+      const messages = await getSessionMessagesAsc(SESSION_ID);
+      const assistantText = messages[1].text as string;
+      expect(assistantText).not.toContain("MỨC ĐỘ LO NGẠI");
+      expect(assistantText.trim()).toBe("Mình hiểu cảm giác đó.");
+    },
+  );
+
+  it("12g. Nhãn có markdown bold, khoảng trắng thừa, và bị lặp lại (ĐÚNG định dạng) → tất cả các dòng nhãn đều bị bóc khỏi văn bản hiển thị", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -462,9 +604,43 @@ describe("sendChatMessage", () => {
     expect(assistantText).not.toContain("MỨC ĐỘ LO NGẠI");
     expect(assistantText).not.toContain("*");
     expect(assistantText.trim()).toBe("Mình hiểu cảm giác đó.");
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.empty).toBe(true); // nhãn cuối cùng hợp lệ là "none"
   });
 
-  it("11. checkOutputSafety báo không an toàn → không ghi tin trợ lý, ghi aiSafetyLog, ném internal với thông điệp trung tính", async () => {
+  it("12h. Nhãn bị học sinh gõ biến thể khoảng trắng (2 dấu cách) trong chính output model → KHÔNG được nhận diện là nhãn thật (không bóc, không đổi mức độ), dòng cuối hợp lệ mới được dùng", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    // Dòng đầu là một biến thể khoảng trắng (2 dấu cách giữa MỨC và ĐỘ) — không khớp CẢ HAI
+    // pattern (xác định mức độ lẫn bóc), vì cả hai đều đòi nguyên văn nhãn. Dòng CUỐI mới là
+    // nhãn thật, hợp lệ, phải được dùng làm kết quả.
+    const modelReply = [
+      NORMAL_REPLY_TEXT,
+      `MỨC  ĐỘ LO NGẠI: urgent`,
+      `${CONCERN_LEVEL_LABEL} none`,
+    ].join("\n");
+    const fake = fakeCallChatCompletion(modelReply);
+
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Hôm nay em thấy ổn." },
+      makeDeps({ callChatCompletion: fake }),
+    );
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.empty).toBe(true);
+
+    const messages = await getSessionMessagesAsc(SESSION_ID);
+    expect(messages[1].role).toBe("assistant");
+    expect(messages[1].isCrisisResponse).toBe(false);
+    // Biến thể 2 dấu cách vẫn còn nguyên trong văn bản hiển thị — KHÔNG bị bóc, vì nó không
+    // phải nhãn thật (an toàn: không "giấu" nội dung không phải control token).
+    expect(messages[1].text).toContain("MỨC  ĐỘ LO NGẠI");
+  });
+
+  it("13. checkOutputSafety báo không an toàn → không ghi tin trợ lý, ghi aiSafetyLog (promptTemplateId='default_chat'), ném internal với thông điệp trung tính", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -490,12 +666,13 @@ describe("sendChatMessage", () => {
     expect(Object.keys(logData).sort()).toEqual(
       ["createdAt", "model", "promptTemplateId", "triggeredKeyword"].sort(),
     );
+    expect(logData.promptTemplateId).toBe("default_chat");
     expect(logData.model).toBe("fake-model-v1");
     expect(logData.triggeredKeyword).toContain("trầm cảm");
     expect(JSON.stringify(logData)).not.toContain(STUDENT_UID);
   });
 
-  it("12. lỗi provider → internal, không lộ baseUrl, model, hay nguyên văn lỗi provider", async () => {
+  it("14. lỗi provider → internal, không lộ baseUrl, model, hay nguyên văn lỗi provider", async () => {
     await setAiConfig({ baseUrl: "https://secret-provider.example/v1" });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -524,7 +701,7 @@ describe("sendChatMessage", () => {
     expect(message).not.toContain("fake-api-key");
   });
 
-  it("12b. lỗi provider → aiUsage VẪN bị trừ (request đã đi ra ngoài)", async () => {
+  it("14b. lỗi provider → aiUsage VẪN bị trừ (request đã đi ra ngoài)", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -541,12 +718,12 @@ describe("sendChatMessage", () => {
       ),
     ).rejects.toMatchObject({ code: "internal" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.exists).toBe(true);
     expect(usageSnap.data()?.count).toBe(1);
   });
 
-  it("13. crisisAlerts được ghi KHÔNG có field nào chứa nguyên văn — Object.keys() đúng bằng danh sách cho phép", async () => {
+  it("15. crisisAlerts được ghi KHÔNG có field nào chứa nguyên văn — Object.keys() đúng bằng danh sách cho phép", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
@@ -567,8 +744,26 @@ describe("sendChatMessage", () => {
     expect(JSON.stringify(data)).not.toContain("Em muốn tự tử");
   });
 
-  it("14. quota chỉ bị trừ khi thật sự phát ra request tới provider — kill switch bật → aiUsage không đổi", async () => {
-    await setAiConfig({ killSwitch: { moodReflection: true } });
+  // Fix round 1, Finding 8: chuỗi CHỈ TOÀN khoảng trắng có length >= 1 (qua được .min(1)) —
+  // phải bị chặn RIÊNG, không được đi tới provider.
+  it("16. text chỉ chứa khoảng trắng → invalid-argument, không gọi mạng", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "    " },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("17. quota chỉ bị trừ khi thật sự phát ra request tới provider — killSwitch.chat bật → aiUsage không đổi", async () => {
+    await setAiConfig({ killSwitch: { moodReflection: false, chat: true } });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
     const now = new Date("2026-08-24T02:00:00Z");
@@ -577,11 +772,11 @@ describe("sendChatMessage", () => {
       runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Xin chào" }, makeDeps({ now })),
     ).rejects.toMatchObject({ code: "failed-precondition" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.exists).toBe(false);
   });
 
-  it("14b. sessionId không tồn tại → aiUsage không đổi (quota đứng sau not-found)", async () => {
+  it("17b. sessionId không tồn tại → aiUsage không đổi (quota đứng sau not-found)", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
     const now = new Date("2026-08-24T02:00:00Z");
@@ -594,7 +789,7 @@ describe("sendChatMessage", () => {
       ),
     ).rejects.toMatchObject({ code: "not-found" });
 
-    const usageSnap = await db.collection("aiUsage").doc(`${STUDENT_UID}_2026-08-24`).get();
+    const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.exists).toBe(false);
   });
 });

@@ -60,7 +60,8 @@ const BASE_VALID: {
   quotaStudentPerDay: number;
   chatQuotaPerDay: number;
   rateLimitPerMinute: number;
-  killSwitch: { moodReflection: boolean };
+  chatRateLimitPerMinute: number;
+  killSwitch: { moodReflection: boolean; chat: boolean };
 } = {
   providerLabel: "DeepSeek",
   baseUrl: "https://api.deepseek.com/v1",
@@ -70,7 +71,8 @@ const BASE_VALID: {
   quotaStudentPerDay: 5,
   chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
-  killSwitch: { moodReflection: true },
+  chatRateLimitPerMinute: 20,
+  killSwitch: { moodReflection: true, chat: true },
 };
 
 /** Mỗi probe là một override ĐÈ LÊN BASE_VALID cho đúng một field — cố tình chọn giá trị biên
@@ -102,6 +104,11 @@ const PROBES: { label: string; override: Record<string, unknown> }[] = [
   { label: "rateLimitPerMinute = -1", override: { rateLimitPerMinute: -1 } },
   { label: "rateLimitPerMinute = 0 (hợp lệ, nghĩa là không rate limit)", override: { rateLimitPerMinute: 0 } },
 
+  // Fix round 1 cho Task 5 (Finding 2a — review từ coordinator): probe mới cho field vừa
+  // thêm, cùng quy ước với rateLimitPerMinute.
+  { label: "chatRateLimitPerMinute = -1", override: { chatRateLimitPerMinute: -1 } },
+  { label: "chatRateLimitPerMinute = 0 (hợp lệ, nghĩa là không rate limit)", override: { chatRateLimitPerMinute: 0 } },
+
   { label: "baseUrl rỗng (sentinel chưa cấu hình, hợp lệ)", override: { baseUrl: "" } },
   { label: "baseUrl https hợp lệ", override: { baseUrl: "https://api.example.com/v1" } },
   { label: "baseUrl http:// remote (không hợp lệ)", override: { baseUrl: "http://api.example.com/v1" } },
@@ -110,8 +117,14 @@ const PROBES: { label: string; override: Record<string, unknown> }[] = [
   { label: "baseUrl http://localhost.evil.com (lookalike host, không hợp lệ)", override: { baseUrl: "http://localhost.evil.com/v1" } },
   { label: "baseUrl không phải URL", override: { baseUrl: "khong-phai-url" } },
 
-  { label: "killSwitch.moodReflection = true", override: { killSwitch: { moodReflection: true } } },
-  { label: "killSwitch.moodReflection = false", override: { killSwitch: { moodReflection: false } } },
+  { label: "killSwitch.moodReflection = true", override: { killSwitch: { moodReflection: true, chat: true } } },
+  { label: "killSwitch.moodReflection = false", override: { killSwitch: { moodReflection: false, chat: true } } },
+  // Fix round 1 cho Task 5 (Finding 2b — ruling của coordinator): probe mới cho field lồng
+  // vừa thêm — đúng rủi ro mà chính doc-comment đầu file này đã cảnh báo trước (mục 5: một
+  // field lồng MỚI bắt buộc phải xuất hiện trong MỌI override killSwitch, không chỉ override
+  // dành riêng cho nó, nếu không toàn bộ probe khác sẽ lệch vì thiếu field bắt buộc).
+  { label: "killSwitch.chat = true", override: { killSwitch: { moodReflection: true, chat: true } } },
+  { label: "killSwitch.chat = false", override: { killSwitch: { moodReflection: true, chat: false } } },
 ];
 
 describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/ai/config.ts", () => {

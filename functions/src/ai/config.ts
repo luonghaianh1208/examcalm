@@ -44,10 +44,16 @@ export const aiConfigSchema = z.object({
   // src/lib/types/ai.ts để biết lý do đầy đủ.
   chatQuotaPerDay: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().min(0),
+  // chatRateLimitPerMinute là phanh chống burst RIÊNG cho chat (Fix round 1, Task 5, Finding
+  // 2a) — cùng quy ước với rateLimitPerMinute (0 = không áp rate limit). Xem src/lib/types/ai.ts.
+  chatRateLimitPerMinute: z.number().int().min(0),
   killSwitch: z.object({
     // true = tính năng ĐANG TẮT. false = tính năng đang bật — đọc ngược field này là lỗi
     // tốn tiền, kiểm tra kỹ trước khi dùng (xem src/lib/types/ai.ts).
     moodReflection: z.boolean(),
+    // Công tắc RIÊNG cho chat (Fix round 1, Task 5, Finding 2b) — độc lập với moodReflection,
+    // mặc định true (tắt). Xem src/lib/types/ai.ts.
+    chat: z.boolean(),
   }),
 });
 
@@ -86,6 +92,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   quotaStudentPerDay: 0,
   chatQuotaPerDay: 30,
   rateLimitPerMinute: 3,
+  chatRateLimitPerMinute: 20,
   // Mặc định hệ thống là im lặng: kill switch true = tính năng đang tắt.
-  killSwitch: { moodReflection: true },
+  killSwitch: { moodReflection: true, chat: true },
 };

@@ -24,9 +24,18 @@ type ConfigFormState = {
   // UI) — giữ pass-through qua form state để lưu cấu hình không làm rớt field bắt buộc này.
   chatQuotaPerDay: string;
   rateLimitPerMinute: string;
+  // Cùng lý do với chatQuotaPerDay ở trên — chưa có ô nhập riêng (Fix round 1, Task 5,
+  // Finding 2a), chỉ pass-through để lưu không làm rớt field.
+  chatRateLimitPerMinute: string;
   /** true = tính năng ĐANG BẬT cho học sinh — NGƯỢC với killSwitch.moodReflection (true =
    *  tắt). Form giữ chiều tích cực để không ai phải tự đảo chiều trong đầu lúc đọc UI. */
   featureEnabled: boolean;
+  // Công tắc RIÊNG cho chat (Fix round 1, Task 5, Finding 2b) — CỐ Ý chưa có checkbox trên UI
+  // này: §10 của design spec chặn go-live của chat cho tới khi chuyên gia tâm lý duyệt persona
+  // và CRISIS_REPLY_TEXT, và một checkbox chung màn hình với các cấu hình provider khác quá dễ
+  // bị bấm nhầm cho một quyết định có mức rủi ro này. Chỉ pass-through để lưu cấu hình khác
+  // (baseUrl, model...) không vô tình reset công tắc chat về giá trị khác giá trị đã lưu.
+  chatEnabled: boolean;
 };
 
 function toFormState(config: AiConfig): ConfigFormState {
@@ -39,7 +48,9 @@ function toFormState(config: AiConfig): ConfigFormState {
     quotaStudentPerDay: String(config.quotaStudentPerDay),
     chatQuotaPerDay: String(config.chatQuotaPerDay),
     rateLimitPerMinute: String(config.rateLimitPerMinute),
+    chatRateLimitPerMinute: String(config.chatRateLimitPerMinute),
     featureEnabled: !config.killSwitch.moodReflection,
+    chatEnabled: !config.killSwitch.chat,
   };
 }
 
@@ -102,7 +113,8 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
       quotaStudentPerDay: Number(form.quotaStudentPerDay),
       chatQuotaPerDay: Number(form.chatQuotaPerDay),
       rateLimitPerMinute: Number(form.rateLimitPerMinute),
-      killSwitch: { moodReflection: !form.featureEnabled },
+      chatRateLimitPerMinute: Number(form.chatRateLimitPerMinute),
+      killSwitch: { moodReflection: !form.featureEnabled, chat: !form.chatEnabled },
     };
 
     const parsed = aiConfigSchema.safeParse(candidate);

@@ -215,9 +215,14 @@ export async function runGenerateReflection(
   // Quota — đứng NGAY TRƯỚC callChatCompletion, chỗ duy nhất còn lại có thể tốn tiền thật.
   // Không rollback nếu các bước sau (lỗi provider, output không an toàn, không tách được)
   // thất bại: request đã thực sự đi ra ngoài, có thể đã bị provider tính phí.
+  // Fix round 1 cho Task 5 (Finding 1, CRITICAL): `feature` truyền TƯỜNG MINH ("reflection")
+  // thay vì để consumeQuota tự suy ra — khoá document giờ có dạng
+  // `aiUsage/{uid}_{feature}_{date}`, để phản chiếu và chat không còn tiêu chung một ngân
+  // sách chỉ vì cùng uid/cùng ngày (xem quota.ts).
   const quota = await consumeQuota(
     deps.db,
     auth.uid,
+    "reflection",
     { quotaStudentPerDay: config.quotaStudentPerDay, rateLimitPerMinute: config.rateLimitPerMinute },
     deps.now,
   );

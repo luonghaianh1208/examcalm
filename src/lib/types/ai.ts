@@ -60,10 +60,23 @@ export const aiConfigSchema = z.object({
   //   functions/src/ai/quota.ts. DEFAULT_AI_CONFIG đặt field này = 3 (không
   //   phải 0) để tránh ship một mặc định "không giới hạn burst".
   rateLimitPerMinute: z.number().int().min(0),
+  // Fix round 1 cho Task 5 (Finding 2a — review từ coordinator): rateLimitPerMinute ở TRÊN là
+  // của phản chiếu (khoảng cách "vô hình" giữa hai lượt phản chiếu, người dùng không gõ liên
+  // tục). Với chat, đó chính là giới hạn CHI PHỐI: rateLimitPerMinute=3 nghĩa là 20 giây giữa
+  // hai tin — vô lý cho một cuộc trò chuyện. chatRateLimitPerMinute là phanh chống burst
+  // RIÊNG cho chat, cùng quy ước với rateLimitPerMinute (0 = không áp rate limit).
+  chatRateLimitPerMinute: z.number().int().min(0),
   killSwitch: z.object({
     // CHÚ Ý CHIỀU: true = tính năng ĐANG TẮT. false = tính năng đang bật.
     // Đọc ngược field này là một lỗi tốn tiền — kiểm tra kỹ trước khi dùng.
     moodReflection: z.boolean(),
+    // Fix round 1 cho Task 5 (Finding 2b — ruling của coordinator): một công tắc DUY NHẤT
+    // (moodReflection) không thể diễn đạt "phản chiếu bật, chat vẫn khoá" — một admin bật lại
+    // phản chiếu (tắt moodReflection) sẽ VÔ TÌNH mở luôn chat cho học sinh, trong khi §10 của
+    // design spec CHẶN go-live của chat cho tới khi chuyên gia tâm lý duyệt persona VÀ
+    // CRISIS_REPLY_TEXT. `chat` là công tắc RIÊNG, mặc định true (tắt) — cùng quy ước "hệ
+    // thống mặc định im lặng" của mọi công tắc khác trong dự án này.
+    chat: z.boolean(),
   }),
 });
 
@@ -86,8 +99,12 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   // chặn mọi lượt gọi khi tính năng còn tắt, nên giá trị này chỉ có tác dụng
   // sau khi admin bật tính năng (belt and braces).
   rateLimitPerMinute: 3,
-  // Mặc định hệ thống là im lặng: kill switch true = tính năng đang tắt.
-  killSwitch: { moodReflection: true },
+  // 20 lượt/phút (một tin mỗi 3 giây) — đủ nhanh cho một cuộc trò chuyện thật, vẫn là một
+  // phanh chống burst (Fix round 1, Task 5, Finding 2a).
+  chatRateLimitPerMinute: 20,
+  // Mặc định hệ thống là im lặng: kill switch true = tính năng đang tắt. `chat` mặc định
+  // true (tắt) — độc lập với moodReflection (Fix round 1, Task 5, Finding 2b).
+  killSwitch: { moodReflection: true, chat: true },
 };
 
 export const promptTemplateSchema = z.object({
