@@ -60,6 +60,41 @@ export async function seedAiEnabled(providerLabel = "E2E Test Provider"): Promis
 }
 
 /**
+ * Task 10 (tests/e2e/chat.spec.ts) — biến thể của seedAiEnabled() ở trên, bật RIÊNG tính năng
+ * TRÒ CHUYỆN thay vì phản chiếu (killSwitch.chat = false thay vì killSwitch.moodReflection,
+ * chatQuotaPerDay > 0 thay vì quotaStudentPerDay — đúng điều kiện `chatReady` của isAiEnabled(),
+ * src/lib/firestore/admin-ai.ts). Giữ phản chiếu TẮT (killSwitch.moodReflection: true,
+ * quotaStudentPerDay: 0) để kịch bản chat không vô tình phụ thuộc hay lẫn với trạng thái phản
+ * chiếu — hai công tắc độc lập hoàn toàn (design spec §10, Fix round 1 Task 5 Finding 2b), nên
+ * bài test của tính năng này chỉ nên bật đúng MỘT công tắc nó cần.
+ */
+export async function seedChatEnabled(providerLabel = "E2E Chat Test Provider"): Promise<void> {
+  const db = getFirestore(adminApp());
+
+  await db.collection("systemConfig").doc("aiConfig").set({
+    providerLabel,
+    baseUrl: "https://e2e-fake-provider.invalid/v1",
+    model: "e2e-fake-model",
+    temperature: 0.7,
+    maxTokens: 500,
+    quotaStudentPerDay: 0,
+    chatQuotaPerDay: 30,
+    rateLimitPerMinute: 3,
+    chatRateLimitPerMinute: 20,
+    killSwitch: { moodReflection: true, chat: false },
+    updatedBy: "e2e-suite",
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  await db.collection("systemConfig").doc("aiPublic").set({
+    providerLabel,
+    enabled: true,
+    reflectionEnabled: false,
+    chatEnabled: true,
+  });
+}
+
+/**
  * Xoá hai document đã seed — gọi ở `test.afterAll` của kịch bản "AI đã bật" để không rò rỉ trạng
  * thái "tính năng đang bật" sang các spec file khác chạy sau trong CÙNG một lượt `playwright test`
  * (emulator Firestore dùng chung cho toàn bộ suite, không reset giữa các file).

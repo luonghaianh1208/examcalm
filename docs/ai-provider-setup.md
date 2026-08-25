@@ -81,6 +81,10 @@ hai cách nhanh hơn nhiều:
   nối"** ở mục 6 (chỉ admin dùng để kiểm tra cấu hình, không tốn quota học sinh) KHÔNG bị kill
   switch chặn — đây là điều có chủ đích, để admin vẫn thử được cấu hình trong lúc tính năng
   đang tắt cho học sinh.
+  - **Tính năng Trò chuyện có công tắc RIÊNG, TÁCH BIỆT hoàn toàn** — ô **"Bật tính năng trò
+    chuyện AI cho học sinh"**, ngay bên dưới ô phản chiếu ở cùng trang. Tắt công tắc phản chiếu
+    KHÔNG tự động tắt trò chuyện, và ngược lại — nếu bạn cần dừng khẩn cấp, kiểm tra và bỏ tick
+    CẢ HAI ô nếu không chắc vấn đề nằm ở tính năng nào.
 - **Nếu nghi ngờ chính API key đã bị lộ/lạm dụng:** vào thẳng dashboard của provider, **thu
   hồi (revoke) API key đó tại đó** — cách này chặn được cả những request không đi qua
   ExamCalm (vd: key bị dùng ở nơi khác). Sau đó tạo key mới và làm lại theo mục 3.

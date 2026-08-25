@@ -14,6 +14,11 @@ là **cổng chặn cuối cùng do con người xác nhận**, không phải th
 > không hoàn tất mục 5 ở [docs/ai-provider-setup.md](./ai-provider-setup.md) trên project
 > `examcalm` thật). Bạn có thể thử nghiệm thoải mái trên Firebase Emulator hoặc một project
 > dev riêng — quy tắc này chỉ áp dụng cho production, nơi học sinh thật đang dùng.
+>
+> **Tính năng Trò chuyện (chat) có công tắc BẬT/TẮT RIÊNG** ("Bật tính năng trò chuyện AI cho
+> học sinh" ở `/admin/ai`, độc lập với công tắc "phản chiếu") **và có thêm ba mục chặn RIÊNG**
+> ở phần [Trước khi bật riêng tính năng Trò chuyện](#-trước-khi-bật-riêng-tính-năng-trò-chuyện-spec-4)
+> bên dưới — hoàn tất 8 mục ở trên KHÔNG đủ điều kiện để tick công tắc trò chuyện.
 
 ---
 
@@ -105,6 +110,107 @@ tương đương) đọc và góp ý — đây là đoạn văn bản định h�
 chuyện với học sinh đang căng thẳng trước kỳ thi. Chỉ publish sau khi người đó xác nhận nội
 dung ổn. Sửa lại một bản ĐANG published sẽ bị hệ thống chặn (phải gỡ đăng trước) — đúng để
 ép quy trình này luôn diễn ra trước khi có thay đổi tới tay học sinh.
+
+---
+
+## ⛔ Trước khi bật riêng tính năng Trò chuyện (Spec #4)
+
+Tám mục ở trên áp dụng cho MỌI tính năng AI của ExamCalm (bao gồm cả "phản chiếu" sau khi ghi
+cảm xúc VÀ "trò chuyện" — cùng dùng chung `baseUrl`/API key). Trò chuyện là tính năng **mở một
+ô để học sinh gõ bất cứ điều gì** — khác hẳn "phản chiếu" (AI chỉ viết lại vài câu sau một lần
+ghi cảm xúc) — nên có công tắc bật/tắt RIÊNG ("Bật tính năng trò chuyện AI cho học sinh" ở
+`/admin/ai`, độc lập với công tắc phản chiếu) và có đường xử lý khủng hoảng riêng khi học sinh
+có dấu hiệu tự hại. **Ba mục dưới đây PHẢI xong TRƯỚC khi tick công tắc trò chuyện, kể cả khi 8
+mục ở trên đã xong từ lâu** (ví dụ trường bạn đã bật "phản chiếu" từ trước, giờ mới bật thêm
+"trò chuyện").
+
+### ☐ 9. Ai nhận cảnh báo khủng hoảng, và trong bao lâu phải phản hồi?
+
+**Đây là dòng quan trọng nhất trong toàn bộ tài liệu này — quan trọng hơn mọi mục ở trên.**
+
+Khi hệ thống phát hiện một học sinh có dấu hiệu tự hại (qua từ khoá hoặc qua chính AI tự đánh
+giá), nó ghi một bản ghi vào `crisisAlerts` — admin xem được ở trang quản trị cảnh báo. **Nhưng
+bản ghi đó, tự nó, không cứu được ai.** Nó chỉ có ý nghĩa nếu có một CON NGƯỜI thật sự đọc nó và
+đi hỏi thăm em học sinh đó. Một hệ thống cảnh báo mà đằng sau không có quy trình con người xử lý
+còn TỆ HƠN không có hệ thống cảnh báo nào cả — nó khiến người thiết kế app tưởng rằng vấn đề đã
+"được xử lý bằng công nghệ", trong khi thực ra không ai đang theo dõi.
+
+Trước khi bật tính năng trò chuyện, trường bạn PHẢI trả lời rõ ràng bằng văn bản (điền ngay vào
+ô dưới đây, không được để trống hay ghi "sẽ tính sau"):
+
+- **Ai** là người (hoặc những người) chịu trách nhiệm kiểm tra trang cảnh báo? Ghi rõ tên/chức
+  vụ, không ghi chung chung như "ban giám hiệu": `______________________________`
+- **Bao lâu một lần** người đó kiểm tra trang cảnh báo? (Đề xuất: ít nhất 1 lần mỗi buổi học,
+  không phải 1 lần mỗi ngày — mức `urgent` cần được thấy trong vài giờ, không phải qua đêm.)
+  `______________________________`
+- Nếu người phụ trách chính **vắng mặt** (nghỉ ốm, đi công tác...), ai là người thay thế?
+  `______________________________`
+- Sau khi thấy cảnh báo, quy trình cụ thể là gì? (Gọi phụ huynh? Mời em lên phòng tư vấn? Báo
+  giáo viên chủ nhiệm?) `______________________________`
+
+Chỉ tick mục này khi cả bốn dòng trên đã có câu trả lời cụ thể, có tên người thật, không phải
+một kế hoạch còn để ngỏ.
+
+### ☐ 10. Chuyên gia tâm lý học đường duyệt BA văn bản, không phải một
+
+Mục 8 ở trên chỉ yêu cầu duyệt "System prompt"/"User template" của tính năng phản chiếu. Tính
+năng trò chuyện có đường xử lý khủng hoảng riêng, và người review cần đọc đúng **ba** văn bản —
+thiếu một trong ba là chưa đạt yêu cầu của mục này:
+
+1. **Danh sách từ khoá khủng hoảng** (`URGENT_KEYWORDS`/`CONCERN_KEYWORDS`,
+   `functions/src/ai/crisisDetector.ts`) — kèm lý do xếp mức của từng cụm, đã tổng hợp sẵn tại
+   [docs/crisis-keyword-rationale.md](./crisis-keyword-rationale.md) để không phải đọc mã nguồn.
+2. **`CRISIS_REPLY_TEXT`** — câu trả lời cố định học sinh nhận khi hệ thống xác định mức
+   `urgent` (nguyên văn đã trích sẵn trong tài liệu ở mục 1).
+3. **System prompt của cuộc trò chuyện bình thường** (`buildChatStructuralInstructions()` trong
+   `functions/src/ai/buildChatPrompt.ts`, cộng phần persona ở `/admin/ai`) — **đây là mục dễ bị
+   bỏ sót nhất.** Sau một lần sửa thiết kế, chỉ mức `urgent` mới nhận câu cố định ở mục 2 —
+   mức `concern` (tuyệt vọng nhưng chưa nêu ý định cụ thể) vẫn để chính AI tiếp tục trò chuyện,
+   dựa theo chỉ dẫn trong hàm này. Nghĩa là câu chữ một học sinh tuyệt vọng thật sự đọc được là
+   do AI tự soạn theo chỉ dẫn đó, không phải một câu đã duyệt sẵn — nên chỉ dẫn đó cũng cần được
+   duyệt như một văn bản các em sẽ đọc, không phải chỉ là "cấu hình kỹ thuật".
+
+Nhờ người phụ trách kỹ thuật in/gửi nguyên văn cả ba cho chuyên gia tâm lý, chỉ tick mục này sau
+khi người đó xác nhận cả ba đều ổn (hoặc sau khi các góp ý đã được sửa và người đó xác nhận lại).
+
+### ☐ 11. Quyết định: `crisisAlerts` có bị xoá khi học sinh xoá tài khoản không?
+
+`crisisAlerts` là **hồ sơ an toàn** (ai từng có dấu hiệu nguy hiểm, mức độ, đã xử lý chưa) —
+khác với nhật ký cảm xúc hay lịch sử trò chuyện, vốn là nội dung riêng tư của học sinh. Trường
+bạn có thể có nghĩa vụ lưu giữ loại hồ sơ này lâu hơn (theo quy định nội bộ, hoặc để theo dõi
+một em đã từng có dấu hiệu nguy hiểm).
+
+**Mặc định của hệ thống: CÓ xoá `crisisAlerts` khi học sinh xoá toàn bộ dữ liệu của mình** —
+nhất quán với lời hứa "xoá toàn bộ dữ liệu" ở trang Hồ sơ. Nếu trường bạn cần GIỮ LẠI hồ sơ cảnh
+báo dù học sinh đã xoá tài khoản, đó phải là một **quyết định có chủ đích, có người chịu trách
+nhiệm ký tên**, không phải một cấu hình bật/tắt có sẵn trên giao diện — cần sửa mã nguồn
+(`functions/src/admin/deleteUserData.logic.ts`, hàm `collectDeletionTargets()`) để bỏ
+`crisisAlerts` ra khỏi danh sách bị xoá cùng tài khoản, và nên tham khảo ý kiến pháp lý về việc
+lưu giữ dữ liệu sức khoẻ tinh thần của trẻ vị thành niên sau khi các em đã yêu cầu xoá.
+
+Ghi lại quyết định của trường bạn ở đây:
+
+☐ Giữ mặc định — `crisisAlerts` bị xoá cùng tài khoản, không cần sửa gì thêm.
+☐ Giữ lại `crisisAlerts` sau khi học sinh xoá tài khoản (đã sửa mã nguồn, đã tham khảo ý kiến
+phù hợp). Người quyết định: `______________________` Ngày: `______________________`
+
+---
+
+## 💬 Câu hỏi cần chủ sản phẩm trả lời (không chặn bật tính năng, nhưng nên quyết trước khi sửa persona)
+
+Giọng nói "ấm áp, gần gũi" mà học sinh nghe từ chú mèo đồng hành trong cuộc trò chuyện nằm ở
+`DEFAULT_CHAT_TEMPLATE` (`functions/src/ai/buildChatPrompt.ts`) — phần **admin sửa được** qua
+ô "System prompt" ở `/admin/ai`. Phần AN TOÀN (cấm chẩn đoán, không giả vờ là người, không hứa
+giữ bí mật, hướng dẫn khi học sinh tuyệt vọng...) nằm ở một hàm KHÁC, cố định, admin **không**
+sửa được qua giao diện — toàn bộ phần đó là quy tắc, không có câu nào tạo cảm giác ấm áp/lắng
+nghe.
+
+**Câu hỏi:** một admin trường (không được đào tạo lâm sàng) có nên được tự do đổi GIỌNG mà học
+sinh nghe (persona) mà không cần ai duyệt lại — trong khi mục 10 ở trên lại đòi hỏi một chuyên
+gia tâm lý duyệt kỹ ba văn bản an toàn? Nói cách khác: phần "ấm áp" của con mèo có đang được bảo
+vệ ở cùng mức nghiêm ngặt với phần "an toàn" hay không? Đây không phải lỗi kỹ thuật cần sửa
+ngay — là một câu hỏi thiết kế sản phẩm cần chủ sản phẩm cân nhắc và quyết định (ví dụ: có nên
+đòi một vòng duyệt tương tự mục 10 mỗi khi sửa System prompt của chat, khác với phản chiếu?).
 
 ---
 

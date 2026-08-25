@@ -35,6 +35,20 @@ export default function Page() {
         </p>
       </section>
 
+      <section className="mb-8">
+        <h2 className="mb-2 text-lg font-medium">Trò chuyện cùng mèo</h2>
+        <p className="text-slate-700">
+          Nếu trường bạn đã bật tính năng này và bạn đồng ý dùng, bạn có thể gõ chuyện với chú
+          mèo đồng hành. Cuộc trò chuyện cũng <strong>riêng tư</strong> — quản trị viên không
+          đọc được nội dung bạn gõ. <strong>Ngoại lệ duy nhất:</strong> nếu bạn nói điều gì
+          khiến hệ thống lo cho sự an toàn của bạn, thầy cô phụ trách sẽ được báo để đến hỏi
+          thăm bạn — báo này <strong>không</strong> kèm theo nguyên văn bạn đã viết, chỉ đủ để
+          thầy cô biết cần gặp ai và mức độ khẩn cấp. Điều này luôn được nhắc lại ngay trên màn
+          hình trò chuyện, trước khi bạn gõ chữ đầu tiên, để bạn biết trước chứ không phát hiện
+          sau lưng mình. Bạn xóa được từng tin nhắn hoặc cả cuộc trò chuyện bất cứ lúc nào.
+        </p>
+      </section>
+
       <section className="flex items-center gap-4 rounded-xl bg-white px-4 py-4">
         <CatMascot size={72} expression="listen" />
         <p className="text-slate-700">

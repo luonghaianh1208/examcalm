@@ -114,12 +114,17 @@ async function saveMoodEntry(page: Page): Promise<void> {
  * Trang /ho-so cũng có MỘT checkbox KHÁC không liên quan gì tới AI — "Tham gia nghiên cứu"
  * (ResearchConsentForm, luôn hiện, không điều kiện gì). `page.getByRole("checkbox")` một mình sẽ
  * khớp CẢ HAI, nên mọi thao tác trên checkbox của AiConsentSection phải scope vào đúng <section>
- * chứa heading "Phản chiếu AI".
+ * chứa heading "Tính năng AI (không bắt buộc)".
+ *
+ * Task 10 (Spec #4): heading trước đây là "Phản chiếu AI" — đổi thành "Tính năng AI" ở Task 9
+ * (AiConsentSection.tsx, Fix round 1 Finding 3) vì cùng MỘT ô tick giờ mở cả phản chiếu lẫn
+ * chat, nên tiêu đề cũ mời "bật Phản chiếu AI" sai tên dưới cấu hình chỉ-bật-chat. Selector cũ
+ * (`/phản chiếu ai/i`) không còn khớp gì — sửa lại đây để `npm run test:e2e` xanh trở lại.
  */
 function aiConsentSection(page: Page) {
   return page
     .locator("section")
-    .filter({ has: page.getByRole("heading", { name: /phản chiếu ai/i }) });
+    .filter({ has: page.getByRole("heading", { name: /tính năng ai/i }) });
 }
 
 test.describe("AI — aiConfig trống (mặc định production lúc mới ship)", () => {

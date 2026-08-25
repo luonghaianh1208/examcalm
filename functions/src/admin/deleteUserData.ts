@@ -39,7 +39,9 @@ async function deleteQueryInBatches(
 export const DELETION_TARGET_HANDLERS: Record<
   string,
   {
-    resultKey: "attempts" | "answers" | "moods" | "cbtSessions" | "aiJournalOutputs" | "aiUsage" | "favorites";
+    resultKey:
+      | "attempts" | "answers" | "moods" | "cbtSessions" | "aiJournalOutputs" | "aiUsage"
+      | "chatSessions" | "chatMessages" | "crisisAlerts" | "favorites";
     query: (targetUid: string) => FirebaseFirestore.Query;
   }
 > = {
@@ -75,6 +77,25 @@ export const DELETION_TARGET_HANDLERS: Record<
   aiUsage: {
     resultKey: "aiUsage",
     query: (targetUid) => getFirestore().collection("aiUsage").where("uid", "==", targetUid),
+  },
+  // chatSessions/chatMessages/crisisAlerts: Task 10 (Spec #4, design spec §7) — sổ đăng ký này
+  // đã bị quên BA LẦN (cbtSessions ở 59289ed, rồi aiJournalOutputs/aiUsage bị cả một spec bỏ
+  // sót). Cả ba lọc bằng field "userId" (chatSessionSchema/chatMessageSchema/crisisAlertSchema,
+  // src/lib/types/chat.ts). `crisisAlerts` là hồ sơ an toàn, không phải nội dung riêng tư —
+  // spec mặc định XOÁ nó theo tài khoản (nhất quán với lời hứa "xoá toàn bộ"); nếu nhà trường
+  // cần giữ lại để có nghĩa vụ lưu trữ, đó là quyết định con người cần ghi vào
+  // docs/ai-go-live-checklist.md, không phải một nhánh code im lặng ở đây.
+  chatSessions: {
+    resultKey: "chatSessions",
+    query: (targetUid) => getFirestore().collection("chatSessions").where("userId", "==", targetUid),
+  },
+  chatMessages: {
+    resultKey: "chatMessages",
+    query: (targetUid) => getFirestore().collection("chatMessages").where("userId", "==", targetUid),
+  },
+  crisisAlerts: {
+    resultKey: "crisisAlerts",
+    query: (targetUid) => getFirestore().collection("crisisAlerts").where("userId", "==", targetUid),
   },
   "users/{uid}/favorites": {
     resultKey: "favorites",
@@ -122,6 +143,9 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
   const cbtSessions = deleted.cbtSessions ?? 0;
   const aiJournalOutputs = deleted.aiJournalOutputs ?? 0;
   const aiUsage = deleted.aiUsage ?? 0;
+  const chatSessions = deleted.chatSessions ?? 0;
+  const chatMessages = deleted.chatMessages ?? 0;
+  const crisisAlerts = deleted.crisisAlerts ?? 0;
   const favorites = deleted.favorites ?? 0;
 
   await db.collection("users").doc(targetUid).delete();
@@ -149,15 +173,19 @@ export const deleteUserData = onCall({ region: "asia-southeast1" }, async (reque
     action: "deleteUserData",
     targetType: "user",
     targetId: targetUid,
-    before: { attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage, favorites },
+    before: {
+      attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage,
+      chatSessions, chatMessages, crisisAlerts, favorites,
+    },
     after: authDeleteFailed ? { authDeleteFailed: true } : null,
   });
 
+  const deletedResult = {
+    attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage,
+    chatSessions, chatMessages, crisisAlerts, favorites,
+  };
+
   return authDeleteFailed
-    ? {
-        ok: true,
-        deleted: { attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage, favorites },
-        authDeleteFailed: true,
-      }
-    : { ok: true, deleted: { attempts, answers, moods, cbtSessions, aiJournalOutputs, aiUsage, favorites } };
+    ? { ok: true, deleted: deletedResult, authDeleteFailed: true }
+    : { ok: true, deleted: deletedResult };
 });
