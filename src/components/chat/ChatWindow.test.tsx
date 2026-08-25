@@ -1,0 +1,286 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, within, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ChatWindow } from "./ChatWindow";
+import {
+  startChatSession,
+  sendMessage,
+  listMessages,
+  listMySessions,
+  deleteMessage,
+  deleteSession,
+  type ChatMessageRecord,
+  type ChatSessionRecord,
+} from "@/lib/firestore/chat";
+import { getAiOptIn } from "@/lib/firestore/ai-optin";
+import { getAiPublicConfig } from "@/lib/firestore/ai-public";
+
+vi.mock("@/lib/firestore/chat", () => ({
+  startChatSession: vi.fn(),
+  sendMessage: vi.fn(),
+  listMessages: vi.fn(),
+  listMySessions: vi.fn(),
+  deleteMessage: vi.fn(),
+  deleteSession: vi.fn(),
+}));
+
+// Cùng khuôn ReflectionCard.test.tsx (Task 11b): ChatWindow tự đọc cổng của
+// chính nó thay vì nhận prop, nên phải mock hai nguồn đọc gate này.
+vi.mock("@/lib/firestore/ai-optin", () => ({
+  getAiOptIn: vi.fn(),
+}));
+vi.mock("@/lib/firestore/ai-public", () => ({
+  getAiPublicConfig: vi.fn(),
+}));
+
+const mockedStartChatSession = vi.mocked(startChatSession);
+const mockedSendMessage = vi.mocked(sendMessage);
+const mockedListMessages = vi.mocked(listMessages);
+const mockedListMySessions = vi.mocked(listMySessions);
+const mockedDeleteMessage = vi.mocked(deleteMessage);
+const mockedDeleteSession = vi.mocked(deleteSession);
+const mockedGetAiOptIn = vi.mocked(getAiOptIn);
+const mockedGetAiPublicConfig = vi.mocked(getAiPublicConfig);
+
+// Câu chữ lấy NGUYÊN VĂN từ chat.ts (Task 6) — brief yêu cầu ChatWindow chỉ
+// hiển thị đúng err.message, không tự viết lại.
+const QUOTA_MESSAGE = "Bạn đã dùng hết lượt trò chuyện AI hôm nay rồi, mai quay lại nhé.";
+const SEND_ERROR_MESSAGE = "Không thể gửi tin nhắn lúc này, thử lại sau nhé.";
+const SAFETY_SENTENCE =
+  "Nếu em nói điều gì khiến chúng tôi lo cho sự an toàn của em, thầy cô sẽ được báo để giúp em.";
+
+function makeMessage(overrides: Partial<ChatMessageRecord>): ChatMessageRecord {
+  return {
+    id: "m1",
+    userId: "u1",
+    sessionId: "s1",
+    role: "user",
+    text: "Xin chào",
+    isCrisisResponse: false,
+    createdAt: null,
+    ...overrides,
+  };
+}
+
+const EXISTING_SESSION: ChatSessionRecord = {
+  id: "s1",
+  userId: "u1",
+  startedAt: null,
+  lastMessageAt: null,
+  messageCount: 1,
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockedGetAiOptIn.mockResolvedValue(true);
+  mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "DeepSeek", enabled: true });
+  // Mặc định: chưa có phiên nào — ChatWindow chỉ tạo phiên mới lúc gửi tin đầu tiên.
+  mockedListMySessions.mockResolvedValue([]);
+  mockedListMessages.mockResolvedValue([]);
+  mockedStartChatSession.mockResolvedValue("s1");
+  mockedSendMessage.mockResolvedValue({ messageId: "assistant-1" });
+  mockedDeleteMessage.mockResolvedValue(undefined);
+  mockedDeleteSession.mockResolvedValue(undefined);
+});
+
+describe("ChatWindow", () => {
+  it("aiOptIn tắt (gate đóng): không render ô chat, chỉ dẫn tới trang Hồ sơ, không gọi hàm chat nào", async () => {
+    mockedGetAiOptIn.mockResolvedValue(false);
+    render(<ChatWindow uid="u1" />);
+
+    const link = await screen.findByRole("link", { name: /hồ sơ/i });
+    expect(link).toHaveAttribute("href", "/ho-so");
+    expect(screen.queryByLabelText(/nhập tin nhắn/i)).not.toBeInTheDocument();
+    expect(mockedListMySessions).not.toHaveBeenCalled();
+    expect(mockedStartChatSession).not.toHaveBeenCalled();
+    expect(mockedSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("aiPublic tắt dù aiOptIn bật (gate đóng): không render ô chat, không gọi hàm chat nào", async () => {
+    mockedGetAiOptIn.mockResolvedValue(true);
+    mockedGetAiPublicConfig.mockResolvedValue({ providerLabel: "", enabled: false });
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByRole("link", { name: /hồ sơ/i });
+    expect(screen.queryByLabelText(/nhập tin nhắn/i)).not.toBeInTheDocument();
+    expect(mockedListMySessions).not.toHaveBeenCalled();
+    expect(mockedSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("trước tin nhắn đầu tiên: hiện câu cảnh báo an toàn, là text thật (không phải tooltip)", async () => {
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByLabelText(/nhập tin nhắn/i);
+    const sentence = screen.getByText(SAFETY_SENTENCE);
+    expect(sentence).toBeVisible();
+    expect(sentence.tagName).not.toBe("TITLE");
+    expect(mockedSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("trước tin nhắn đầu tiên: hiện nhãn 'Nội dung do AI tạo'", async () => {
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByLabelText(/nhập tin nhắn/i);
+    const label = screen.getByText("Nội dung do AI tạo");
+    expect(label).toBeVisible();
+  });
+
+  it("gửi tin: hiện tin của mình ngay, trạng thái đang chờ, rồi tin trả lời", async () => {
+    let resolveSend: (v: { messageId: string }) => void = () => {};
+    mockedSendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+    mockedListMessages.mockResolvedValue([
+      makeMessage({ id: "m1", role: "user", text: "Em rất mệt" }),
+      makeMessage({ id: "m2", role: "assistant", text: "Mình ở đây với bạn." }),
+    ]);
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    const input = await screen.findByLabelText(/nhập tin nhắn/i);
+    await user.type(input, "Em rất mệt");
+    await user.click(screen.getByRole("button", { name: /^gửi$/i }));
+
+    // Tin của mình hiện ngay, ô nhập được xoá, trạng thái đang chờ hiện ra —
+    // TRƯỚC KHI sendMessage resolve.
+    expect(screen.getByText("Em rất mệt")).toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(screen.getByText(/đang trả lời/i)).toBeInTheDocument();
+    expect(mockedStartChatSession).toHaveBeenCalledWith("u1");
+    expect(mockedSendMessage).toHaveBeenCalledWith("s1", "Em rất mệt");
+
+    resolveSend({ messageId: "m2" });
+
+    await waitFor(() => expect(mockedListMessages).toHaveBeenCalledWith("u1", "s1"));
+    expect(await screen.findByText("Mình ở đây với bạn.")).toBeInTheDocument();
+    expect(screen.queryByText(/đang trả lời/i)).not.toBeInTheDocument();
+  });
+
+  it("gửi lỗi: hiện thông báo nhẹ nhàng, nội dung đã gõ không mất — quay lại ô nhập", async () => {
+    mockedSendMessage.mockRejectedValue(new Error(SEND_ERROR_MESSAGE));
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    const input = await screen.findByLabelText(/nhập tin nhắn/i);
+    await user.type(input, "Em không biết phải làm sao");
+    await user.click(screen.getByRole("button", { name: /^gửi$/i }));
+
+    expect(await screen.findByText(SEND_ERROR_MESSAGE)).toBeInTheDocument();
+    expect(input).toHaveValue("Em không biết phải làm sao");
+  });
+
+  it("hết quota: thông điệp riêng, tử tế, không dùng từ 'lỗi'", async () => {
+    mockedSendMessage.mockRejectedValue(new Error(QUOTA_MESSAGE));
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    const input = await screen.findByLabelText(/nhập tin nhắn/i);
+    await user.type(input, "Cho em hỏi thêm");
+    await user.click(screen.getByRole("button", { name: /^gửi$/i }));
+
+    const message = await screen.findByText(QUOTA_MESSAGE);
+    expect(message.textContent).not.toMatch(/lỗi/i);
+    expect(input).toHaveValue("Cho em hỏi thêm");
+  });
+
+  it("phản hồi khủng hoảng: hiển thị nổi bật, có tel:111 bấm gọi được, khác tin thường", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([
+      makeMessage({ id: "m1", role: "user", text: "Em thấy áp lực quá", isCrisisResponse: false }),
+      makeMessage({ id: "m2", role: "assistant", text: "Mình hiểu bạn đang mệt.", isCrisisResponse: false }),
+      makeMessage({ id: "m3", role: "assistant", text: "Em hãy gọi ngay Tổng đài 111.", isCrisisResponse: true }),
+    ]);
+
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByText("Em hãy gọi ngay Tổng đài 111.");
+
+    // Chỉ ĐÚNG MỘT liên kết gọi điện trong toàn bộ danh sách tin — không dính
+    // vào tin nhắn thường.
+    const callLinks = screen.getAllByRole("link", { name: /111/ });
+    expect(callLinks).toHaveLength(1);
+    expect(callLinks[0]).toHaveAttribute("href", "tel:111");
+
+    // Tin khủng hoảng có một dấu hiệu riêng để phân biệt khỏi tin thường.
+    expect(screen.getByText(/cần trợ giúp ngay/i)).toBeInTheDocument();
+  });
+
+  it("xoá một tin nhắn: hỏi xác nhận trước, huỷ thì không xoá", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([makeMessage({ id: "m1", text: "Tin cần xoá" })]);
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByText("Tin cần xoá");
+    await user.click(screen.getByRole("button", { name: /xoá tin này/i }));
+    expect(mockedDeleteMessage).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /^huỷ$/i }));
+    expect(mockedDeleteMessage).not.toHaveBeenCalled();
+    expect(screen.getByText("Tin cần xoá")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /xoá tin này/i })).toBeInTheDocument();
+  });
+
+  it("xoá một tin nhắn: xác nhận thì gọi deleteMessage và gỡ khỏi danh sách", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([makeMessage({ id: "m1", text: "Tin cần xoá" })]);
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByText("Tin cần xoá");
+    await user.click(screen.getByRole("button", { name: /xoá tin này/i }));
+    await user.click(screen.getByRole("button", { name: /xác nhận xoá/i }));
+
+    expect(mockedDeleteMessage).toHaveBeenCalledWith("m1");
+    await waitFor(() => expect(screen.queryByText("Tin cần xoá")).not.toBeInTheDocument());
+  });
+
+  it("xoá cả hội thoại: hỏi xác nhận, xác nhận thì gọi deleteSession và xoá sạch danh sách", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([makeMessage({ id: "m1", text: "Tin trong hội thoại" })]);
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByText("Tin trong hội thoại");
+    await user.click(screen.getByRole("button", { name: /xoá cả hội thoại/i }));
+    expect(mockedDeleteSession).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /xác nhận xoá/i }));
+
+    expect(mockedDeleteSession).toHaveBeenCalledWith("u1", "s1");
+    await waitFor(() => expect(screen.queryByText("Tin trong hội thoại")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /xoá cả hội thoại/i })).not.toBeInTheDocument();
+  });
+
+  it("mở lại trang khi đã có phiên trước đó: tải lại tin nhắn cũ, không tạo phiên mới", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([makeMessage({ id: "m1", text: "Tin từ hôm qua" })]);
+
+    render(<ChatWindow uid="u1" />);
+
+    expect(await screen.findByText("Tin từ hôm qua")).toBeInTheDocument();
+    expect(mockedListMessages).toHaveBeenCalledWith("u1", "s1");
+    expect(mockedStartChatSession).not.toHaveBeenCalled();
+  });
+
+  it("bàn phím: ô nhập có nhãn, Enter gửi tin, vùng tin nhắn là live region", async () => {
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    const input = await screen.findByLabelText(/nhập tin nhắn/i);
+    const log = screen.getByRole("log");
+    expect(log).toHaveAttribute("aria-live", "polite");
+
+    await user.type(input, "Chào mèo{Enter}");
+
+    await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledWith("s1", "Chào mèo"));
+  });
+});
