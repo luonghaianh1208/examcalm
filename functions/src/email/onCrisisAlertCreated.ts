@@ -136,6 +136,24 @@ const vnDateTimeFormatter = new Intl.DateTimeFormat("vi-VN", {
  *  quán, không phải một con số tuỳ tiện khác (Fix round 1, Finding 5). */
 const NICKNAME_MAX_CHARS_IN_EMAIL = 50;
 
+/** `school` do học sinh tự nhập — CÙNG lý do NICKNAME_MAX_CHARS_IN_EMAIL ở trên
+ *  (firestore.rules không kiểm tra độ dài khi owner ghi `users/{uid}`; trần 120 ký tự của
+ *  userProfileSchema.school chỉ ở phía client/zod). I1 (final whole-branch review): một học sinh
+ *  muốn giáo viên đọc được lời nhắn có thể nhét cả một đoạn văn vào field này qua SDK trực tiếp
+ *  (bỏ qua giới hạn 120 ký tự của UI hồ sơ) rồi kèm một từ khoá khủng hoảng — đoạn văn đó sẽ tới
+ *  thẳng hộp thư MỌI admin, một đường vòng thẳng qua luật §3.4 (không mang nguyên văn học sinh
+ *  viết). Cắt về đúng trần zod (120), không phải một con số tuỳ tiện khác — cùng nguyên tắc với
+ *  nickname. */
+const SCHOOL_MAX_CHARS_IN_EMAIL = 120;
+
+/** I1 (final whole-branch review): `gradeLevel` là một enum ĐÓNG ("10"|"11"|"12" —
+ *  userProfileSchema.gradeLevel) chứ không phải văn bản tự do như nickname/school — nhưng
+ *  firestore.rules cũng KHÔNG kiểm tra giá trị này khi owner ghi `users/{uid}`, nên một giá trị
+ *  NGOÀI enum (kể cả một đoạn văn dài) có thể tới thẳng hộp thư admin qua field "Lớp:" nếu chỉ
+ *  kiểm tra `typeof === "string"` như nickname/school. Validate đúng tập giá trị đóng thay vì cắt
+ *  độ dài — giá trị lạ rơi về `null` (hiện "Không rõ", giống trường hợp thiếu field). */
+const VALID_GRADE_LEVELS = new Set(["10", "11", "12"]);
+
 export type EmailStatus = "sent" | "failed" | "skipped";
 
 /** Bề mặt tối thiểu của một Auth UserRecord mà module này cần — KHÔNG phải kiểu đầy đủ của SDK,
@@ -234,7 +252,11 @@ async function loadStudentInfo(db: Firestore, userId: string): Promise<StudentIn
     const data = snap.data() as Record<string, unknown>;
     return {
       nickname: typeof data.nickname === "string" ? data.nickname : null,
-      gradeLevel: typeof data.gradeLevel === "string" ? data.gradeLevel : null,
+      // I1: chỉ chấp nhận đúng ba giá trị enum — giá trị lạ (kể cả một đoạn văn) rơi về null.
+      gradeLevel:
+        typeof data.gradeLevel === "string" && VALID_GRADE_LEVELS.has(data.gradeLevel)
+          ? data.gradeLevel
+          : null,
       school: typeof data.school === "string" ? data.school : null,
     };
   } catch (error) {
@@ -360,7 +382,8 @@ async function decideAndSendEmail(
   const text = buildEmailBody({
     studentLabel,
     gradeLevel: student.gradeLevel,
-    school: student.school,
+    // I1 (final whole-branch review): cắt về đúng trần zod, cùng lý do/vị trí với nickname ở trên.
+    school: student.school !== null ? truncate(student.school, SCHOOL_MAX_CHARS_IN_EMAIL) : null,
     severity,
     createdAt,
     kind,

@@ -296,6 +296,35 @@ describe("onCrisisAlertCreated — sự kiện TẠO", () => {
     expect(params.text).toContain("KHÔNG được đưa vào email này");
   });
 
+  it("7b. school quá dài (SDK ghi trực tiếp, không qua giới hạn UI) → thân mail CẮT về đúng trần 120 ký tự của userSchema, không đưa nguyên văn (I1, final whole-branch review)", async () => {
+    await setAiConfig();
+    const longSchool = "T".repeat(200); // vượt xa trần 120 ký tự của userProfileSchema.school
+    await setStudent({ school: longSchool });
+    const alertData = await writeAlert();
+    const sendEmailSpy = fakeSendEmail();
+    const deps = makeDeps({ sendEmail: sendEmailSpy });
+
+    await runOnCrisisAlertCreated(ALERT_ID, alertData, deps);
+
+    const params = sendEmailSpy.mock.calls[0][0];
+    expect(params.text).not.toContain(longSchool);
+    expect(params.text).toContain("T".repeat(120));
+  });
+
+  it("7c. gradeLevel ngoài enum \"10\"|\"11\"|\"12\" (SDK ghi trực tiếp, rules không kiểm tra) → thân mail hiện 'Không rõ', không đưa nguyên giá trị lạ (I1, final whole-branch review)", async () => {
+    await setAiConfig();
+    await setStudent({ gradeLevel: "một đoạn văn dài học sinh cố tình nhét vào field lớp" });
+    const alertData = await writeAlert();
+    const sendEmailSpy = fakeSendEmail();
+    const deps = makeDeps({ sendEmail: sendEmailSpy });
+
+    await runOnCrisisAlertCreated(ALERT_ID, alertData, deps);
+
+    const params = sendEmailSpy.mock.calls[0][0];
+    expect(params.text).not.toContain("một đoạn văn dài");
+    expect(params.text).toContain("Lớp: Không rõ");
+  });
+
   it("8. thân mail KHÔNG chứa gì ngoài danh sách field cho phép — không được spread document", async () => {
     await setAiConfig();
     await setStudent();
