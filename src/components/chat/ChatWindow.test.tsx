@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChatWindow } from "./ChatWindow";
 import {
@@ -9,20 +9,35 @@ import {
   listMySessions,
   deleteMessage,
   deleteSession,
+  ChatSendError,
   type ChatMessageRecord,
   type ChatSessionRecord,
 } from "@/lib/firestore/chat";
 import { getAiOptIn } from "@/lib/firestore/ai-optin";
 import { getAiPublicConfig } from "@/lib/firestore/ai-public";
 
-vi.mock("@/lib/firestore/chat", () => ({
-  startChatSession: vi.fn(),
-  sendMessage: vi.fn(),
-  listMessages: vi.fn(),
-  listMySessions: vi.fn(),
-  deleteMessage: vi.fn(),
-  deleteSession: vi.fn(),
-}));
+vi.mock("@/lib/firestore/chat", () => {
+  // Fix round 1 (Finding 2, coordinator): ChatSendError phải là class THẬT (không phải
+  // vi.fn()) để ChatWindow.tsx `err instanceof ChatSendError` nhận đúng trong test — cùng lý
+  // do MockTimestamp ở chat.test.ts phải là class thật, không phải mock rỗng. Định nghĩa cục
+  // bộ trong factory (thay vì vi.importActual chat.ts thật) để không kéo theo firebase/* thật.
+  class ChatSendError extends Error {
+    kind: "quota" | "rate_limit" | "error";
+    constructor(message: string, kind: "quota" | "rate_limit" | "error") {
+      super(message);
+      this.kind = kind;
+    }
+  }
+  return {
+    startChatSession: vi.fn(),
+    sendMessage: vi.fn(),
+    listMessages: vi.fn(),
+    listMySessions: vi.fn(),
+    deleteMessage: vi.fn(),
+    deleteSession: vi.fn(),
+    ChatSendError,
+  };
+});
 
 // Cùng khuôn ReflectionCard.test.tsx (Task 11b): ChatWindow tự đọc cổng của
 // chính nó thay vì nhận prop, nên phải mock hai nguồn đọc gate này.
@@ -159,8 +174,11 @@ describe("ChatWindow", () => {
     expect(screen.queryByText(/đang trả lời/i)).not.toBeInTheDocument();
   });
 
-  it("gửi lỗi: hiện thông báo nhẹ nhàng, nội dung đã gõ không mất — quay lại ô nhập", async () => {
-    mockedSendMessage.mockRejectedValue(new Error(SEND_ERROR_MESSAGE));
+  it("gửi lỗi thật: hiện thông báo dạng role=alert, nội dung đã gõ không mất — quay lại ô nhập", async () => {
+    mockedSendMessage.mockRejectedValue(new ChatSendError(SEND_ERROR_MESSAGE, "error"));
+    // Phiên đã có sẵn (không phải lần gửi đầu) — cô lập test này khỏi hành vi dọn rác orphan
+    // của Finding 1, có test riêng bên dưới.
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
 
     const user = userEvent.setup();
     render(<ChatWindow uid="u1" />);
@@ -169,12 +187,18 @@ describe("ChatWindow", () => {
     await user.type(input, "Em không biết phải làm sao");
     await user.click(screen.getByRole("button", { name: /^gửi$/i }));
 
-    expect(await screen.findByText(SEND_ERROR_MESSAGE)).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(SEND_ERROR_MESSAGE);
     expect(input).toHaveValue("Em không biết phải làm sao");
   });
 
-  it("hết quota: thông điệp riêng, tử tế, không dùng từ 'lỗi'", async () => {
-    mockedSendMessage.mockRejectedValue(new Error(QUOTA_MESSAGE));
+  // Fix round 1 (Finding 2, coordinator): hết quota/rate limit KHÔNG phải lỗi — không được
+  // hiện qua role="alert" đỏ khẩn cấp như lỗi gửi thật, phải qua role="status" trung tính
+  // (cùng khuôn ReflectionCard.tsx). Phân biệt bằng `kind` máy đọc được từ ChatSendError,
+  // KHÔNG suy luận lại từ câu chữ tiếng Việt.
+  it("hết quota: thông điệp riêng, tử tế, không dùng từ 'lỗi', hiện qua role=status (không phải alert)", async () => {
+    mockedSendMessage.mockRejectedValue(new ChatSendError(QUOTA_MESSAGE, "quota"));
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
 
     const user = userEvent.setup();
     render(<ChatWindow uid="u1" />);
@@ -183,9 +207,55 @@ describe("ChatWindow", () => {
     await user.type(input, "Cho em hỏi thêm");
     await user.click(screen.getByRole("button", { name: /^gửi$/i }));
 
-    const message = await screen.findByText(QUOTA_MESSAGE);
-    expect(message.textContent).not.toMatch(/lỗi/i);
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(QUOTA_MESSAGE);
+    expect(status.textContent).not.toMatch(/lỗi/i);
     expect(input).toHaveValue("Cho em hỏi thêm");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // Fix round 1 (Finding 1, coordinator): gửi tin ĐẦU TIÊN thất bại tạo ra một phiên rỗng
+  // (startChatSession chạy trước sendMessage) — nếu học sinh không gửi lại trong tab đó, phiên
+  // này kẹt vĩnh viễn không ai xoá được. ChatWindow phải tự dọn: kiểm tra phiên vừa tạo có tin
+  // nào không (listMessages), rỗng thì xoá luôn và đặt lại sessionId=null.
+  it("gửi tin đầu tiên thất bại: tự xoá phiên rỗng vừa tạo, không để lại orphan, gửi lại tạo phiên mới sạch", async () => {
+    mockedStartChatSession.mockResolvedValueOnce("s-new").mockResolvedValueOnce("s-retry");
+    mockedSendMessage.mockRejectedValue(new ChatSendError(SEND_ERROR_MESSAGE, "error"));
+    // listMessages dùng cho bước dọn rác: phiên vừa tạo không có tin nào.
+    mockedListMessages.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(<ChatWindow uid="u1" />);
+
+    const input = await screen.findByLabelText(/nhập tin nhắn/i);
+    await user.type(input, "Tin đầu tiên");
+    await user.click(screen.getByRole("button", { name: /^gửi$/i }));
+
+    await screen.findByRole("alert");
+    await waitFor(() => expect(mockedDeleteSession).toHaveBeenCalledWith("u1", "s-new"));
+
+    // Phiên đã bị xoá và không còn tin nào — không có gì để hiện nút xoá cả hội thoại.
+    expect(screen.queryByRole("button", { name: /xoá cả hội thoại/i })).not.toBeInTheDocument();
+
+    // Gửi lại: phải tạo phiên MỚI ("s-retry"), không tái dùng "s-new" đã bị xoá.
+    await user.clear(input);
+    await user.type(input, "Tin thử lại");
+    await user.click(screen.getByRole("button", { name: /^gửi$/i }));
+    await waitFor(() => expect(mockedStartChatSession).toHaveBeenCalledTimes(2));
+    expect(mockedSendMessage).toHaveBeenCalledWith("s-retry", "Tin thử lại");
+  });
+
+  // Fix round 1 (Finding 1, coordinator): nút "Xoá cả hội thoại" không còn phụ thuộc
+  // messages.length > 0 — một phiên đã tồn tại nhưng chưa có tin nào (dọn rác tự động thất
+  // bại, hoặc bất kỳ lý do nào khác) vẫn phải xoá được, không phải kẹt vì "chưa có gì để xoá".
+  it("phiên đã tồn tại nhưng chưa có tin nào: nút Xoá cả hội thoại vẫn hiện", async () => {
+    mockedListMySessions.mockResolvedValue([EXISTING_SESSION]);
+    mockedListMessages.mockResolvedValue([]);
+
+    render(<ChatWindow uid="u1" />);
+
+    await screen.findByLabelText(/nhập tin nhắn/i);
+    expect(screen.getByRole("button", { name: /xoá cả hội thoại/i })).toBeInTheDocument();
   });
 
   it("phản hồi khủng hoảng: hiển thị nổi bật, có tel:111 bấm gọi được, khác tin thường", async () => {

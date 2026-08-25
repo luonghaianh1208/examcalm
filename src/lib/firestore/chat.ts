@@ -167,6 +167,35 @@ function mapResourceExhaustedMessage(err: unknown): string {
 }
 
 /**
+ * Fix round 1 cho Task 7 (Finding 2, coordinator): UI (ChatWindow) cần phân biệt "hết
+ * quota"/"rate limit" — KHÔNG phải lỗi, không nên hiện màu đỏ khẩn cấp — khỏi lỗi thật, mà
+ * KHÔNG được quay lại kiểu string-match câu tiếng Việt (đúng thứ đã bỏ ở Task 6, Finding 3).
+ * `kind` là cờ máy đọc được duy nhất phục vụ mục đích đó — tính riêng khỏi
+ * `mapSendMessageErrorMessage` để không đọc `extractErrorDetailsReason` hai lần cho cùng một
+ * lỗi resource-exhausted.
+ */
+export type ChatSendErrorKind = "quota" | "rate_limit" | "error";
+
+function mapSendMessageErrorKind(err: unknown): ChatSendErrorKind {
+  if (extractFunctionsErrorCode(err) !== "resource-exhausted") return "error";
+  return extractErrorDetailsReason(err) === "quota" ? "quota" : "rate_limit";
+}
+
+/**
+ * Lỗi gửi tin nhắn — vẫn là `Error` bình thường (giữ nguyên `message` tiếng Việt đã dịch sẵn,
+ * mọi chỗ gọi `err.message`/`err instanceof Error` hiện có không cần đổi), chỉ mang thêm
+ * `kind` để UI branch mà không cần đoán từ câu chữ.
+ */
+export class ChatSendError extends Error {
+  readonly kind: ChatSendErrorKind;
+  constructor(message: string, kind: ChatSendErrorKind) {
+    super(message);
+    this.name = "ChatSendError";
+    this.kind = kind;
+  }
+}
+
+/**
  * `permission-denied` gộp BA nguyên nhân ở server (đối chiếu sendChatMessage.ts): email
  * chưa xác thực, chưa bật đồng ý dùng AI, và session không thuộc về mình. Hai nguyên nhân
  * đầu kèm `details.reason`; nguyên nhân thứ ba CỐ Ý không kèm `details` — để không xác nhận
@@ -235,7 +264,7 @@ export async function sendMessage(
   try {
     return await callSendChatMessage(sessionId, text);
   } catch (err) {
-    throw new Error(mapSendMessageErrorMessage(err));
+    throw new ChatSendError(mapSendMessageErrorMessage(err), mapSendMessageErrorKind(err));
   }
 }
 

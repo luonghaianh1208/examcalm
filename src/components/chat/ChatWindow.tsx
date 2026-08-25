@@ -8,7 +8,9 @@ import {
   listMySessions,
   deleteMessage,
   deleteSession,
+  ChatSendError,
   type ChatMessageRecord,
+  type ChatSendErrorKind,
 } from "@/lib/firestore/chat";
 import { getAiOptIn } from "@/lib/firestore/ai-optin";
 import { getAiPublicConfig } from "@/lib/firestore/ai-public";
@@ -53,7 +55,9 @@ export function ChatWindow({ uid }: Props) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [pendingText, setPendingText] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
+  // Fix round 1 (Finding 2, coordinator): giữ kèm `kind` — hết quota/rate limit không phải
+  // lỗi, không được hiện màu đỏ khẩn cấp "role=alert" như lỗi gửi thật sự.
+  const [sendError, setSendError] = useState<{ message: string; kind: ChatSendErrorKind } | null>(null);
 
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -133,6 +137,27 @@ export function ChatWindow({ uid }: Props) {
     );
   }
 
+  // Fix round 1 (Finding 1, coordinator): nếu phiên vừa TẠO MỚI trong chính lần gửi vừa thất
+  // bại, và không tin nào thực sự lọt vào nó (kiểm bằng listMessages, không đoán từ mã lỗi —
+  // trường hợp hiếm `internal`+`details.reason==="saved"` ở chat.ts nghĩa là tin học sinh ĐÃ
+  // lưu trước khi lỗi xảy ra, xoá phiên lúc đó sẽ mất tin thật), xoá luôn phiên rỗng đó và
+  // đặt lại sessionId=null. Không làm vậy, một phiên rỗng mang userId của học sinh tồn tại
+  // vĩnh viễn nếu học sinh không gửi lại trong tab đó — vi phạm §8.4 (xoá được cả hội thoại).
+  // Dọn rác là best-effort: nếu chính bước dọn này cũng lỗi, phiên rỗng vẫn còn nhưng KHÔNG
+  // còn kẹt — nút "Xoá cả hội thoại" giờ hiện với `sessionId !== null` bất kể messages có rỗng
+  // hay không (fix thứ hai của cùng finding, xem điều kiện render bên dưới).
+  async function cleanupOrphanSessionIfEmpty(sid: string) {
+    try {
+      const remaining = await listMessages(uid, sid);
+      if (remaining.length === 0) {
+        await deleteSession(uid, sid);
+        setSessionId(null);
+      }
+    } catch {
+      // Dọn rác thất bại không phải lỗi nghiêm trọng — xem giải thích ở trên.
+    }
+  }
+
   async function handleSend() {
     const text = draft.trim();
     if (text === "" || sending) return;
@@ -142,6 +167,7 @@ export function ChatWindow({ uid }: Props) {
     setPendingText(text);
     setDraft("");
 
+    const createdSessionThisAttempt = sessionId === null;
     let sid = sessionId;
     try {
       if (sid === null) {
@@ -150,15 +176,17 @@ export function ChatWindow({ uid }: Props) {
       }
       await sendMessage(sid, text);
     } catch (err) {
-      // Gửi thất bại: KHÔNG có tin nào thật sự được lưu (Cloud Function ghi tin học sinh
-      // TRƯỚC khi gọi model — nhưng nếu nó lưu rồi mới lỗi, chat.ts đã dịch riêng thông điệp
-      // "đã được lưu" cho trường hợp đó, ChatWindow không cần tự đoán). Trả chữ về ô nhập để
-      // học sinh không phải gõ lại — mất một tin nhắn đã lấy hết can đảm để viết còn tệ hơn
-      // chính lỗi gửi.
-      setSendError(err instanceof Error ? err.message : GENERIC_SEND_ERROR);
+      // Gửi thất bại: trả chữ về ô nhập để học sinh không phải gõ lại — mất một tin nhắn đã
+      // lấy hết can đảm để viết còn tệ hơn chính lỗi gửi.
+      const message = err instanceof Error ? err.message : GENERIC_SEND_ERROR;
+      const kind = err instanceof ChatSendError ? err.kind : "error";
+      setSendError({ message, kind });
       setDraft(text);
       setPendingText(null);
       setSending(false);
+      if (createdSessionThisAttempt && sid !== null) {
+        await cleanupOrphanSessionIfEmpty(sid);
+      }
       return;
     }
 
@@ -168,7 +196,7 @@ export function ChatWindow({ uid }: Props) {
       const refreshed = await listMessages(uid, sid);
       setMessages(refreshed);
     } catch {
-      setSendError("Không thể tải tin trả lời lúc này, thử tải lại trang nhé.");
+      setSendError({ message: "Không thể tải tin trả lời lúc này, thử tải lại trang nhé.", kind: "error" });
     }
     setPendingText(null);
     setSending(false);
@@ -299,11 +327,18 @@ export function ChatWindow({ uid }: Props) {
             )}
           </div>
 
-          {sendError && (
-            <p role="alert" className="text-rose-800">
-              {sendError}
-            </p>
-          )}
+          {sendError &&
+            (sendError.kind === "quota" || sendError.kind === "rate_limit" ? (
+              // Hết quota/rate limit KHÔNG phải lỗi — cùng khuôn ReflectionCard.tsx dùng
+              // role="status" trung tính cho thông điệp hết lượt, không phải role="alert" đỏ.
+              <p role="status" className="text-slate-700">
+                {sendError.message}
+              </p>
+            ) : (
+              <p role="alert" className="text-rose-800">
+                {sendError.message}
+              </p>
+            ))}
           {deleteError && (
             <p role="alert" className="text-rose-800">
               {deleteError}
@@ -343,7 +378,10 @@ export function ChatWindow({ uid }: Props) {
             </button>
           </form>
 
-          {messages.length > 0 && sessionId !== null && (
+          {/* Fix round 1 (Finding 1, coordinator): gate chỉ còn phụ thuộc sessionId !== null —
+              một phiên rỗng (dọn rác tự động thất bại, hoặc bất kỳ lý do nào khác) vẫn phải
+              xoá được, không phải chỉ khi đã có tin nhắn. */}
+          {sessionId !== null && (
             <div>
               {confirmingDeleteSession ? (
                 <div className="flex items-center gap-2 text-sm">

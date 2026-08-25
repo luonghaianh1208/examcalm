@@ -52,6 +52,7 @@ const {
   listMySessions,
   deleteMessage,
   deleteSession,
+  ChatSendError,
 } = await import("@/lib/firestore/chat");
 
 // Bản ghi tin nhắn giả khớp chatMessageSchema (src/lib/types/chat.ts).
@@ -223,6 +224,38 @@ describe("sendMessage", () => {
       });
       expect(typeof message).toBe("string");
       expect(message.length).toBeGreaterThan(0);
+    });
+  });
+
+  // Fix round 1 cho Task 7 (Finding 2, coordinator): sendMessage phải ném ChatSendError mang
+  // `kind` máy đọc được — để ChatWindow phân biệt "hết quota"/"rate limit" (không phải lỗi,
+  // không hiện role="alert" đỏ) khỏi lỗi thật, KHÔNG quay lại string-match câu tiếng Việt.
+  describe("ném ChatSendError kèm kind máy đọc được", () => {
+    it("resource-exhausted + reason='quota' → kind='quota'", async () => {
+      callSendChatMessageMock.mockRejectedValue({
+        code: "functions/resource-exhausted",
+        details: { reason: "quota" },
+      });
+      const err = await sendMessage("s1", "abc").catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ChatSendError);
+      expect((err as InstanceType<typeof ChatSendError>).kind).toBe("quota");
+    });
+
+    it("resource-exhausted + reason='rate_limit' → kind='rate_limit'", async () => {
+      callSendChatMessageMock.mockRejectedValue({
+        code: "functions/resource-exhausted",
+        details: { reason: "rate_limit" },
+      });
+      const err = await sendMessage("s1", "abc").catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ChatSendError);
+      expect((err as InstanceType<typeof ChatSendError>).kind).toBe("rate_limit");
+    });
+
+    it("mã lỗi khác (vd permission-denied, internal) → kind='error'", async () => {
+      callSendChatMessageMock.mockRejectedValue({ code: "functions/internal" });
+      const err = await sendMessage("s1", "abc").catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ChatSendError);
+      expect((err as InstanceType<typeof ChatSendError>).kind).toBe("error");
     });
   });
 
