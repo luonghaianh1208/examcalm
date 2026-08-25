@@ -293,24 +293,38 @@ describe("gộp nhầm thanh điệu do bỏ dấu cả câu (Fix round 2, Findi
 // đầu "giàu"/"giáo"/"giấy"/"giữa"/"giường"/"giỏi". Đây là ví dụ thật, ngữ pháp bình thường học
 // sinh sẽ gõ.
 describe("ranh giới \\b không đủ cho từ cuối cùng của một cụm (Fix round 3, Finding 1)", () => {
-  const falsePositives = [
-    // "gì" → "gi" khớp nhầm đầu "giàu" — ví dụ nghiêm trọng nhất: câu bình thường đáng ra
-    // không liên quan gì tới khủng hoảng.
+  // Fix round 4, Finding 1: mutation-test (revert literalFragment về \b) cho thấy CHỈ 3 dòng
+  // dưới đây thật sự "kill" được mutant — 7 dòng còn lại (documentaryOnly bên dưới) vẫn PASS cả
+  // khi bug đã bị revert, vì va chạm chỉ xảy ra khi TOÀN BỘ cụm phía trước cũng khớp ("sống để
+  // làm ", "thuốc ", "tự "), không chỉ riêng từ cuối. Ba dòng này là regression test thật —
+  // "tuân thủ" bổ sung ở Fix round 4 vì phía "tự tử" → "tuần"/"tuổi" (được nêu tên tường minh ở
+  // Fix round 3) trước đó không có dòng nào thật sự kill được mutant.
+  const regressionKillers = [
     "Sống để làm giàu thôi chị.",
     "Bố em bảo sống để làm giàu.",
+    "Thuốc nguồn gốc rõ ràng thì mới nên mua.",
+    "Em tự tuân thủ giờ giấc.",
+  ];
+
+  it.each(regressionKillers)("%s → detected: false (kill mutant)", (text) => {
+    expect(detectCrisisKeywords(text).detected).toBe(false);
+  });
+
+  // CHỈ MANG TÍNH MINH HOẠ — các dòng này KHÔNG kill được mutant \b (đã mutation-test xác nhận
+  // ở Fix round 4), tức là chúng không tự thân chứng minh gì về sửa lỗi. Giữ lại vì vẫn là ví
+  // dụ hợp lệ của "va chạm chữ cái" (letter-collision) cho người đọc hình dung vấn đề — nhưng
+  // đừng coi đây là coverage cho Fix round 3, Finding 1.
+  const documentaryOnly = [
     "Bạn ấy học giỏi nhất lớp.",
     "Cô giáo em rất tốt.",
     "Tờ giấy này của em.",
     "Ở giữa lớp có một cái bàn.",
     "Cái giường này êm quá.",
-    // "ngủ" → "ngu" khớp nhầm đầu "nguồn".
-    "Thuốc nguồn gốc rõ ràng thì mới nên mua.",
-    // "tử"/"tự" → "tu" khớp nhầm đầu "tuổi"/"tuần".
     "Em mười tám tuổi.",
     "Tuần sau em thi rồi.",
   ];
 
-  it.each(falsePositives)("%s → detected: false", (text) => {
+  it.each(documentaryOnly)("(minh hoạ) %s → detected: false", (text) => {
     expect(detectCrisisKeywords(text).detected).toBe(false);
   });
 
@@ -434,3 +448,24 @@ describe("bổ sung test dương tính còn thiếu (Fix round 2, Finding 5)", (
 // vô nghĩa đó thay vì giữ một "bằng chứng" giả — Map vẫn giữ lại vì không tốn gì để giữ, và
 // phòng trường hợp một maintainer sau này định tuyến dữ liệu khác (không phải từ khoá cố định)
 // qua cùng cơ chế tra cứu.
+
+// Fix round 4, Finding 2 (Important — lỗi tồn tại từ Fix round 1, bị bỏ sót ở mọi vòng sau):
+// buildWordFragment() strip dấu cho TỪ GỐC ("không", "muốn") nhưng chưa từng strip dấu cho các
+// BIẾN THỂ GÕ TẮT có dấu trong TEEN_ABBREVIATIONS ("hông", "mún") — nên hai biến thể đó trước
+// đây chỉ tồn tại ở dạng có dấu, và một tin nhắn bỏ dấu HOÀN TOÀN của học sinh (đúng use-case
+// mà cơ chế bỏ dấu ở Fix round 2, Finding 1 được thêm vào để xử lý) bị bỏ sót hoàn toàn.
+describe("biến thể gõ tắt có dấu thiếu dạng bỏ dấu (Fix round 4, Finding 2)", () => {
+  it("'mún' (viết tắt có dấu của 'muốn') phải có dạng bỏ dấu 'mun'", () => {
+    const result = detectCrisisKeywords("em mun chet");
+    expect(result.detected).toBe(true);
+    expect(result.severity).toBe("urgent");
+    expect(result.matched).toBe("muốn chết");
+  });
+
+  it("'hông' (viết tắt có dấu của 'không') phải có dạng bỏ dấu 'hong'", () => {
+    const result = detectCrisisKeywords("e hong muon song nua");
+    expect(result.detected).toBe(true);
+    expect(result.severity).toBe("urgent");
+    expect(result.matched).toBe("không muốn sống nữa");
+  });
+});

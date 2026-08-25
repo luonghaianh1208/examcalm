@@ -66,6 +66,12 @@
 // còn cách báo nhầm mà guard số không bắt được ("Em chạy vài kms nữa thôi.", không có số ngay
 // trước "kms"), và sau Fix round 2 chỉ "urgent" mới chặn model, nên một token có độ đặc hiệu
 // thấp như "kms" không đáng ở mức chặn hội thoại — xem Nhóm mới trong CONCERN_KEYWORDS.
+//
+// Fix round 4 (vòng cuối), Finding 2: biến thể gõ tắt có dấu trong TEEN_ABBREVIATIONS ("hông",
+// "mún") trước đây không có dạng bỏ dấu riêng — một tin nhắn bỏ dấu HOÀN TOÀN của học sinh
+// ("e hong muon song nua", "em mun chet") bị bỏ sót ở MỌI vòng sửa trước, vì cơ chế bỏ dấu
+// (Fix round 2) và bảng viết tắt (Fix round 1) được thêm độc lập, không ai kiểm tra giao điểm.
+// Sửa bằng cách strip từng biến thể gõ tắt, không chỉ từ gốc — xem buildWordFragment.
 
 /**
  * Cụm biểu đạt Ý ĐỊNH hoặc KẾ HOẠCH tự hại — mức "urgent", thầy cô cần can thiệp NGAY, VÀ
@@ -421,7 +427,11 @@ function literalFragment(candidate: string): string {
  * không strip cả câu, nên một từ trong văn bản mang dấu SAI (khác thanh điệu với từ khoá) sẽ
  * không khớp dạng nào trong hai dạng này — đây chính là cơ chế tránh gộp nhầm thanh điệu (xem
  * comment lớn ở đầu file). Nếu từ nằm trong TEEN_ABBREVIATIONS, cộng thêm alternation cho mọi
- * biến thể gõ tắt đã biết.
+ * biến thể gõ tắt đã biết — VÀ dạng bỏ dấu CỦA TỪNG BIẾN THỂ ĐÓ (Fix round 4, Finding 2): hai
+ * biến thể gõ tắt có dấu ("hông", "mún") trước đây chỉ tồn tại ở dạng có dấu, nên một tin nhắn
+ * bỏ dấu HOÀN TOÀN của học sinh ("e hong muon song nua", "em mun chet") bị bỏ sót — đúng lỗ hổng
+ * ở tầng cơ chế mà Fix round 2, Finding 1 đặt ra để bịt, nhưng bị bỏ sót vì cơ chế bỏ dấu và
+ * bảng viết tắt được thêm ở hai thời điểm khác nhau, không ai kiểm tra giao điểm của chúng.
  */
 function buildWordFragment(word: string): string {
   const candidates = new Set<string>([word, stripDiacritics(word)]);
@@ -430,6 +440,7 @@ function buildWordFragment(word: string): string {
   if (abbreviations !== undefined) {
     for (const alt of abbreviations) {
       candidates.add(alt);
+      candidates.add(stripDiacritics(alt));
     }
   }
 
