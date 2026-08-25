@@ -47,7 +47,11 @@ export const aiConfigSchema = z.object({
   // mặc định KHÔNG im lặng (xem DEFAULT_AI_CONFIG bên dưới) vì baseUrl rỗng và killSwitch bật
   // đã tự tắt toàn bộ tính năng AI rồi — chatQuotaPerDay chỉ cần sẵn một ngân sách hợp lý cho
   // thời điểm admin bật tính năng, không cần đóng vai một guard độc lập thứ hai.
-  chatQuotaPerDay: z.number().int().min(0),
+  // `.default(30)` (C1 follow-up, final whole-branch review): field này thêm SAU khi document
+  // aiConfig gốc đã tồn tại (commit a697953) — CÙNG hình dạng nguy hiểm với
+  // crisisEmailEnabled/crisisEmailFrom mà C1 sửa (required, không default, thêm sau khi document
+  // gốc đã có). Giá trị khớp DEFAULT_AI_CONFIG bên dưới để hai nguồn không thể lệch nhau.
+  chatQuotaPerDay: z.number().int().min(0).default(30),
   // - rateLimitPerMinute chỉ là PHANH CHỐNG BURST trong một ngày, KHÔNG PHẢI
   //   ngân sách — nó không quyết định ngân sách của ngày, quotaStudentPerDay
   //   mới quyết định. Vì vậy 0 ở đây nghĩa là KHÔNG áp rate limit (bỏ qua hoàn
@@ -65,7 +69,10 @@ export const aiConfigSchema = z.object({
   // tục). Với chat, đó chính là giới hạn CHI PHỐI: rateLimitPerMinute=3 nghĩa là 20 giây giữa
   // hai tin — vô lý cho một cuộc trò chuyện. chatRateLimitPerMinute là phanh chống burst
   // RIÊNG cho chat, cùng quy ước với rateLimitPerMinute (0 = không áp rate limit).
-  chatRateLimitPerMinute: z.number().int().min(0),
+  // `.default(20)` (C1 follow-up, final whole-branch review): field này thêm SAU khi document
+  // aiConfig gốc đã tồn tại (commit 40bc825) — cùng lý do chatQuotaPerDay ở trên. Giá trị khớp
+  // DEFAULT_AI_CONFIG bên dưới.
+  chatRateLimitPerMinute: z.number().int().min(0).default(20),
   killSwitch: z.object({
     // CHÚ Ý CHIỀU: true = tính năng ĐANG TẮT. false = tính năng đang bật.
     // Đọc ngược field này là một lỗi tốn tiền — kiểm tra kỹ trước khi dùng.
@@ -76,7 +83,11 @@ export const aiConfigSchema = z.object({
     // design spec CHẶN go-live của chat cho tới khi chuyên gia tâm lý duyệt persona VÀ
     // CRISIS_REPLY_TEXT. `chat` là công tắc RIÊNG, mặc định true (tắt) — cùng quy ước "hệ
     // thống mặc định im lặng" của mọi công tắc khác trong dự án này.
-    chat: z.boolean(),
+    // `.default(true)` (C1 follow-up): field này thêm SAU document gốc (commit 40bc825), CÙNG
+    // hình dạng nguy hiểm với chatQuotaPerDay/chatRateLimitPerMinute/crisisEmailEnabled/
+    // crisisEmailFrom — một document cũ thiếu field này giờ fallback về "tắt" (khớp
+    // DEFAULT_AI_CONFIG) thay vì làm rớt CẢ document qua safeParse.
+    chat: z.boolean().default(true),
   }),
   // ExamCalm Spec #5 (task-1-brief.md): hai field này KHÔNG PHẢI cấu hình AI — chúng cấu hình
   // việc GỬI MAIL khi có crisisAlerts. Đặt trong aiConfig là CỐ Ý, không phải tiện đâu bỏ đó:

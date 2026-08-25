@@ -203,6 +203,15 @@ describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/
   // Test này khẳng định tài liệu kiểu-production đó parse THÀNH CÔNG ở CẢ HAI bên, với đúng giá
   // trị mặc định "tắt, chưa cấu hình" — không phải một object gần như rỗng (đã có phong cách này
   // ở test #13 sai-hình-dạng của onCrisisAlertCreated.test.ts, Fix round 2 Finding 2).
+  //
+  // C1 follow-up (ruling coordinator): khảo sát sau fix C1 tìm thấy BA field khác CÙNG hình dạng
+  // nguy hiểm — chatQuotaPerDay/chatRateLimitPerMinute (commit a697953/40bc825) và killSwitch.chat
+  // (commit 40bc825) — cả ba required, không default, thêm SAU khi document aiConfig gốc đã tồn
+  // tại. Ruling: thêm default cho cả ba thay vì xác minh trạng thái production (một `.default()`
+  // chỉ lấp field VẮNG MẶT — field có mặt nhưng sai kiểu vẫn thất bại đúng như mong muốn, và mọi
+  // đường ghi document đều ghi ĐỦ mọi field nên default chỉ áp dụng cho tài liệu ghi TRƯỚC khi
+  // field tồn tại). Test thứ hai dưới đây mô phỏng tài liệu CỔ NHẤT có thể có — ghi TRƯỚC commit
+  // 40bc825, thiếu CẢ NĂM field (ba field này CỘNG hai field Spec #5).
   describe("tài liệu production TRƯỚC Spec #5 (C1, final whole-branch review)", () => {
     it("thiếu crisisEmailEnabled/crisisEmailFrom vẫn parse THÀNH CÔNG ở cả hai schema, với default false/\"\"", () => {
       const { crisisEmailEnabled, crisisEmailFrom, ...preSpec5Doc } = BASE_VALID;
@@ -218,6 +227,58 @@ describe("aiConfigSchema — đồng bộ src/lib/types/ai.ts và functions/src/
       expect(srcResult.success && srcResult.data.crisisEmailFrom).toBe("");
       expect(functionsResult.success && functionsResult.data.crisisEmailEnabled).toBe(false);
       expect(functionsResult.success && functionsResult.data.crisisEmailFrom).toBe("");
+    });
+
+    it("thiếu CẢ NĂM field thêm sau document gốc (tài liệu TRƯỚC commit 40bc825) vẫn parse THÀNH CÔNG ở cả hai schema, với đúng default của từng field", () => {
+      const {
+        crisisEmailEnabled, crisisEmailFrom, chatQuotaPerDay, chatRateLimitPerMinute, killSwitch,
+        ...preChatFeatureDoc
+      } = BASE_VALID;
+      void crisisEmailEnabled;
+      void crisisEmailFrom;
+      void chatQuotaPerDay;
+      void chatRateLimitPerMinute;
+      // killSwitch vẫn phải CÓ MẶT (field này tồn tại từ document gốc — chỉ `chat` bên trong nó
+      // là field thêm sau) — chỉ bỏ đúng `chat`, giữ nguyên `moodReflection`.
+      const oldestShapeDoc = {
+        ...preChatFeatureDoc,
+        killSwitch: { moodReflection: killSwitch.moodReflection },
+      };
+
+      const srcResult = srcSchema.safeParse(oldestShapeDoc);
+      const functionsResult = functionsSchema.safeParse(oldestShapeDoc);
+
+      expect(srcResult.success).toBe(true);
+      expect(functionsResult.success).toBe(true);
+      const expectedDefaults = {
+        crisisEmailEnabled: false,
+        crisisEmailFrom: "",
+        chatQuotaPerDay: 30,
+        chatRateLimitPerMinute: 20,
+        killSwitchChat: true,
+      };
+      expect(srcResult.success && srcResult.data.crisisEmailEnabled).toBe(expectedDefaults.crisisEmailEnabled);
+      expect(srcResult.success && srcResult.data.crisisEmailFrom).toBe(expectedDefaults.crisisEmailFrom);
+      expect(srcResult.success && srcResult.data.chatQuotaPerDay).toBe(expectedDefaults.chatQuotaPerDay);
+      expect(srcResult.success && srcResult.data.chatRateLimitPerMinute).toBe(
+        expectedDefaults.chatRateLimitPerMinute,
+      );
+      expect(srcResult.success && srcResult.data.killSwitch.chat).toBe(expectedDefaults.killSwitchChat);
+      expect(functionsResult.success && functionsResult.data.crisisEmailEnabled).toBe(
+        expectedDefaults.crisisEmailEnabled,
+      );
+      expect(functionsResult.success && functionsResult.data.crisisEmailFrom).toBe(
+        expectedDefaults.crisisEmailFrom,
+      );
+      expect(functionsResult.success && functionsResult.data.chatQuotaPerDay).toBe(
+        expectedDefaults.chatQuotaPerDay,
+      );
+      expect(functionsResult.success && functionsResult.data.chatRateLimitPerMinute).toBe(
+        expectedDefaults.chatRateLimitPerMinute,
+      );
+      expect(functionsResult.success && functionsResult.data.killSwitch.chat).toBe(
+        expectedDefaults.killSwitchChat,
+      );
     });
   });
 });

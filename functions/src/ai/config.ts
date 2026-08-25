@@ -42,18 +42,25 @@ export const aiConfigSchema = z.object({
   // chat/ngày, dùng lại consumeQuota với khoá khác — design spec §6): 0 = không tin chat nào
   // được gửi trong ngày. Mặc định KHÔNG im lặng như quotaStudentPerDay — xem
   // src/lib/types/ai.ts để biết lý do đầy đủ.
-  chatQuotaPerDay: z.number().int().min(0),
+  // `.default(30)` (C1 follow-up, final whole-branch review): field thêm SAU document aiConfig
+  // gốc (commit a697953) — cùng hình dạng nguy hiểm với crisisEmailEnabled/crisisEmailFrom mà
+  // C1 sửa. Xem src/lib/types/ai.ts.
+  chatQuotaPerDay: z.number().int().min(0).default(30),
   rateLimitPerMinute: z.number().int().min(0),
   // chatRateLimitPerMinute là phanh chống burst RIÊNG cho chat (Fix round 1, Task 5, Finding
   // 2a) — cùng quy ước với rateLimitPerMinute (0 = không áp rate limit). Xem src/lib/types/ai.ts.
-  chatRateLimitPerMinute: z.number().int().min(0),
+  // `.default(20)` (C1 follow-up): field thêm SAU document gốc (commit 40bc825) — cùng lý do
+  // chatQuotaPerDay ở trên.
+  chatRateLimitPerMinute: z.number().int().min(0).default(20),
   killSwitch: z.object({
     // true = tính năng ĐANG TẮT. false = tính năng đang bật — đọc ngược field này là lỗi
     // tốn tiền, kiểm tra kỹ trước khi dùng (xem src/lib/types/ai.ts).
     moodReflection: z.boolean(),
     // Công tắc RIÊNG cho chat (Fix round 1, Task 5, Finding 2b) — độc lập với moodReflection,
     // mặc định true (tắt). Xem src/lib/types/ai.ts.
-    chat: z.boolean(),
+    // `.default(true)` (C1 follow-up): field thêm SAU document gốc (commit 40bc825) — cùng hình
+    // dạng nguy hiểm với các field khác ở trên.
+    chat: z.boolean().default(true),
   }),
   // ExamCalm Spec #5: cấu hình gửi mail khi có crisisAlerts — KHÔNG PHẢI cấu hình AI, nhưng
   // sống chung document aiConfig CÓ CHỦ ĐÍCH (lý do đầy đủ ở src/lib/types/ai.ts): cảnh báo chỉ

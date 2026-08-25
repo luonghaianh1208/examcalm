@@ -108,10 +108,25 @@ describe("aiConfigSchema", () => {
     ).toBe(true);
   });
 
-  it("killSwitch thiếu field chat -> từ chối (chat là field bắt buộc, không phải tuỳ chọn)", () => {
+  it("killSwitch thiếu field chat -> vẫn chấp nhận, default về true (tắt) — C1 follow-up, final whole-branch review", () => {
+    // Trước C1 follow-up: field này bắt buộc, thiếu -> từ chối thẳng. Sau ruling C1 follow-up
+    // (coordinator): killSwitch.chat thêm SAU khi document aiConfig gốc đã tồn tại (commit
+    // 40bc825) — CÙNG hình dạng nguy hiểm với crisisEmailEnabled/crisisEmailFrom mà C1 sửa, nên
+    // giờ có `.default(true)` để một tài liệu production ghi TRƯỚC commit đó không làm rớt cả
+    // document qua safeParse. `.default()` chỉ lấp field VẮNG MẶT — field có mặt nhưng sai kiểu
+    // (vd killSwitch.chat: "yes") vẫn phải bị từ chối, xem test kế tiếp.
     const { chat: _chat, ...killSwitchWithoutChat } = { moodReflection: true, chat: true };
+    const result = aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, killSwitch: killSwitchWithoutChat });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.killSwitch.chat).toBe(true);
+  });
+
+  it("killSwitch.chat sai kiểu (không phải boolean) -> vẫn từ chối — default không cứu field CÓ MẶT nhưng sai kiểu", () => {
     expect(
-      aiConfigSchema.safeParse({ ...VALID_AI_CONFIG, killSwitch: killSwitchWithoutChat }).success,
+      aiConfigSchema.safeParse({
+        ...VALID_AI_CONFIG,
+        killSwitch: { moodReflection: true, chat: "yes" },
+      }).success,
     ).toBe(false);
   });
 
