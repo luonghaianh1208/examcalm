@@ -31,6 +31,11 @@ export function SiteHeader({ user }: Props) {
           <Link href="/test" data-tour="test">Bài test</Link>
           <Link href="/cbt">Bài tập</Link>
           <Link href="/thu-vien" data-tour="library">Thư viện</Link>
+          {/* Nhật ký và Trò chuyện là trang của học sinh đã đăng nhập nhưng trước đây KHÔNG
+              có link nào dẫn tới — chỉ vào được bằng cách gõ thẳng URL. Trang Trò chuyện tự
+              xử lý trạng thái "chưa bật"/"chưa đồng ý" nên link luôn hiện là an toàn. */}
+          {user && <Link href="/nhat-ky">Nhật ký</Link>}
+          {user && <Link href="/tro-chuyen">Trò chuyện</Link>}
           {user && <Link href="/tien-trinh" data-tour="progress">Tiến trình</Link>}
           {user?.role === "admin" && <Link href="/admin">Quản trị</Link>}
         </nav>

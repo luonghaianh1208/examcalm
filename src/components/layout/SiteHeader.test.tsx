@@ -34,4 +34,29 @@ describe("SiteHeader", () => {
     expect(screen.getByRole("link", { name: /quản trị/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /hồ sơ/i })).toBeInTheDocument();
   });
+
+  // Trước đây /nhat-ky và /tro-chuyen KHÔNG có link nào dẫn tới — chỉ vào được bằng
+  // cách gõ thẳng URL, tức thực tế là không ai vào.
+  it("học sinh đã đăng nhập thấy link Nhật ký và Trò chuyện", () => {
+    render(<SiteHeader user={STUDENT} />);
+
+    expect(screen.getByRole("link", { name: /nhật ký/i })).toHaveAttribute("href", "/nhat-ky");
+    expect(screen.getByRole("link", { name: /trò chuyện/i })).toHaveAttribute("href", "/tro-chuyen");
+  });
+
+  // Admin cũng là người dùng đã đăng nhập nên dùng được đúng giao diện học sinh —
+  // chủ dự án cần điều này để vừa quản trị vừa trải nghiệm thật.
+  it("admin cũng thấy link Nhật ký và Trò chuyện", () => {
+    render(<SiteHeader user={ADMIN} />);
+
+    expect(screen.getByRole("link", { name: /nhật ký/i })).toHaveAttribute("href", "/nhat-ky");
+    expect(screen.getByRole("link", { name: /trò chuyện/i })).toHaveAttribute("href", "/tro-chuyen");
+  });
+
+  it("khách chưa đăng nhập KHÔNG thấy Nhật ký hay Trò chuyện", () => {
+    render(<SiteHeader user={null} />);
+
+    expect(screen.queryByRole("link", { name: /nhật ký/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /trò chuyện/i })).not.toBeInTheDocument();
+  });
 });
