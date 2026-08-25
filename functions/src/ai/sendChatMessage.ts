@@ -545,15 +545,21 @@ export async function runSendChatMessage(
     // chất khi lý do thực sự là "gửi hơi nhanh", và rate limit là ngưỡng CHI PHỐI với chat
     // (chatRateLimitPerMinute mặc định 20/phút, tức 3 giây/tin) trong khi quota ngày hiếm khi
     // chạm tới trước rate limit.
+    // Fix round 1 cho Task 6 (Finding 3, coordinator): `details.reason` cho client phân biệt
+    // hai nguyên nhân bằng MÃ, không phải bằng cách regex/substring lại câu tiếng Việt bên
+    // dưới — sửa câu chữ ở đây không còn âm thầm phá vỡ cách client nhận diện nguyên nhân
+    // (đúng lỗi hình dạng mà Spec #3 Task 8 từng mắc với extractTriggeredKeyword).
     if (quota.reason === "rate_limit") {
       throw new HttpsError(
         "resource-exhausted",
         "Bạn đang gửi tin hơi nhanh, chờ một chút rồi gửi lại nhé.",
+        { reason: "rate_limit" },
       );
     }
     throw new HttpsError(
       "resource-exhausted",
       "Bạn đã dùng hết lượt trò chuyện AI hôm nay, thử lại sau nhé.",
+      { reason: "quota" },
     );
   }
 
@@ -581,7 +587,14 @@ export async function runSendChatMessage(
       // KHÔNG đưa error.message (có thể chứa status code, gợi ý baseUrl) vào lỗi trả về
       // client — chỉ log nội bộ `kind`, không log uid (cùng lý do generateReflection.ts).
       console.error("sendChatMessage: callChatCompletion thất bại", { kind: error.kind });
-      throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE);
+      // Fix round 1 cho Task 6 (Finding 2, coordinator): `details: { reason: "saved" }` đánh
+      // dấu MỘT ĐIỀU CỤ THỂ đã đúng lúc throw này xảy ra — appendChatMessage(user) ở trên đã
+      // chạy xong (dòng 560), nên tin của học sinh chắc chắn đã ghi vào chatMessages. Client
+      // CHỈ được trấn an "tin nhắn đã lưu" khi thấy marker này — mọi `internal` khác (kể cả
+      // internal KHÔNG tường minh mà onCall tự bọc từ một throw sớm hơn, vd lỗi đọc
+      // userSnap/sessionRef/aiConfig/history/quota) không có marker này và không được phép bị
+      // client hiểu nhầm là "đã lưu".
+      throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE, { reason: "saved" });
     }
     throw error;
   }
@@ -597,7 +610,8 @@ export async function runSendChatMessage(
       promptTemplateId: DEFAULT_CHAT_PROMPT_TEMPLATE_ID,
       createdAt: FieldValue.serverTimestamp(),
     });
-    throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE);
+    // Cùng marker "saved" — appendChatMessage(user) đã chạy xong từ lâu tới đây (dòng 560).
+    throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE, { reason: "saved" });
   }
 
   // Lớp 2 — model tự đánh giá. "concern" — kể cả fail-closed do nhãn thiếu/sai định dạng (mục
@@ -639,8 +653,9 @@ export async function runSendChatMessage(
     if (parsedConcern.strippedText === "") {
       // Cùng triết lý "không đoán mò" của parseReflectionOutput: một câu trả lời rỗng sau khi
       // bóc nhãn (model chỉ trả đúng dòng nhãn, không có nội dung nào khác) không đáng tin để
-      // hiển thị hay lưu — coi như output hỏng.
-      throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE);
+      // hiển thị hay lưu — coi như output hỏng. Cùng marker "saved" — appendChatMessage(user)
+      // đã chạy xong từ lâu tới đây.
+      throw new HttpsError("internal", GENERIC_MODEL_FAILURE_MESSAGE, { reason: "saved" });
     }
     assistantText = parsedConcern.strippedText;
     isCrisisResponse = false;

@@ -86,6 +86,24 @@ function makeSessionDoc(overrides: Record<string, unknown> = {}) {
   return { id: "s1", ref: { id: "s1" }, data: () => data };
 }
 
+// Lỗi Firestore SDK thô điển hình (FirestoreError thật, KHÔNG có tiền tố "functions/") —
+// dùng để mô phỏng đúng trigger Finding 1 (coordinator): học sinh chưa xác thực email gọi
+// startChatSession (firestore.rules đòi isVerified() để tạo chatSessions), hoặc
+// deleteSession trên session không thuộc về mình khiến cả batch bị từ chối.
+const RAW_PERMISSION_DENIED = {
+  code: "permission-denied",
+  message: "Missing or insufficient permissions.",
+};
+
+async function captureThrownMessage(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+    throw new Error("lẽ ra phải throw nhưng không throw");
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
 beforeEach(() => {
   ensureAuthReady.mockClear();
   addDocMock.mockClear();
@@ -93,8 +111,10 @@ beforeEach(() => {
   getDocsMock.mockClear();
   getDocsMock.mockResolvedValue({ docs: [] });
   deleteDocMock.mockClear();
+  deleteDocMock.mockResolvedValue(undefined);
   batchDeleteMock.mockClear();
   batchCommitMock.mockClear();
+  batchCommitMock.mockResolvedValue(undefined);
   writeBatchMock.mockClear();
   callSendChatMessageMock.mockClear();
   callSendChatMessageMock.mockResolvedValue({ messageId: "msg1" });
@@ -114,6 +134,16 @@ describe("startChatSession", () => {
     expect(written.userId).toBe("u1");
     expect(written.messageCount).toBe(0);
     expect(id).toBe("s1");
+  });
+
+  // Fix round 1 (Finding 1, coordinator): trigger thật — học sinh chưa xác thực email gọi
+  // startChatSession, firestore.rules đòi isVerified() để create → permission-denied thô.
+  it("lỗi permission-denied thô từ Firestore (vd chưa xác thực email) không lọt ra ngoài", async () => {
+    addDocMock.mockRejectedValue(RAW_PERMISSION_DENIED);
+    const message = await captureThrownMessage(() => startChatSession("u1"));
+    expect(message).not.toContain("permission-denied");
+    expect(message).not.toContain("Missing or insufficient permissions");
+    expect(message.length).toBeGreaterThan(0);
   });
 });
 
@@ -141,11 +171,15 @@ describe("sendMessage", () => {
     }
   }
 
-  describe("resource-exhausted — quota ngày vs rate limit cần thông điệp khác nhau", () => {
-    it("message server chứa 'hôm nay' (hết quota ngày) → thông điệp KHÔNG dùng từ 'lỗi', không hàm ý em làm sai", async () => {
+  // Fix round 1 (Finding 3, coordinator): phân biệt bằng details.reason, KHÔNG còn
+  // regex/substring lại câu tiếng Việt của server — đổi câu chữ server không còn âm thầm
+  // phá cách nhận diện của client (cùng dạng lỗi Spec #3 Task 8 đã mắc với
+  // extractTriggeredKeyword).
+  describe("resource-exhausted — quota ngày vs rate limit cần thông điệp khác nhau, phân biệt bằng details.reason", () => {
+    it("details.reason = 'quota' → thông điệp 'hết lượt hôm nay', KHÔNG dùng từ 'lỗi', không hàm ý em làm sai", async () => {
       const message = await captureMessage({
         code: "functions/resource-exhausted",
-        message: "Bạn đã dùng hết lượt trò chuyện AI hôm nay, thử lại sau nhé.",
+        details: { reason: "quota" },
       });
       expect(message).toContain("hết lượt");
       expect(message).toContain("hôm nay");
@@ -153,10 +187,10 @@ describe("sendMessage", () => {
       expect(message).not.toContain("resource-exhausted");
     });
 
-    it("message server KHÔNG chứa 'hôm nay' (rate limit) → thông điệp khác, không nói 'hết lượt hôm nay'", async () => {
+    it("details.reason = 'rate_limit' → thông điệp khác, không nói 'hết lượt hôm nay'", async () => {
       const message = await captureMessage({
         code: "functions/resource-exhausted",
-        message: "Bạn đang gửi tin hơi nhanh, chờ một chút rồi gửi lại nhé.",
+        details: { reason: "rate_limit" },
       });
       expect(message).not.toContain("hết lượt");
       expect(message).not.toContain("hôm nay");
@@ -164,16 +198,28 @@ describe("sendMessage", () => {
       expect(message).not.toContain("lỗi");
     });
 
-    it("thiếu message (hình dạng lỗi không đầy đủ) → mặc định về nhánh rate limit, không throw runtime, không bịa 'hết lượt hôm nay'", async () => {
+    // Đổi câu chữ message server (vd sửa lại câu tiếng Việt cho mượt hơn) KHÔNG được phép
+    // đổi thông điệp client nhận — chỉ details.reason mới quyết định, message bị bỏ qua.
+    it("message server đổi câu chữ nhưng details.reason = 'quota' → vẫn đúng thông điệp hết lượt hôm nay", async () => {
+      const message = await captureMessage({
+        code: "functions/resource-exhausted",
+        message: "Một câu hoàn toàn khác, không còn cụm 'hôm nay' nào.",
+        details: { reason: "quota" },
+      });
+      expect(message).toContain("hết lượt");
+      expect(message).toContain("hôm nay");
+    });
+
+    it("thiếu details (hình dạng lỗi không đầy đủ) → mặc định về nhánh rate limit, không throw runtime, không bịa 'hết lượt hôm nay'", async () => {
       const message = await captureMessage({ code: "functions/resource-exhausted" });
       expect(message).not.toContain("hết lượt hôm nay");
       expect(message).not.toContain("resource-exhausted");
     });
 
-    it("message không phải string (hình dạng hỏng) → không throw khi dựng thông điệp", async () => {
+    it("details.reason không phải string hoặc hình dạng details hỏng → không throw khi dựng thông điệp", async () => {
       const message = await captureMessage({
         code: "functions/resource-exhausted",
-        message: 12345,
+        details: { reason: 12345 },
       });
       expect(typeof message).toBe("string");
       expect(message.length).toBeGreaterThan(0);
@@ -213,16 +259,36 @@ describe("sendMessage", () => {
     expect(message).toMatch(/chưa sẵn sàng|đang tắt/);
   });
 
-  it("invalid-argument: nhắc nội dung tin nhắn không hợp lệ", async () => {
+  // Fix round 1 (Finding 4, coordinator): callable ném invalid-argument cho CẢ sessionId
+  // sai hình dạng LẪN nội dung tin nhắn rỗng/quá dài (một message chung, xem
+  // sendChatMessage.ts) — thông điệp client phải phủ cả hai, không chỉ đổ cho "nội dung".
+  it("invalid-argument: phủ cả hai nguyên nhân (session hoặc nội dung), không đổ hết cho nội dung tin nhắn", async () => {
     const message = await captureMessage({ code: "functions/invalid-argument" });
     expect(message).not.toContain("invalid-argument");
-    expect(message).toMatch(/nội dung|tin nhắn/i);
+    expect(message).toMatch(/tải lại trang|phiên/i);
+    expect(message).toMatch(/nội dung/i);
   });
 
-  it("internal: trấn an tin nhắn đã được lưu", async () => {
-    const message = await captureMessage({ code: "functions/internal" });
-    expect(message).toContain("lưu");
-    expect(message).not.toContain("internal");
+  // Fix round 1 (Finding 2, coordinator): chỉ trấn an "đã lưu" khi callable gắn
+  // details.reason = "saved" (đúng ba throw site tường minh, tất cả SAU khi tin học sinh đã
+  // ghi). internal KHÔNG có marker này (onCall tự bọc một exception SỚM HƠN, trước khi tin
+  // được lưu) không được phép khẳng định đã lưu.
+  describe("internal — chỉ trấn an 'đã lưu' khi callable xác nhận qua details.reason", () => {
+    it("details.reason = 'saved' → trấn an tin nhắn đã được lưu", async () => {
+      const message = await captureMessage({
+        code: "functions/internal",
+        details: { reason: "saved" },
+      });
+      expect(message).toContain("lưu");
+      expect(message).not.toContain("internal");
+    });
+
+    it("thiếu details (onCall tự bọc exception SỚM HƠN, trước khi tin được lưu) → thông điệp trung tính, KHÔNG khẳng định đã lưu", async () => {
+      const message = await captureMessage({ code: "functions/internal" });
+      expect(message).not.toContain("lưu");
+      expect(message).not.toContain("internal");
+      expect(message.length).toBeGreaterThan(0);
+    });
   });
 
   it("mã lỗi khác (vd not-found, unauthenticated) rơi vào thông điệp chung, không phơi mã hay tiếng Anh", async () => {
@@ -281,6 +347,14 @@ describe("listMessages", () => {
     const result = await listMessages("u1", "s1");
     expect(result.map((r) => r.text)).toEqual(["cũ", "mới"]);
   });
+
+  it("lỗi permission-denied thô từ Firestore không lọt ra ngoài", async () => {
+    getDocsMock.mockRejectedValue(RAW_PERMISSION_DENIED);
+    const message = await captureThrownMessage(() => listMessages("u1", "s1"));
+    expect(message).not.toContain("permission-denied");
+    expect(message).not.toContain("Missing or insufficient permissions");
+    expect(message.length).toBeGreaterThan(0);
+  });
 });
 
 describe("listMySessions", () => {
@@ -314,6 +388,14 @@ describe("listMySessions", () => {
     expect(result!.startedAt).toBeNull();
     expect(result!.lastMessageAt).toBeNull();
   });
+
+  it("lỗi permission-denied thô từ Firestore không lọt ra ngoài", async () => {
+    getDocsMock.mockRejectedValue(RAW_PERMISSION_DENIED);
+    const message = await captureThrownMessage(() => listMySessions("u1"));
+    expect(message).not.toContain("permission-denied");
+    expect(message).not.toContain("Missing or insufficient permissions");
+    expect(message.length).toBeGreaterThan(0);
+  });
 });
 
 describe("deleteMessage", () => {
@@ -322,6 +404,14 @@ describe("deleteMessage", () => {
     expect(ensureAuthReady.mock.invocationCallOrder[0]).toBeLessThan(
       deleteDocMock.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("lỗi permission-denied thô từ Firestore (vd xoá tin của người khác) không lọt ra ngoài", async () => {
+    deleteDocMock.mockRejectedValue(RAW_PERMISSION_DENIED);
+    const message = await captureThrownMessage(() => deleteMessage("m1"));
+    expect(message).not.toContain("permission-denied");
+    expect(message).not.toContain("Missing or insufficient permissions");
+    expect(message.length).toBeGreaterThan(0);
   });
 });
 
@@ -368,5 +458,26 @@ describe("deleteSession", () => {
     await deleteSession("u1", "s1");
     expect(writeBatchMock).toHaveBeenCalledTimes(2);
     expect(batchDeleteMock).toHaveBeenCalledTimes(502);
+  });
+
+  it("lỗi permission-denied thô từ Firestore ở bước đọc tin nhắn không lọt ra ngoài", async () => {
+    getDocsMock.mockRejectedValue(RAW_PERMISSION_DENIED);
+    const message = await captureThrownMessage(() => deleteSession("u1", "s1"));
+    expect(message).not.toContain("permission-denied");
+    expect(message).not.toContain("Missing or insufficient permissions");
+    expect(message.length).toBeGreaterThan(0);
+  });
+
+  // Fix round 1 (Finding 1, coordinator) — trigger cụ thể: batch là ATOMIC, nên khi document
+  // phiên trong chunk KHÔNG thuộc về `uid`, rule từ chối CẢ batch (kể cả khi phần tin nhắn
+  // đã được lọc đúng bằng where("userId"...) và getDocs() thành công bình thường). Lỗi thô
+  // vẫn có thể lọt ra từ batch.commit(), không chỉ từ getDocs().
+  it("lỗi permission-denied thô từ batch.commit() (session không thuộc về uid, batch atomic từ chối cả lô dù phần tin nhắn đã lọc đúng) không lọt ra ngoài", async () => {
+    getDocsMock.mockResolvedValue({ docs: [makeMessageDoc()] });
+    batchCommitMock.mockRejectedValue(RAW_PERMISSION_DENIED);
+    const message = await captureThrownMessage(() => deleteSession("u1", "s1"));
+    expect(message).not.toContain("permission-denied");
+    expect(message).not.toContain("Missing or insufficient permissions");
+    expect(message.length).toBeGreaterThan(0);
   });
 });
