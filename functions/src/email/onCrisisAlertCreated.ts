@@ -236,6 +236,22 @@ async function listAllAuthUsers(): Promise<AuthUserRecordLike[]> {
   return users;
 }
 
+/** I1 follow-up (final whole-branch review): nickname/school có thể chứa `\n`/`\t`/nhiều dấu
+ *  cách liên tiếp qua SDK trực tiếp — thân mail là PLAIN TEXT, nên một `\n` là một DÒNG LABEL MỚI
+ *  hợp lệ về cú pháp, không phải một ký tự lạ vô hại. Một giá trị như
+ *  `"THPT Trần Phú\nMức độ: Khẩn cấp"` giả mạo thêm một dòng "Mức độ:" thứ hai mà thầy cô đọc như
+ *  dữ liệu THẬT của hệ thống, không phải nội dung học sinh viết — lợi dụng chính lòng tin vào kênh
+ *  an toàn này (khác câu chuyện I1 gốc là ĐỘ DÀI, đây là NỘI DUNG). Gộp MỌI khoảng trắng liên tiếp
+ *  về ĐÚNG MỘT dấu cách rồi trim hai đầu — áp dụng ở ĐÂY (khi đọc từ Firestore), TRƯỚC khi
+ *  `truncate()` cắt độ dài ở decideAndSendEmail: cắt trước sẽ để một `\n` nằm đúng tại biên cắt
+ *  sống sót (vd nickname 200 ký tự với `\n` ở vị trí 50 vẫn giữ nguyên `\n` sau khi cắt về 120).
+ *  Áp dụng cho CẢ BA field lấy từ hồ sơ học sinh — kể cả gradeLevel, dù enum đóng ở dưới đã tự
+ *  loại một giá trị mang khoảng trắng, để cả ba field cùng đi qua đúng MỘT luật, không phải hai
+ *  luật khác nhau cho ba field cùng nguồn. */
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 type StudentInfo = { nickname: string | null; gradeLevel: string | null; school: string | null };
 
 /** Đọc `users/{uid}` để lấy biệt danh/lớp/trường hiển thị trong mail — trích TỪNG field tường
@@ -250,14 +266,13 @@ async function loadStudentInfo(db: Firestore, userId: string): Promise<StudentIn
     const snap = await db.collection("users").doc(userId).get();
     if (!snap.exists) return empty;
     const data = snap.data() as Record<string, unknown>;
+    // I1 follow-up: collapseWhitespace() TRƯỚC khi kiểm tra enum/trả về — xem doc-comment hàm đó.
+    const rawGradeLevel = typeof data.gradeLevel === "string" ? collapseWhitespace(data.gradeLevel) : null;
     return {
-      nickname: typeof data.nickname === "string" ? data.nickname : null,
+      nickname: typeof data.nickname === "string" ? collapseWhitespace(data.nickname) : null,
       // I1: chỉ chấp nhận đúng ba giá trị enum — giá trị lạ (kể cả một đoạn văn) rơi về null.
-      gradeLevel:
-        typeof data.gradeLevel === "string" && VALID_GRADE_LEVELS.has(data.gradeLevel)
-          ? data.gradeLevel
-          : null,
-      school: typeof data.school === "string" ? data.school : null,
+      gradeLevel: rawGradeLevel !== null && VALID_GRADE_LEVELS.has(rawGradeLevel) ? rawGradeLevel : null,
+      school: typeof data.school === "string" ? collapseWhitespace(data.school) : null,
     };
   } catch (error) {
     console.error("onCrisisAlertCreated: đọc users/{uid} thất bại — dùng uid thô thay thế", {

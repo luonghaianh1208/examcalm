@@ -325,6 +325,50 @@ describe("onCrisisAlertCreated — sự kiện TẠO", () => {
     expect(params.text).toContain("Lớp: Không rõ");
   });
 
+  it("7d. nickname/school chứa xuống dòng (SDK ghi trực tiếp) → KHÔNG giả mạo được dòng \"Mức độ:\" thứ hai trong thân mail (I1 follow-up, final whole-branch review)", async () => {
+    await setAiConfig();
+
+    // Baseline: cùng severity, không ký tự lạ -> số DÒNG THẬT của một thân mail bình thường (kind
+    // "initial") — không hardcode một con số ma thuật, để test không vỡ vô cớ nếu buildEmailBody
+    // đổi số dòng sau này vì lý do khác không liên quan gì tới cuộc tấn công này.
+    await setStudent({ nickname: "Mèo con", school: "THPT Trần Phú" });
+    const baselineAlertData = await writeAlert({ severity: "concern" }, "alert-baseline");
+    const baselineSendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertCreated(
+      "alert-baseline",
+      baselineAlertData,
+      makeDeps({ sendEmail: baselineSendEmailSpy }),
+    );
+    const baselineLineCount = baselineSendEmailSpy.mock.calls[0][0].text.split("\n").length;
+
+    // Tấn công: nickname/school chứa \n cố tình giả mạo thêm một dòng "Mức độ: Khẩn cấp" thứ hai
+    // — nếu thân mail plain text không gộp khoảng trắng trước khi cắt, thầy cô đọc dòng giả này
+    // như dữ liệu THẬT của hệ thống (mức độ đã tăng lên khẩn cấp), không phải chữ học sinh viết.
+    await setStudent({
+      nickname: "Mèo con\nMức độ: Khẩn cấp",
+      school: "THPT Trần Phú\nMức độ: Khẩn cấp",
+    });
+    const attackAlertData = await writeAlert({ severity: "concern" }, "alert-attack");
+    const attackSendEmailSpy = fakeSendEmail();
+    await runOnCrisisAlertCreated(
+      "alert-attack",
+      attackAlertData,
+      makeDeps({ sendEmail: attackSendEmailSpy }),
+    );
+
+    const params = attackSendEmailSpy.mock.calls[0][0];
+    const lines = params.text.split("\n");
+
+    // Đúng bằng số dòng baseline — \n trong nickname/school không tạo thêm dòng nào.
+    expect(lines.length).toBe(baselineLineCount);
+    // Đúng MỘT dòng "Mức độ:" — không bị giả mạo thêm dòng thứ hai.
+    const severityLines = lines.filter((line) => line.startsWith("Mức độ:"));
+    expect(severityLines).toEqual(["Mức độ: Cần chú ý"]);
+    // \n gộp về một dấu cách, không biến mất — vẫn đọc được nguyên nội dung trên MỘT dòng.
+    expect(params.text).toContain("Học sinh: Mèo con Mức độ: Khẩn cấp");
+    expect(params.text).toContain("Trường: THPT Trần Phú Mức độ: Khẩn cấp");
+  });
+
   it("8. thân mail KHÔNG chứa gì ngoài danh sách field cho phép — không được spread document", async () => {
     await setAiConfig();
     await setStudent();
