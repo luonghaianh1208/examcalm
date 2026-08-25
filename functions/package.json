@@ -9,7 +9,7 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "test": "firebase emulators:exec --only firestore \"vitest run\"",
-    "test:unit": "vitest run --exclude \"**/quota.test.ts\" --exclude \"**/generateReflection.test.ts\" --exclude \"**/testConnection.test.ts\" --exclude \"**/saveAiConfig.test.ts\" --exclude \"**/sendChatMessage.test.ts\" --exclude \"**/deleteUserData.integration.test.ts\"",
+    "test:unit": "vitest run --exclude \"**/quota.test.ts\" --exclude \"**/generateReflection.test.ts\" --exclude \"**/testConnection.test.ts\" --exclude \"**/saveAiConfig.test.ts\" --exclude \"**/sendChatMessage.test.ts\" --exclude \"**/deleteUserData.integration.test.ts\" --exclude \"**/onCrisisAlertCreated.test.ts\"",
     "test:quota": "firebase emulators:exec --only firestore \"vitest run src/ai/quota.test.ts\""
   },
   "dependencies": {
