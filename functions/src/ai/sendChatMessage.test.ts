@@ -267,6 +267,70 @@ describe("sendChatMessage", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
+  // ==== Fix round 2, Finding 2 — phanh chống-lụt cảnh báo (KHÔNG phải rate limit lên học sinh) ====
+  it("6d. Hai tin urgent liên tiếp trong cửa sổ chống-lụt (5 phút) → CHỈ MỘT crisisAlerts được tạo, cả hai tin vẫn được lưu và trả CRISIS_REPLY_TEXT bình thường", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00Z");
+    const t2 = new Date(t1.getTime() + 60_000); // 1 phút sau — trong cửa sổ 5 phút
+
+    const r1 = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em muốn tự tử" },
+      makeDeps({ now: t1 }),
+    );
+    expect(r1.messageId).toBeTruthy();
+
+    const r2 = await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em muốn tự tử lần nữa" },
+      makeDeps({ now: t2 }),
+    );
+    expect(r2.messageId).toBeTruthy();
+
+    // Học sinh KHÔNG bị chặn — cả hai tin đều được lưu, cả hai đều nhận CRISIS_REPLY_TEXT.
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+
+    const messages = await getSessionMessagesAsc(SESSION_ID);
+    expect(messages.length).toBe(4);
+    expect(messages[1].text).toBe(CRISIS_REPLY_TEXT);
+    expect(messages[3].text).toBe(CRISIS_REPLY_TEXT);
+  });
+
+  it("6e. Hai tin urgent cách nhau NGOÀI cửa sổ chống-lụt (>5 phút) → tin thứ hai VẪN tạo cảnh báo mới", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00Z");
+    const t2 = new Date(t1.getTime() + 6 * 60_000); // 6 phút sau — ngoài cửa sổ 5 phút
+
+    await runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Em muốn tự tử" }, makeDeps({ now: t1 }));
+    await runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Em muốn tự tử" }, makeDeps({ now: t2 }));
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(2);
+  });
+
+  it("6f. Cảnh báo cũ ĐÃ xử lý (handledBy khác null), dù còn trong cửa sổ → tin urgent mới VẪN tạo cảnh báo mới", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00Z");
+
+    await runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Em muốn tự tử" }, makeDeps({ now: t1 }));
+    const firstAlerts = await db.collection("crisisAlerts").get();
+    expect(firstAlerts.size).toBe(1);
+    await firstAlerts.docs[0].ref.update({ handledBy: "teacher1", handledAt: t1 });
+
+    const t2 = new Date(t1.getTime() + 60_000); // 1 phút sau — vẫn trong cửa sổ 5 phút
+    await runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Em muốn tự tử" }, makeDeps({ now: t2 }));
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(2);
+  });
+
   it("7. Lớp 1 mức concern (một mình, không có tín hiệu Lớp 2) → MỘT alert triggeredBy=keyword, vẫn gọi model, dùng phản hồi của nó, VẪN trừ quota", async () => {
     await setAiConfig();
     await setUser(STUDENT_UID, true);
@@ -291,6 +355,130 @@ describe("sendChatMessage", () => {
 
     const usageSnap = await db.collection("aiUsage").doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24")).get();
     expect(usageSnap.data()?.count).toBe(1);
+  });
+
+  it("7f. Hai tin concern liên tiếp trong cửa sổ chống-lụt → CHỈ MỘT crisisAlerts, nhưng model VẪN được gọi cho cả hai (phanh chỉ áp cho việc TẠO cảnh báo, không áp cho hội thoại)", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00Z");
+    const t2 = new Date(t1.getTime() + 60_000);
+
+    const fake1 = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+      makeDeps({ now: t1, callChatCompletion: fake1 }),
+    );
+    expect(fake1).toHaveBeenCalledTimes(1);
+
+    const fake2 = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    await runSendChatMessage(
+      AUTH_OK,
+      { sessionId: SESSION_ID, text: "Em vẫn thấy tuyệt vọng" },
+      makeDeps({ now: t2, callChatCompletion: fake2 }),
+    );
+    expect(fake2).toHaveBeenCalledTimes(1);
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+  });
+
+  // ==== Fix round 2, Finding 1 (CRITICAL) — cảnh báo Lớp 1 ghi NGAY khi phát hiện, PHẢI sống
+  // sót qua mọi throw point phía sau (quota, lỗi provider, lọc an toàn). Bốn test dưới đây tái
+  // hiện đúng bốn đường thất bại review đã chỉ ra — trước fix, cả bốn đều để crisisAlerts RỖNG.
+  it("7g. Lớp 1 concern đã ghi cảnh báo → VƯỢT RATE LIMIT ngay sau đó → cảnh báo VẪN tồn tại", async () => {
+    await setAiConfig({ chatRateLimitPerMinute: 20 }); // ngưỡng 3 giây/tin
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const t1 = new Date("2026-08-24T02:00:00.000Z");
+    const t2 = new Date("2026-08-24T02:00:00.500Z"); // 500ms sau — dưới ngưỡng
+
+    // Lượt đầu bình thường để tạo document aiUsage (rate limit chỉ áp khi đã có `existing`).
+    await runSendChatMessage(AUTH_OK, { sessionId: SESSION_ID, text: "Xin chào" }, makeDeps({ now: t1 }));
+
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+        makeDeps({ now: t2, callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "resource-exhausted" });
+    expect(fake).not.toHaveBeenCalled();
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "keyword" });
+  });
+
+  it("7h. Lớp 1 concern đã ghi cảnh báo → HẾT QUOTA NGÀY ngay sau đó → cảnh báo VẪN tồn tại", async () => {
+    await setAiConfig({ chatQuotaPerDay: 1 });
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const now = new Date("2026-08-24T02:00:00Z");
+    await db
+      .collection("aiUsage")
+      .doc(CHAT_USAGE_DOC(STUDENT_UID, "2026-08-24"))
+      .set({ uid: STUDENT_UID, feature: "chat", date: "2026-08-24", count: 1, updatedAt: now });
+
+    const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+        makeDeps({ now, callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "resource-exhausted" });
+    expect(fake).not.toHaveBeenCalled();
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "keyword" });
+  });
+
+  it("7i. Lớp 1 concern đã ghi cảnh báo → LỖI PROVIDER ngay sau đó → cảnh báo VẪN tồn tại", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const fake = vi.fn(async () => {
+      throw new AiProviderError("server", "AI provider trả về lỗi.");
+    });
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "internal" });
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "keyword" });
+  });
+
+  it("7j. Lớp 1 concern đã ghi cảnh báo → phản hồi model bị LỌC AN TOÀN chặn ngay sau đó → cảnh báo VẪN tồn tại (đây chính là ca review đã chỉ ra: trước fix, crisisAlerts RỖNG còn aiSafetyLog thì có)", async () => {
+    await setAiConfig();
+    await setUser(STUDENT_UID, true);
+    await setChatSession(SESSION_ID, STUDENT_UID);
+    const unsafeText = ["Có vẻ như bạn đang bị trầm cảm.", "", `${CONCERN_LEVEL_LABEL} none`].join("\n");
+    const fake = fakeCallChatCompletion(unsafeText);
+
+    await expect(
+      runSendChatMessage(
+        AUTH_OK,
+        { sessionId: SESSION_ID, text: "Em thấy tuyệt vọng quá" },
+        makeDeps({ callChatCompletion: fake }),
+      ),
+    ).rejects.toMatchObject({ code: "internal" });
+
+    const alerts = await db.collection("crisisAlerts").get();
+    expect(alerts.size).toBe(1);
+    expect(alerts.docs[0].data()).toMatchObject({ severity: "concern", triggeredBy: "keyword" });
+
+    const safetyLogs = await db.collection("aiSafetyLog").get();
+    expect(safetyLogs.size).toBe(1);
   });
 
   it("8. killSwitch.chat = true → failed-precondition, callChatCompletion KHÔNG được gọi (moodReflection có thể vẫn bật)", async () => {

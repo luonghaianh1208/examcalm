@@ -27,10 +27,40 @@
 // lượt mà không có request nào thực sự đi ra ngoài — cùng lý do generateReflection.ts dựng
 // prompt trước khi trừ quota). Việc GHI tin nhắn của học sinh vẫn đứng SAU quota — chỉ đọc/dựng
 // dữ liệu (không tốn gì, không thể "mất" nếu thất bại) mới được phép đứng trước.
+//
+// ==== Fix round 2 (review từ coordinator) — Finding 1 CRITICAL, sửa lỗi do round 1 gây ra ====
+//
+// Round 1 (Finding 5) hoãn việc ghi cảnh báo Lớp 1 "concern" tới SAU khi model trả lời, để gộp
+// với Lớp 2 thành một document. Hậu quả không lường trước: từ điểm hoãn đó tới điểm ghi có BA
+// throw point (quota, lỗi provider, lọc an toàn) — một tin bị Lớp 1 gắn cờ "concern" nhưng gặp
+// bất kỳ throw nào trong ba điểm đó sẽ KHÔNG BAO GIỜ có cảnh báo nào được ghi. Liệu thầy cô có
+// nghe được tín hiệu hay không không được phép phụ thuộc vào việc một cuộc gọi HTTP tới bên thứ
+// ba có thành công hay không.
+//
+// SỬA: ghi cảnh báo Lớp 1 NGAY khi phát hiện (như trước round 1) — `layer1AlertId` giữ lại id
+// document đó. Lớp 2 (biết được sau khi model trả lời) NÂNG CẤP đúng document đó (severity lên
+// mức nặng hơn nếu cần, triggeredBy thành "both") thay vì tạo document mới — vẫn đúng MỘT
+// document mỗi tin nhắn (đúng tinh thần Finding 5 round 1), nhưng tín hiệu không bao giờ bị mất
+// giữa chừng nữa.
+//
+// Finding 2 (Important): Lớp 1 "urgent" giờ bỏ qua MỌI phanh vận hành (kill switch, baseUrl,
+// quota — Finding 4 round 1) — nghĩa là không gì chặn được việc ghi hàng loạt `crisisAlerts`
+// nếu một client gửi liên tục các tin có từ khoá urgent. Một luồng cảnh báo tự nó là một lỗi an
+// toàn (rủi ro R6, design spec §9: cảnh báo nhầm quá nhiều khiến thầy cô bỏ qua). Phanh đặt ở
+// việc TẠO CẢNH BÁO, KHÔNG BAO GIỜ ở phản hồi cho học sinh — xem hasRecentUnhandledAlert.
+
+/** Cửa sổ thời gian coi một cảnh báo CHƯA XỬ LÝ là "vẫn còn mới" — trong cửa sổ này, một cảnh
+ *  báo thứ hai cho ĐÚNG học sinh đó không được tạo thêm (Fix round 2, Finding 2). "Vài phút" là
+ *  khoảng đủ để không tạo ra hai document cho hai tin nhắn liên tiếp trong CÙNG một đợt bộc lộ
+ *  khủng hoảng, nhưng không quá dài để một tình huống thật sự MỚI (nhiều phút sau, có thể sau khi
+ *  thầy cô đã bắt đầu can thiệp ngoài hệ thống) vẫn tạo được cảnh báo riêng nếu cảnh báo cũ chưa
+ *  kịp đánh dấu đã xử lý. CỐ Ý không phải rate limit lên học sinh: tin nhắn của em vẫn được lưu,
+ *  CRISIS_REPLY_TEXT vẫn được trả về bình thường mọi lúc — chỉ việc TẠO CẢNH BÁO bị phanh lại.*/
+const CRISIS_ALERT_DEDUP_WINDOW_MS = 5 * 60 * 1000;
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { z } from "zod";
 import { aiConfigSchema, DEFAULT_AI_CONFIG, type AiConfig } from "./config";
 import {
@@ -143,23 +173,72 @@ async function appendChatMessage(
   return ref.id;
 }
 
-/** Ghi một cảnh báo khủng hoảng — CHỈ đúng sáu field cho phép (design spec §3.4, non-negotiable
- *  của task-5-brief.md): không bao giờ messageText, trích đoạn, hay tóm tắt nào lọt vào đây.
- *  `triggeredBy` giờ có thêm giá trị "both" (Fix round 1, Finding 5) — xem
- *  `resolveCrisisOutcome` bên dưới, nơi DUY NHẤT quyết định giá trị nào được truyền vào đây. */
+/** true nếu đã có một cảnh báo CHƯA XỬ LÝ (`handledBy == null`) cho ĐÚNG `userId` này được tạo
+ *  trong `CRISIS_ALERT_DEDUP_WINDOW_MS` gần nhất — dùng để phanh việc TẠO cảnh báo mới (Fix
+ *  round 2, Finding 2), không phanh bất kỳ điều gì khác. */
+async function hasRecentUnhandledAlert(
+  db: Firestore,
+  userId: string,
+  now: Date,
+): Promise<boolean> {
+  const windowStart = Timestamp.fromDate(new Date(now.getTime() - CRISIS_ALERT_DEDUP_WINDOW_MS));
+  const snap = await db
+    .collection("crisisAlerts")
+    .where("userId", "==", userId)
+    .where("handledBy", "==", null)
+    .where("createdAt", ">=", windowStart)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
+
+/** Ghi một cảnh báo khủng hoảng MỚI — CHỈ đúng sáu field cho phép (design spec §3.4,
+ *  non-negotiable của task-5-brief.md): không bao giờ messageText, trích đoạn, hay tóm tắt nào
+ *  lọt vào đây. Trả về `null` (KHÔNG ghi gì) nếu đã có một cảnh báo chưa xử lý gần đây cho đúng
+ *  học sinh này (Fix round 2, Finding 2 — phanh TẠO cảnh báo, không phanh phản hồi cho học
+ *  sinh: caller vẫn tiếp tục lưu tin nhắn và trả CRISIS_REPLY_TEXT như bình thường dù hàm này
+ *  trả về null). */
 async function writeCrisisAlert(
   db: Firestore,
   userId: string,
   severity: "urgent" | "concern",
   triggeredBy: "keyword" | "model" | "both",
-): Promise<void> {
-  await db.collection("crisisAlerts").add({
+  now: Date,
+): Promise<string | null> {
+  if (await hasRecentUnhandledAlert(db, userId, now)) {
+    return null;
+  }
+  const ref = await db.collection("crisisAlerts").add({
     userId,
     severity,
     triggeredBy,
-    createdAt: FieldValue.serverTimestamp(),
+    // `Timestamp.fromDate(now)` — KHÔNG dùng FieldValue.serverTimestamp() (khác với
+    // appendChatMessage): hasRecentUnhandledAlert so `createdAt` với một cửa sổ tính từ CHÍNH
+    // `now` này. Nếu `createdAt` là giờ tường thật của server còn cửa sổ tính từ `now` do test
+    // tiêm vào, hai đồng hồ lệch nhau khiến so sánh cửa sổ vô nghĩa (đã bắt được bằng test thất
+    // bại: 6e — Fix round 2, Finding 2 — hai tin "cách nhau 6 phút" theo `now` giả định vẫn bị
+    // coi là "trong cửa sổ" vì `createdAt` thật luôn lớn hơn nhiều so với mốc cửa sổ tính từ một
+    // `now` giả định trong quá khứ).
+    createdAt: Timestamp.fromDate(now),
     handledBy: null,
     handledAt: null,
+  });
+  return ref.id;
+}
+
+/** NÂNG CẤP một cảnh báo Lớp 1 đã ghi TRƯỚC đó (id đã biết) lên mức độ NẶNG HƠN kèm
+ *  `triggeredBy: "both"` — dùng khi Lớp 2 (biết được sau khi model trả lời) cũng phát tín hiệu
+ *  trên CHÍNH tin nhắn đã tạo alert đó (Fix round 2, Finding 1). KHÔNG đi qua
+ *  hasRecentUnhandledAlert: đây không phải tạo một document mới, mà hoàn thiện đúng một document
+ *  đã tồn tại cho đúng tin nhắn này — phanh chống-lụt (Finding 2) chỉ áp cho việc TẠO mới. */
+async function upgradeCrisisAlert(
+  db: Firestore,
+  alertId: string,
+  severity: "urgent" | "concern",
+): Promise<void> {
+  await db.collection("crisisAlerts").doc(alertId).update({
+    severity,
+    triggeredBy: "both",
   });
 }
 
@@ -268,44 +347,17 @@ function parseConcernLevel(rawText: string): ParsedConcernLevel {
  *  gì từ lớp đó", KHÁC với severity `"concern"`/`"urgent"` ghi vào crisisAlerts. */
 type InternalSeverity = "urgent" | "concern" | null;
 
-type CrisisOutcome = {
-  /** null = không lớp nào phát tín hiệu — không ghi cảnh báo nào. */
-  severity: "urgent" | "concern" | null;
-  triggeredBy: "keyword" | "model" | "both" | null;
-};
-
 /**
- * Fix round 1, Finding 5 (ruling của coordinator): gộp kết quả Lớp 1 (đã biết TRƯỚC khi gọi
- * model — chỉ có thể là "concern" hoặc không có gì, vì "urgent" đã return sớm ở nhánh riêng)
- * và Lớp 2 (chỉ biết SAU khi model trả lời) thành ĐÚNG MỘT quyết định — thay vì mỗi lớp tự ghi
- * một document `crisisAlerts` riêng như bản đầu. Trước fix, một tin vừa khớp từ khoá "concern"
- * VỪA khiến model tự chấm "concern" tạo ra HAI document cách nhau vài trăm mili-giây, không có
- * cách nào phân biệt với hai tin nhắn riêng biệt — và `triggeredBy: "both"` không bao giờ được
- * dùng tới dù đã có sẵn trong schema.
- *
- * Mức độ gộp lấy giá trị NẶNG HƠN (urgent > concern > không có gì) — over-inclusive đúng
- * hướng đã chọn cho toàn bộ đường xử lý khủng hoảng (§3.2 design spec).
+ * Mức độ NẶNG HƠN giữa hai severity nội bộ — urgent > concern > null. Hàm THUẦN, tính đúng MAX
+ * thật sự (Fix round 2, Finding 3 — Minor): bản round 1 (`resolveCrisisOutcome`) chỉ đặc cách
+ * `layer2Severity === "urgent"`, đúng với bất biến hiện tại "layer1 không bao giờ là 'urgent'
+ * khi tới đoạn gộp này" (vì "urgent" đã return sớm ở nhánh riêng) nhưng không TỰ nó đúng nếu bất
+ * biến đó bị phá vỡ sau này — hàm không nên dựa vào một điều caller phải tự nhớ giữ đúng.
  */
-function resolveCrisisOutcome(
-  layer1Severity: InternalSeverity,
-  layer2Severity: InternalSeverity,
-): CrisisOutcome {
-  const layer1Fired = layer1Severity !== null;
-  const layer2Fired = layer2Severity !== null;
-
-  let severity: "urgent" | "concern" | null = null;
-  if (layer2Severity === "urgent") {
-    severity = "urgent";
-  } else if (layer1Fired || layer2Severity === "concern") {
-    severity = "concern";
-  }
-
-  let triggeredBy: "keyword" | "model" | "both" | null = null;
-  if (layer1Fired && layer2Fired) triggeredBy = "both";
-  else if (layer1Fired) triggeredBy = "keyword";
-  else if (layer2Fired) triggeredBy = "model";
-
-  return { severity, triggeredBy };
+function maxSeverity(a: InternalSeverity, b: InternalSeverity): InternalSeverity {
+  if (a === "urgent" || b === "urgent") return "urgent";
+  if (a === "concern" || b === "concern") return "concern";
+  return null;
 }
 
 /**
@@ -371,7 +423,10 @@ export async function runSendChatMessage(
   // baseUrl rỗng.
   const layer1 = detectCrisisKeywords(text);
   if (layer1.severity === "urgent") {
-    await writeCrisisAlert(deps.db, auth.uid, "urgent", "keyword");
+    // Fix round 2, Finding 2: writeCrisisAlert tự phanh nếu đã có cảnh báo chưa xử lý gần đây
+    // cho đúng học sinh này — tin nhắn vẫn được lưu và CRISIS_REPLY_TEXT vẫn được trả về BÌNH
+    // THƯỜNG dù không có document cảnh báo mới nào được tạo.
+    await writeCrisisAlert(deps.db, auth.uid, "urgent", "keyword", deps.now);
     await appendChatMessage(deps.db, sessionId, {
       userId: auth.uid,
       sessionId,
@@ -388,9 +443,15 @@ export async function runSendChatMessage(
     });
     return { messageId: assistantMessageId };
   }
-  // "concern" — KHÔNG ghi alert ngay ở đây nữa (Fix round 1, Finding 5): nhớ lại để GỘP với
-  // kết quả Lớp 2 (chỉ biết được sau khi gọi model) thành đúng MỘT document.
+  // "concern" — Fix round 2, Finding 1 (CRITICAL, sửa lỗi round 1 gây ra): ghi NGAY, không hoãn
+  // tới sau khi gọi model nữa. `layer1AlertId` giữ id document (null nếu bị phanh chống-lụt, xem
+  // writeCrisisAlert, HOẶC nếu Lớp 1 không phát hiện gì) để Lớp 2 nâng cấp đúng document đó sau
+  // này thay vì tạo document thứ hai.
   const layer1Severity: InternalSeverity = layer1.severity === "concern" ? "concern" : null;
+  const layer1AlertId =
+    layer1Severity !== null
+      ? await writeCrisisAlert(deps.db, auth.uid, "concern", "keyword", deps.now)
+      : null;
 
   const config = await loadAiConfig(deps.db);
 
@@ -492,11 +553,19 @@ export async function runSendChatMessage(
         ? "concern"
         : null; // "none" — không có tín hiệu
 
-  // Fix round 1, Finding 5: MỘT quyết định gộp, MỘT document (nếu có tín hiệu) — thay vì mỗi
-  // lớp tự ghi.
-  const outcome = resolveCrisisOutcome(layer1Severity, layer2Severity);
-  if (outcome.severity !== null) {
-    await writeCrisisAlert(deps.db, auth.uid, outcome.severity, outcome.triggeredBy!);
+  // Fix round 2, Finding 1: KHÔNG còn tạo document ở đây khi Lớp 1 đã ghi một cái rồi — NÂNG
+  // CẤP đúng document đó (severity lên mức nặng hơn nếu cần, triggeredBy thành "both"). Chỉ tạo
+  // document MỚI nếu Lớp 1 không phát hiện gì (layer1AlertId === null) và Lớp 2 có tín hiệu.
+  const combinedSeverity = maxSeverity(layer1Severity, layer2Severity);
+  if (layer1AlertId !== null) {
+    if (layer2Severity !== null) {
+      await upgradeCrisisAlert(deps.db, layer1AlertId, combinedSeverity!);
+    }
+    // else: Lớp 2 không có tín hiệu gì ("none") — để nguyên document Lớp 1 đã ghi
+    // (severity="concern", triggeredBy="keyword"), không cần đụng vào.
+  } else if (layer2Severity !== null) {
+    // Lớp 1 không phát hiện gì — document (nếu có) hoàn toàn do Lớp 2 tạo ra.
+    await writeCrisisAlert(deps.db, auth.uid, layer2Severity, "model", deps.now);
   }
 
   // Chỉ "urgent" (từ Lớp 2, vì Lớp 1 "urgent" đã return sớm ở trên) mới ghi đè bằng
@@ -506,7 +575,7 @@ export async function runSendChatMessage(
   let assistantText: string;
   let isCrisisResponse: boolean;
 
-  if (outcome.severity === "urgent") {
+  if (combinedSeverity === "urgent") {
     assistantText = CRISIS_REPLY_TEXT;
     isCrisisResponse = true;
   } else {

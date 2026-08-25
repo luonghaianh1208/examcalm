@@ -67,8 +67,11 @@ export const DELETION_TARGET_HANDLERS: Record<
     resultKey: "aiJournalOutputs",
     query: (targetUid) => getFirestore().collection("aiJournalOutputs").where("userId", "==", targetUid),
   },
-  // aiUsage: sổ đếm quota AI, khóa doc theo "{uid}_{yyyy-mm-dd}" (functions/src/ai/quota.ts)
-  // — không phải một doc-id đơn lẻ nên phải lọc bằng where("uid", ...), không doc(targetUid).
+  // aiUsage: sổ đếm quota AI, khóa doc theo "{uid}_{feature}_{yyyy-mm-dd}" (functions/src/ai/
+  // quota.ts, Fix round 1 Task 5 Finding 1: thêm "{feature}" để phản chiếu và chat không tiêu
+  // chung một ngân sách) — không phải một doc-id đơn lẻ nên phải lọc bằng where("uid", ...),
+  // không doc(targetUid). Query where("uid",...) không đổi hành vi khi khoá đổi hình dạng —
+  // "uid" vẫn là field lọc, không phải một phần bị parse ra từ id.
   aiUsage: {
     resultKey: "aiUsage",
     query: (targetUid) => getFirestore().collection("aiUsage").where("uid", "==", targetUid),
