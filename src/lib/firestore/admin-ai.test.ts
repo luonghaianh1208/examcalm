@@ -126,7 +126,7 @@ describe("isAiEnabled", () => {
     expect(
       isAiEnabled({
         baseUrl: "https://a.test", model: "m",
-        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
+        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5, chatQuotaPerDay: 0,
       }),
     ).toBe(true);
   });
@@ -134,7 +134,8 @@ describe("isAiEnabled", () => {
   it("false khi baseUrl rỗng", () => {
     expect(
       isAiEnabled({
-        baseUrl: "", model: "m", killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
+        baseUrl: "", model: "m", killSwitch: { moodReflection: false, chat: true },
+        quotaStudentPerDay: 5, chatQuotaPerDay: 0,
       }),
     ).toBe(false);
   });
@@ -142,15 +143,17 @@ describe("isAiEnabled", () => {
   it("false khi model rỗng", () => {
     expect(
       isAiEnabled({
-        baseUrl: "https://a.test", model: "", killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
+        baseUrl: "https://a.test", model: "", killSwitch: { moodReflection: false, chat: true },
+        quotaStudentPerDay: 5, chatQuotaPerDay: 0,
       }),
     ).toBe(false);
   });
 
-  it("false khi killSwitch đang bật (true = tính năng TẮT)", () => {
+  it("false khi killSwitch đang bật cả hai (true = tính năng TẮT)", () => {
     expect(
       isAiEnabled({
-        baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: true, chat: true }, quotaStudentPerDay: 5,
+        baseUrl: "https://a.test", model: "m", killSwitch: { moodReflection: true, chat: true },
+        quotaStudentPerDay: 5, chatQuotaPerDay: 30,
       }),
     ).toBe(false);
   });
@@ -160,11 +163,11 @@ describe("isAiEnabled", () => {
   // baseUrl/model đã điền và kill switch tắt sẽ khiến aiPublic.enabled=true, màn hình đồng ý
   // mời học sinh bật, và MỌI lượt gọi đều bị resource-exhausted ngay lập tức — hiện ra như
   // "Bạn đã dùng hết lượt phản chiếu AI cho hôm nay rồi" cho một học sinh chưa dùng lượt nào.
-  it("M8: false khi quotaStudentPerDay=0, dù baseUrl/model/killSwitch đều hợp lệ", () => {
+  it("M8: false khi quotaStudentPerDay=0 VÀ chatQuotaPerDay=0, dù baseUrl/model/killSwitch đều hợp lệ", () => {
     expect(
       isAiEnabled({
         baseUrl: "https://a.test", model: "m",
-        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 0,
+        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 0, chatQuotaPerDay: 0,
       }),
     ).toBe(false);
   });
@@ -173,9 +176,30 @@ describe("isAiEnabled", () => {
     expect(
       isAiEnabled({
         baseUrl: "https://a.test", model: "m",
-        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5,
+        killSwitch: { moodReflection: false, chat: true }, quotaStudentPerDay: 5, chatQuotaPerDay: 0,
       }),
     ).toBe(true);
+  });
+
+  // Task 9 (task-9-brief.md — lý do đầy đủ ở task-9-report.md): giờ có HAI tính năng, mỗi tính
+  // năng có killSwitch + quota riêng — `enabled` là OR giữa hai tính năng, không phải AND, vì
+  // cùng một ô tick aiOptIn gate cả hai (xem cùng comment ở functions/src/ai/config.ts).
+  it("QUYẾT ĐỊNH MỚI: chỉ chat sẵn sàng (phản chiếu tắt) -> true", () => {
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "m",
+        killSwitch: { moodReflection: true, chat: false }, quotaStudentPerDay: 0, chatQuotaPerDay: 30,
+      }),
+    ).toBe(true);
+  });
+
+  it("chat killSwitch tắt (đang bật) nhưng chatQuotaPerDay=0 -> chat KHÔNG sẵn sàng; phản chiếu cũng tắt -> false", () => {
+    expect(
+      isAiEnabled({
+        baseUrl: "https://a.test", model: "m",
+        killSwitch: { moodReflection: true, chat: false }, quotaStudentPerDay: 0, chatQuotaPerDay: 0,
+      }),
+    ).toBe(false);
   });
 });
 

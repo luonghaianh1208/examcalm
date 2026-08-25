@@ -27,10 +27,8 @@ export async function getAiConfig(): Promise<AiConfig> {
 }
 
 /**
- * true khi và chỉ khi tính năng phản chiếu AI sẵn sàng phục vụ học sinh — khớp CHÍNH XÁC điều
- * kiện mà generateReflection kiểm tra (functions/src/ai/generateReflection.ts: killSwitch tắt,
- * baseUrl khác rỗng) CỘNG thêm model khác rỗng, vì baseUrl đúng mà model rỗng vẫn không gọi
- * được provider. Bản mirror ở functions/src/ai/config.ts (Cloud Function saveAiConfig, fix
+ * true khi và chỉ khi ÍT NHẤT MỘT trong hai tính năng AI (phản chiếu hoặc chat) sẵn sàng phục
+ * vụ học sinh. Bản mirror ở functions/src/ai/config.ts (Cloud Function saveAiConfig, fix
  * I4+I5) mới là nơi THẬT SỰ derive `enabled` của aiPublic từ server; hàm ở đây chỉ còn dùng để
  * xem trước kết quả ở phía client (vd hiển thị UI) và pin bằng test — không tự ghi Firestore.
  *
@@ -39,14 +37,27 @@ export async function getAiConfig(): Promise<AiConfig> {
  * baseUrl/model và tắt kill switch trong khi quên nâng quota sẽ khiến aiPublic.enabled=true,
  * màn hình đồng ý mời học sinh bật, và MỌI lượt gọi đều rớt resource-exhausted ngay lập tức —
  * học sinh nhận thông báo "đã dùng hết lượt hôm nay" dù chưa dùng lượt nào.
+ *
+ * Task 9 (task-9-brief.md — lý do đầy đủ trong task-9-report.md): giờ có HAI tính năng dùng
+ * chung document cấu hình này, mỗi tính năng có killSwitch VÀ quota riêng. `enabled` là OR giữa
+ * hai tính năng, KHÔNG PHẢI AND: `aiPublic.enabled` chỉ quyết định MỘT điều — màn hình đồng ý
+ * của học sinh (AiConsentSection.tsx) có hiện ô tick "aiOptIn" hay không — và CHÍNH ô tick đó
+ * (một field DUY NHẤT trên users/{uid}) gate quyền truy cập CẢ HAI tính năng. Dùng AND sẽ khiến
+ * một admin cố ý bật RIÊNG chat trong khi giữ phản chiếu tắt (đúng kịch bản §10 design spec)
+ * không bao giờ hiện được ô tick cho học sinh. baseUrl/model vẫn là điều kiện CHUNG bắt buộc
+ * (hai tính năng dùng chung một provider).
  */
 export function isAiEnabled(
-  config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay">,
+  config: Pick<
+    AiConfig,
+    "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay" | "chatQuotaPerDay"
+  >,
 ): boolean {
-  return (
-    config.baseUrl !== "" && config.model !== "" &&
-    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0
-  );
+  if (config.baseUrl === "" || config.model === "") return false;
+  const moodReflectionReady =
+    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0;
+  const chatReady = config.killSwitch.chat === false && config.chatQuotaPerDay > 0;
+  return moodReflectionReady || chatReady;
 }
 
 /**

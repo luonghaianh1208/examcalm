@@ -20,21 +20,22 @@ type ConfigFormState = {
   temperature: string;
   maxTokens: string;
   quotaStudentPerDay: string;
-  // Chưa có ô nhập riêng trên UI (task-1-brief.md chỉ yêu cầu thêm field vào schema, chưa tới
-  // UI) — giữ pass-through qua form state để lưu cấu hình không làm rớt field bắt buộc này.
+  // Task 9 (task-9-brief.md): giờ có ô nhập thật bên dưới — trước đây chỉ pass-through vì
+  // task-1-brief.md chỉ yêu cầu thêm field vào schema, chưa tới UI.
   chatQuotaPerDay: string;
   rateLimitPerMinute: string;
-  // Cùng lý do với chatQuotaPerDay ở trên — chưa có ô nhập riêng (Fix round 1, Task 5,
-  // Finding 2a), chỉ pass-through để lưu không làm rớt field.
+  // Task 9: giờ có ô nhập thật bên dưới — trước đây chỉ pass-through (Fix round 1, Task 5,
+  // Finding 2a).
   chatRateLimitPerMinute: string;
   /** true = tính năng ĐANG BẬT cho học sinh — NGƯỢC với killSwitch.moodReflection (true =
    *  tắt). Form giữ chiều tích cực để không ai phải tự đảo chiều trong đầu lúc đọc UI. */
   featureEnabled: boolean;
-  // Công tắc RIÊNG cho chat (Fix round 1, Task 5, Finding 2b) — CỐ Ý chưa có checkbox trên UI
-  // này: §10 của design spec chặn go-live của chat cho tới khi chuyên gia tâm lý duyệt persona
-  // và CRISIS_REPLY_TEXT, và một checkbox chung màn hình với các cấu hình provider khác quá dễ
-  // bị bấm nhầm cho một quyết định có mức rủi ro này. Chỉ pass-through để lưu cấu hình khác
-  // (baseUrl, model...) không vô tình reset công tắc chat về giá trị khác giá trị đã lưu.
+  // Task 9: giờ có checkbox thật bên dưới. Công tắc RIÊNG cho chat (Fix round 1, Task 5,
+  // Finding 2b) — tách biệt hẳn UI với công tắc phản chiếu (nhãn/dòng trạng thái không dùng
+  // chung chữ với featureEnabled) đúng tinh thần "không dễ bấm nhầm" mà Finding 2b đặt ra: §10
+  // của design spec chặn go-live của chat cho tới khi chuyên gia tâm lý duyệt persona và
+  // CRISIS_REPLY_TEXT, nên admin bật công tắc này phải biết chắc mình đang bật ĐÚNG tính năng
+  // nào. true = tính năng ĐANG BẬT (cùng chiều tích cực với featureEnabled).
   chatEnabled: boolean;
 };
 
@@ -91,6 +92,8 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
   // true khi RIÊNG công tắc bật/tắt tính năng khác bản đã lưu — Finding 1 chỉ cần biết đúng
   // field này để quyết định dòng trạng thái nói "đang" (khớp bản lưu) hay "sẽ" (chưa lưu).
   const isFeatureToggleDirty = form !== null && savedForm !== null && form.featureEnabled !== savedForm.featureEnabled;
+  // Task 9: cùng lý do với isFeatureToggleDirty ở trên, áp cho công tắc chat RIÊNG.
+  const isChatToggleDirty = form !== null && savedForm !== null && form.chatEnabled !== savedForm.chatEnabled;
 
   const [configError, setConfigError] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
@@ -364,6 +367,46 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
                   // trên Firestore chưa đổi, học sinh vẫn đang dùng đúng như trước khi admin bấm.
                   ? (form.featureEnabled ? "Sẽ bật sau khi lưu" : "Sẽ tắt sau khi lưu")
                   : (form.featureEnabled ? "Đang bật cho học sinh" : "Đang tắt")}
+              </p>
+            </div>
+
+            <label className="flex flex-col gap-1">
+              <span>Quota tin nhắn chat mỗi học sinh mỗi ngày (0 = tạm khoá hoàn toàn)</span>
+              <input
+                value={form.chatQuotaPerDay}
+                onChange={(e) => updateForm("chatQuotaPerDay", e.target.value)}
+                inputMode="numeric"
+                className="rounded-lg border px-3 py-2"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span>Giới hạn số tin chat mỗi phút (phanh chống burst, 0 = không giới hạn)</span>
+              <input
+                value={form.chatRateLimitPerMinute}
+                onChange={(e) => updateForm("chatRateLimitPerMinute", e.target.value)}
+                inputMode="numeric"
+                className="rounded-lg border px-3 py-2"
+              />
+            </label>
+
+            {/* Task 9: nhãn/dòng trạng thái CỐ Ý dùng chữ khác hẳn công tắc phản chiếu ở trên
+                ("trò chuyện" thay vì lặp lại "cho học sinh" trơn) — hai công tắc kiểm soát hai
+                tính năng độc lập (killSwitch.moodReflection vs killSwitch.chat), lẫn chữ giữa
+                hai dòng trạng thái đúng lúc 11 giờ đêm là cách nhanh nhất để bật nhầm tính năng. */}
+            <div className="rounded-lg border p-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.chatEnabled}
+                  onChange={(e) => updateForm("chatEnabled", e.target.checked)}
+                />
+                <span>Bật tính năng trò chuyện AI cho học sinh</span>
+              </label>
+              <p className="mt-1 text-sm font-medium">
+                {isChatToggleDirty
+                  ? (form.chatEnabled ? "Sẽ bật trò chuyện sau khi lưu" : "Sẽ tắt trò chuyện sau khi lưu")
+                  : (form.chatEnabled ? "Đang bật trò chuyện cho học sinh" : "Đang tắt trò chuyện")}
               </p>
             </div>
 

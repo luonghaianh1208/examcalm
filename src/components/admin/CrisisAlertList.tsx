@@ -1,0 +1,144 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  listCrisisAlerts, markCrisisAlertHandled, reopenCrisisAlert, isAlertUnhandled,
+  type CrisisAlertRecord,
+} from "@/lib/firestore/admin-crisis";
+
+const SEVERITY_LABEL: Record<CrisisAlertRecord["severity"], string> = {
+  urgent: "Khẩn cấp",
+  concern: "Cần chú ý",
+};
+
+const formatter = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" });
+
+export function CrisisAlertList({ adminUid }: { adminUid: string }) {
+  const [alerts, setAlerts] = useState<CrisisAlertRecord[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    listCrisisAlerts()
+      .then((result) => {
+        setAlerts(result);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleMark(alertId: string) {
+    setPendingId(alertId);
+    setActionError(null);
+    try {
+      await markCrisisAlertHandled(alertId, adminUid);
+      load();
+    } catch {
+      setActionError("Không đánh dấu được. Kiểm tra lại quyền quản trị của bạn.");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleReopen(alertId: string) {
+    setPendingId(alertId);
+    setActionError(null);
+    try {
+      await reopenCrisisAlert(alertId);
+      load();
+    } catch {
+      setActionError("Không mở lại được. Kiểm tra lại quyền quản trị của bạn.");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* task-9-brief.md, Step 1 mục 6: trang phải nói rõ việc cần làm là ĐI GẶP học sinh, không
+          phải đọc hồ sơ — design spec §3.4: cảnh báo cố ý không mang nguyên văn, nên không có gì
+          để đọc thêm ở đây cả. */}
+      <p className="rounded-xl bg-amber-50 px-4 py-3 text-amber-900">
+        Khi có cảnh báo dưới đây: việc cần làm là <strong>đi gặp trực tiếp học sinh này</strong> —
+        không phải đọc thêm hồ sơ. Hệ thống cố ý không lưu lại nguyên văn các em đã viết.
+      </p>
+
+      {actionError && (
+        <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{actionError}</p>
+      )}
+
+      {loadFailed ? (
+        <div className="rounded-xl bg-amber-50 px-4 py-6 text-amber-900">
+          <p>Chưa tải được danh sách cảnh báo lúc này — có thể do mạng chập chờn thôi.</p>
+          <button
+            type="button"
+            onClick={load}
+            className="mt-3 rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-900"
+          >
+            Thử tải lại
+          </button>
+        </div>
+      ) : alerts === null ? (
+        <div aria-busy="true" className="h-20 animate-pulse rounded-xl bg-slate-200" />
+      ) : alerts.length === 0 ? (
+        <p className="rounded-xl bg-slate-100 px-4 py-6 text-slate-600">Chưa có cảnh báo nào.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {alerts.map((alert) => {
+            // Khoá theo handledBy — KHÔNG BAO GIỜ handledAt (xem isAlertUnhandled).
+            const unhandled = isAlertUnhandled(alert);
+            return (
+              <li
+                key={alert.id}
+                className="flex flex-wrap items-center gap-3 rounded-xl border bg-white px-4 py-3"
+              >
+                <span
+                  className={
+                    alert.severity === "urgent"
+                      ? "rounded-full bg-rose-100 px-2 py-0.5 text-sm font-medium text-rose-800"
+                      : "rounded-full bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-800"
+                  }
+                >
+                  {SEVERITY_LABEL[alert.severity]}
+                </span>
+                <span className="text-sm text-slate-500">{formatter.format(alert.createdAt)}</span>
+                <span className="font-mono text-sm">Mã học sinh: {alert.userId}</span>
+
+                {unhandled ? (
+                  <button
+                    type="button"
+                    disabled={pendingId === alert.id}
+                    onClick={() => handleMark(alert.id)}
+                    className="ml-auto underline disabled:opacity-50"
+                  >
+                    Đánh dấu đã xử lý
+                  </button>
+                ) : (
+                  <>
+                    <span className="text-sm text-slate-500">
+                      Đã xử lý bởi {alert.handledBy}
+                      {alert.handledAt ? ` lúc ${formatter.format(alert.handledAt)}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={pendingId === alert.id}
+                      onClick={() => handleReopen(alert.id)}
+                      className="ml-auto underline disabled:opacity-50"
+                    >
+                      Mở lại
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}

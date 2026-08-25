@@ -212,6 +212,86 @@ describe("AiConfigEditor — kill switch (Decision D)", () => {
   });
 });
 
+// Task 9 (task-9-brief.md): killSwitch.chat, chatQuotaPerDay, chatRateLimitPerMinute trước đây
+// chỉ là pass-through trong ConfigFormState — không có input nào trên UI thao túng được, nên
+// chat không thể bật qua bất kỳ đường nào được hỗ trợ. Nhóm test này pin các ô nhập THẬT.
+describe("AiConfigEditor — công tắc chat (Task 9)", () => {
+  it("nhãn công tắc chat và dòng trạng thái KHÔNG trùng với công tắc phản chiếu — đọc được cả hai cùng lúc", async () => {
+    await renderReady(CONFIGURED); // killSwitch: { moodReflection: false, chat: true } -> mood bật, chat tắt
+
+    expect(screen.getByLabelText(/bật tính năng trò chuyện ai cho học sinh/i)).toBeInTheDocument();
+    // Cả hai dòng trạng thái cùng tồn tại, không ghi đè/trùng chữ nhau (mood "đang bật cho học
+    // sinh", chat "đang tắt trò chuyện") — nếu trùng chữ, getByText bên dưới sẽ ném lỗi multiple
+    // elements match, chính là guard cho việc này.
+    expect(screen.getByText(/đang bật cho học sinh/i)).toBeInTheDocument();
+    expect(screen.getByText(/đang tắt trò chuyện/i)).toBeInTheDocument();
+  });
+
+  it("khi killSwitch.chat=false (đang bật) -> hiện chữ nói rõ chat đang bật cho học sinh", async () => {
+    await renderReady({ ...CONFIGURED, killSwitch: { moodReflection: false, chat: false } });
+    expect(screen.getByText(/đang bật trò chuyện cho học sinh/i)).toBeInTheDocument();
+  });
+
+  it("tick công tắc chat nhưng CHƯA lưu -> hiện trạng thái TƯƠNG LAI, không khẳng định sai hiện tại", async () => {
+    await renderReady(CONFIGURED); // đã lưu: chat tắt
+
+    await userEvent.click(screen.getByLabelText(/bật tính năng trò chuyện ai cho học sinh/i));
+
+    expect(screen.getByText(/sẽ bật trò chuyện sau khi lưu/i)).toBeInTheDocument();
+    expect(screen.queryByText(/đang bật trò chuyện cho học sinh/i)).not.toBeInTheDocument();
+    expect(mockedSaveAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("bật công tắc chat rồi lưu -> gửi killSwitch.chat=false, giữ nguyên killSwitch.moodReflection", async () => {
+    await renderReady(CONFIGURED); // moodReflection: false, chat: true
+
+    await userEvent.click(screen.getByLabelText(/bật tính năng trò chuyện ai cho học sinh/i));
+    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
+
+    await waitFor(() => {
+      expect(mockedSaveAiConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ killSwitch: { moodReflection: false, chat: false } }),
+      );
+    });
+  });
+
+  it("có ô nhập quota tin nhắn chat mỗi ngày, nạp đúng giá trị đã lưu và gửi đúng khi sửa", async () => {
+    await renderReady(CONFIGURED); // chatQuotaPerDay: 30
+
+    const input = screen.getByLabelText(/quota tin nhắn chat mỗi học sinh mỗi ngày/i);
+    expect((input as HTMLInputElement).value).toBe("30");
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "50");
+    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
+
+    await waitFor(() => {
+      expect(mockedSaveAiConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ chatQuotaPerDay: 50 }),
+      );
+    });
+  });
+
+  // chatRateLimitPerMinute = 0 nghĩa là KHÔNG rate limit — quy ước NGƯỢC với chatQuotaPerDay
+  // (design đã ghi ở aiConfigSchema) — nhãn ô nhập phải nói rõ điều này, không được im lặng.
+  it("ô nhập giới hạn tin chat mỗi phút nói rõ 0 = không giới hạn, nạp và gửi đúng giá trị", async () => {
+    await renderReady(CONFIGURED); // chatRateLimitPerMinute: 20
+
+    const input = screen.getByLabelText(/giới hạn.*tin chat.*mỗi phút.*0 = không giới hạn/i);
+    expect((input as HTMLInputElement).value).toBe("20");
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "0");
+    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
+
+    await waitFor(() => {
+      expect(mockedSaveAiConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ chatRateLimitPerMinute: 0 }),
+      );
+    });
+  });
+});
+
 describe("AiConfigEditor — thông báo lưu nêu tên nhà cung cấp (Fix round 1, Finding 8)", () => {
   it("lưu thành công -> thông báo nêu đúng providerLabel sẽ hiện trên màn hình đồng ý học sinh", async () => {
     mockedSaveAiConfig.mockResolvedValue(undefined);

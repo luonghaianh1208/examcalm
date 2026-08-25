@@ -73,14 +73,31 @@ export const AI_CONFIG_FIELD_KEYS = Object.keys(aiConfigSchema.shape) as (keyof 
  * là 0 ("không lượt nào", xem aiConfigSchema). Thiếu điều kiện này, aiPublic.enabled=true dù
  * quota=0 khiến màn hình đồng ý mời học sinh bật một tính năng mà MỌI lượt gọi đều rớt
  * resource-exhausted ngay lập tức.
+ *
+ * Task 9 (task-9-brief.md — quyết định + lý do đầy đủ trong task-9-report.md): giờ có HAI tính
+ * năng dùng chung document cấu hình này (phản chiếu + chat), mỗi tính năng có killSwitch VÀ
+ * quota riêng. `enabled` = true khi VÀ CHỈ KHI ÍT NHẤT MỘT trong hai sẵn sàng phục vụ — OR,
+ * KHÔNG PHẢI AND. Lý do: `aiPublic.enabled` chỉ quyết định MỘT điều — màn hình đồng ý của học
+ * sinh (AiConsentSection.tsx) có hiện ô tick "aiOptIn" hay không — và CHÍNH ô tick đó (một field
+ * DUY NHẤT trên users/{uid}) gate quyền truy cập CẢ HAI tính năng (generateReflection.ts VÀ
+ * sendChatMessage.ts đều tự đọc privacySettings.aiOptIn, độc lập với nhau). Nếu dùng AND, một
+ * admin cố ý bật RIÊNG chat trong khi giữ phản chiếu tắt (đúng kịch bản §10 design spec: chờ
+ * chuyên gia tâm lý duyệt persona + CRISIS_REPLY_TEXT trước khi bật lại phản chiếu) sẽ khiến
+ * `enabled` không bao giờ bật — ô tick không hiện ra, chat KHÔNG học sinh nào bật được dù đã
+ * cấu hình và bật đúng công tắc. baseUrl/model vẫn là điều kiện CHUNG bắt buộc (hai tính năng
+ * dùng chung một provider) — chỉ killSwitch + quota mới tách theo từng tính năng.
  */
 export function isAiEnabled(
-  config: Pick<AiConfig, "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay">,
+  config: Pick<
+    AiConfig,
+    "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay" | "chatQuotaPerDay"
+  >,
 ): boolean {
-  return (
-    config.baseUrl !== "" && config.model !== "" &&
-    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0
-  );
+  if (config.baseUrl === "" || config.model === "") return false;
+  const moodReflectionReady =
+    config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0;
+  const chatReady = config.killSwitch.chat === false && config.chatQuotaPerDay > 0;
+  return moodReflectionReady || chatReady;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
