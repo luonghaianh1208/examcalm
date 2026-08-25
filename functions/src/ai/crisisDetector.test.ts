@@ -184,10 +184,12 @@ describe("tiếng Anh: gốc từ và từ lóng né bộ lọc (Fix round 1, Fi
     expect(detectCrisisKeywords("I've been feeling suicidal lately.").severity).toBe("urgent");
   });
 
-  it('từ lóng né bộ lọc phổ biến: "unalive", "kms"', () => {
+  it('từ lóng né bộ lọc phổ biến: "unalive"', () => {
     expect(detectCrisisKeywords("ngl i wanna unalive myself").severity).toBe("urgent");
-    expect(detectCrisisKeywords("might just kms tonight ngl").severity).toBe("urgent");
   });
+
+  // "kms" hạ xuống mức concern ở Fix round 3, Finding 2 — xem describe riêng "kms hạ xuống mức
+  // concern" bên dưới.
 });
 
 // Fix round 1, Finding 4 (CRITICAL): "X muốn chết" là cấu trúc tăng cường độ productive, gắn
@@ -284,6 +286,43 @@ describe("gộp nhầm thanh điệu do bỏ dấu cả câu (Fix round 2, Findi
   });
 });
 
+// Fix round 3, Finding 1 (Important, gần Critical): `\b` của Fix round 2 chỉ vô tình đủ an
+// toàn cho từ NẰM GIỮA một cụm (nhờ `\s+` bắt buộc theo sau) — từ CUỐI CÙNG của một cụm thì
+// không có gì bắt buộc theo sau để chặn, và `\b` coi việc chuyển từ ASCII sang ký tự có dấu là
+// một boundary hợp lệ dù đó vẫn là MỘT âm tiết. "gì" bỏ dấu thành "gi", và "gi" khớp được ngay
+// đầu "giàu"/"giáo"/"giấy"/"giữa"/"giường"/"giỏi". Đây là ví dụ thật, ngữ pháp bình thường học
+// sinh sẽ gõ.
+describe("ranh giới \\b không đủ cho từ cuối cùng của một cụm (Fix round 3, Finding 1)", () => {
+  const falsePositives = [
+    // "gì" → "gi" khớp nhầm đầu "giàu" — ví dụ nghiêm trọng nhất: câu bình thường đáng ra
+    // không liên quan gì tới khủng hoảng.
+    "Sống để làm giàu thôi chị.",
+    "Bố em bảo sống để làm giàu.",
+    "Bạn ấy học giỏi nhất lớp.",
+    "Cô giáo em rất tốt.",
+    "Tờ giấy này của em.",
+    "Ở giữa lớp có một cái bàn.",
+    "Cái giường này êm quá.",
+    // "ngủ" → "ngu" khớp nhầm đầu "nguồn".
+    "Thuốc nguồn gốc rõ ràng thì mới nên mua.",
+    // "tử"/"tự" → "tu" khớp nhầm đầu "tuổi"/"tuần".
+    "Em mười tám tuổi.",
+    "Tuần sau em thi rồi.",
+  ];
+
+  it.each(falsePositives)("%s → detected: false", (text) => {
+    expect(detectCrisisKeywords(text).detected).toBe(false);
+  });
+
+  // Cùng những từ đó, khi đứng đúng làm MỘT TỪ RIÊNG (có ranh giới thật ở cả hai đầu), vẫn phải
+  // bị bắt — sửa lỗ hổng không được làm mất khả năng phát hiện thật.
+  it("cùng các từ đó vẫn bắt đúng khi là một từ riêng, có ranh giới thật", () => {
+    expect(detectCrisisKeywords("Sống để làm gì nữa hả chị.").severity).toBe("urgent");
+    expect(detectCrisisKeywords("Em định uống thuốc ngủ.").severity).toBe("urgent");
+    expect(detectCrisisKeywords("Em muốn tự tử.").severity).toBe("urgent");
+  });
+});
+
 // Fix round 2, Finding 2 (Important): pattern trước đây là substring thô, không có ranh giới
 // từ — "k"/"kg" khớp được giữa chừng "Ok"/"50kg". Bốn dòng đầu từng bị báo nhầm.
 describe("thiếu ranh giới từ (word boundary) cho biến thể ASCII ngắn (Fix round 2, Finding 2)", () => {
@@ -298,8 +337,10 @@ describe("thiếu ranh giới từ (word boundary) cho biến thể ASCII ngắn
     expect(detectCrisisKeywords(text).detected).toBe(false);
   });
 
-  it("'kms' (tiếng lóng, không có số đứng trước) vẫn phải bị bắt", () => {
-    expect(detectCrisisKeywords("might just kms tonight ngl").severity).toBe("urgent");
+  // "kms" hạ xuống mức concern ở Fix round 3, Finding 2 (xem describe riêng bên dưới) — vẫn
+  // phải được bắt (ở mức concern), guard số chỉ loại trừ đúng mẫu "số + kms".
+  it("'kms' (tiếng lóng, không có số đứng trước) vẫn phải bị bắt ở mức concern", () => {
+    expect(detectCrisisKeywords("might just kms tonight ngl").severity).toBe("concern");
   });
 
   // "cutting" bị gỡ khỏi URGENT_KEYWORDS (quyết định có chủ đích, xem comment tại Nhóm 9 trong
@@ -307,6 +348,25 @@ describe("thiếu ranh giới từ (word boundary) cho biến thể ASCII ngắn
   it("'cutting' không còn là từ khoá — 'cutting edge' không bị bắt", () => {
     expect(detectCrisisKeywords("cutting edge technology").detected).toBe(false);
   });
+});
+
+// Fix round 3, Finding 2 (Important): guard số của "kms" chỉ loại trừ được mẫu "số + kms"
+// ("chạy được 3 kms") — không loại trừ được cách dùng đơn vị khác không kèm số cụ thể ("chạy
+// vài kms nữa"). Sau Fix round 2, chỉ "urgent" mới chặn model, nên một token có độ đặc hiệu
+// thấp và dư thừa với "kill myself"/"unalive"/gốc từ "suicid" như "kms" không đáng ở mức chặn
+// hội thoại — quyết định: HẠ xuống CONCERN_KEYWORDS thay vì xây guard "phải đứng gần đại từ tự
+// xưng" (cùng lý do đã dẫn tới quyết định gỡ "cutting" ở Fix round 2: một cơ chế mới chỉ để cứu
+// một từ không đáng công sức khi hạ mức đã đủ giải quyết vấn đề).
+describe('"kms" hạ xuống mức concern (Fix round 3, Finding 2)', () => {
+  it("'kms' không có số đứng trước vẫn phải bị bắt, nhưng chỉ ở mức concern", () => {
+    const result = detectCrisisKeywords("Em chạy vài kms nữa thôi.");
+    expect(result.detected).toBe(true);
+    expect(result.severity).toBe("concern");
+    expect(result.matched).toBe("kms");
+  });
+
+  // Guard số cho mẫu "số + kms" đã có test riêng ở describe "thiếu ranh giới từ..." (Fix
+  // round 2, Finding 2) — "Em vừa chạy bộ được 3 kms" vẫn detected: false.
 });
 
 // Fix round 1, Finding 4 từng liệt kê 23 từ tăng cường cho "X muốn chết" — nhưng bỏ sót đúng
@@ -360,12 +420,17 @@ describe("bổ sung test dương tính còn thiếu (Fix round 2, Finding 5)", (
 
 // Fix round 2, Finding 6 (Minor): TEEN_ABBREVIATIONS/PHRASE_GUARDS trước đây là object literal
 // — tra cứu với key trùng tên thuộc tính kế thừa từ Object.prototype ("constructor",
-// "toString", "valueOf"...) có thể trả về một hàm thay vì undefined và làm code sau đó ném
-// lỗi. Chuyển sang Map để loại bỏ rủi ro này.
-describe("an toàn với prototype lookup (Fix round 2, Finding 6)", () => {
-  it("không ném lỗi và không báo nhầm khi văn bản chứa tên thuộc tính Object.prototype", () => {
-    const text = "constructor toString valueOf hasOwnProperty";
-    expect(() => detectCrisisKeywords(text)).not.toThrow();
-    expect(detectCrisisKeywords(text).detected).toBe(false);
-  });
-});
+// "toString", "valueOf"...) có thể trả về một hàm thay vì undefined. Chuyển sang Map để loại bỏ
+// rủi ro này (giữ như defence-in-depth).
+//
+// Fix round 3 (mục nhỏ, theo re-review): bài test từng đứng ở đây ("văn bản chứa
+// 'constructor toString valueOf hasOwnProperty' không ném lỗi") PASS cả khi revert lại object
+// literal — vì nó không hề kiểm chứng lỗ hổng: key tra cứu trong TEEN_ABBREVIATIONS.get(word)/
+// PHRASE_GUARDS.get(normalizedKeyword) LUÔN LUÔN là một từ tách ra từ chính URGENT_KEYWORDS/
+// CONCERN_KEYWORDS (hằng số do ta viết), KHÔNG BAO GIỜ là văn bản người dùng nhập — văn bản
+// người dùng chỉ đóng vai trò là chuỗi bị QUÉT TÌM sự xuất hiện của từ khoá, không bao giờ trở
+// thành chính cái key được tra cứu. Nói cách khác: lớp lỗi object-literal-prototype-pollution
+// không thể xảy ra được ở đường dẫn dữ liệu này, bất kể văn bản người dùng chứa gì. Xoá bài test
+// vô nghĩa đó thay vì giữ một "bằng chứng" giả — Map vẫn giữ lại vì không tốn gì để giữ, và
+// phòng trường hợp một maintainer sau này định tuyến dữ liệu khác (không phải từ khoá cố định)
+// qua cùng cơ chế tra cứu.

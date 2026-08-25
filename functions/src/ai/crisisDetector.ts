@@ -48,9 +48,24 @@
 // có dấu, chỉ khác từ khoá) thì không còn bị gộp nhầm nữa. Xem buildWordFragment.
 //
 // Fix round 2, Finding 2: thêm boundary \b cho các biến thể thuần ASCII (không dấu) — "k"/"kg"
-// không còn khớp giữa chừng "Ok"/"50kg" nữa — và một guard số riêng cho "kms" (loại trừ khi
-// đứng ngay sau một con số, vì "kms" cũng là cách viết tắt đơn vị km/s rất phổ biến khi kể
-// chuyện chạy bộ). Bỏ hẳn "cutting" khỏi danh sách — xem lý do tại Nhóm 9 của URGENT_KEYWORDS.
+// không còn khớp giữa chừng "Ok"/"50kg" nữa. Bỏ hẳn "cutting" khỏi danh sách — xem lý do tại
+// Nhóm 9 của URGENT_KEYWORDS.
+//
+// Fix round 3, Finding 1 (Important, gần Critical): `\b` của Fix round 2 hoá ra KHÔNG đủ — nó
+// chỉ bảo vệ được từ NẰM GIỮA một cụm (vì từ sau luôn có `\s+` bắt buộc chặn), còn từ CUỐI CÙNG
+// của một cụm (không có `\s+` theo sau) thì không được bảo vệ: `\b` coi việc chuyển từ ASCII
+// sang ký tự có dấu là một ranh giới hợp lệ, dù về ngôn ngữ học đó vẫn là MỘT âm tiết — "gì" bỏ
+// dấu thành "gi", và "gi" khớp được ngay đầu "giàu"/"giáo"/"giấy"/"giữa" vì \b coi "i"(ASCII)
+// →"à"(có dấu) là một boundary. "Sống để làm giàu thôi chị." bị đọc thành "sống để làm gì" —
+// đúng chiều sai lầm nghiêm trọng nhất trong cả module: câu bình thường nhận tổng đài khủng
+// hoảng. Sửa bằng cách thay `\b` bằng một ranh giới "kiểu tiếng Việt" — `VN_LETTER_CLASS`, phủ
+// mọi ký tự ASCII lẫn có dấu có thể là phần tiếp theo của CÙNG một âm tiết — áp dụng cho CẢ hai
+// đầu (trái lẫn phải) của mọi biến thể ASCII, không chỉ đầu cuối cụm. Xem literalFragment.
+//
+// Fix round 3, Finding 2: "kms" hạ xuống CONCERN_KEYWORDS (không còn ở URGENT_KEYWORDS) — vẫn
+// còn cách báo nhầm mà guard số không bắt được ("Em chạy vài kms nữa thôi.", không có số ngay
+// trước "kms"), và sau Fix round 2 chỉ "urgent" mới chặn model, nên một token có độ đặc hiệu
+// thấp như "kms" không đáng ở mức chặn hội thoại — xem Nhóm mới trong CONCERN_KEYWORDS.
 
 /**
  * Cụm biểu đạt Ý ĐỊNH hoặc KẾ HOẠCH tự hại — mức "urgent", thầy cô cần can thiệp NGAY, VÀ
@@ -148,16 +163,19 @@ export const URGENT_KEYWORDS: readonly string[] = [
   "cách để chết",
 
   // Nhóm 9: học sinh có thể code-switch sang tiếng Anh khi diễn đạt điều khó nói, hoặc dùng từ
-  // lóng né bộ lọc phổ biến trong ngôn ngữ mạng ("unalive", "kms"). Dùng gốc từ "suicid" thay
-  // vì "suicide" để bắt luôn "suicidal"/"suicides" mà không cần liệt kê từng biến thể — đây là
-  // ngoại lệ CỐ Ý không có boundary \b ở cuối (xem NO_BOUNDARY_WORDS). "kms" có guard riêng
-  // (PHRASE_GUARDS) để loại trừ "kms" = đơn vị khoảng cách (km/s) khi đứng ngay sau một con số
-  // (Fix round 2, Finding 2). KHÔNG có "cutting" (Fix round 2, Finding 2 — quyết định có chủ
-  // đích): từ này là một substring quá phổ biến trong tiếng Anh đời thường ("cutting edge",
-  // "cutting class", "cutting board", dựng phim...) để làm một tín hiệu đơn lẻ đáng tin, và một
-  // guard "phải đứng gần đại từ tự xưng" sẽ là một cơ chế mới chỉ để cứu một từ — không đáng.
-  // Hành vi tự hại bằng cắt/rạch đã được phủ đủ bởi Nhóm 7 (rạch tay, cắt tay, cứa tay, cứa cổ
-  // tay, rạch đùi...) và "self harm"/"self-harm" ngay dưới đây.
+  // lóng né bộ lọc phổ biến trong ngôn ngữ mạng ("unalive"). Dùng gốc từ "suicid" thay vì
+  // "suicide" để bắt luôn "suicidal"/"suicides" mà không cần liệt kê từng biến thể — đây là
+  // ngoại lệ CỐ Ý không có boundary ở cuối (xem NO_BOUNDARY_WORDS). KHÔNG có "cutting" (Fix
+  // round 2, Finding 2 — quyết định có chủ đích): từ này là một substring quá phổ biến trong
+  // tiếng Anh đời thường ("cutting edge", "cutting class", "cutting board", dựng phim...) để
+  // làm một tín hiệu đơn lẻ đáng tin, và một guard "phải đứng gần đại từ tự xưng" sẽ là một cơ
+  // chế mới chỉ để cứu một từ — không đáng. KHÔNG có "kms" nữa (Fix round 3, Finding 2 — đã hạ
+  // xuống CONCERN_KEYWORDS, xem đó): guard số (PHRASE_GUARDS) chỉ loại trừ được đúng mẫu "số +
+  // kms" ("chạy được 3 kms"), không loại trừ được "chạy vài kms nữa" (không có số cụ thể) — sau
+  // Fix round 2 chỉ "urgent" mới chặn model, nên một token có độ đặc hiệu thấp và đã dư thừa với
+  // "kill myself"/"unalive"/gốc từ "suicid" như "kms" không đáng ở mức chặn hội thoại. Hành vi
+  // tự hại bằng cắt/rạch đã được phủ đủ bởi Nhóm 7 (rạch tay, cắt tay, cứa tay, cứa cổ tay,
+  // rạch đùi...) và "self harm"/"self-harm" ngay dưới đây.
   "suicid",
   "kill myself",
   "end my life",
@@ -165,7 +183,6 @@ export const URGENT_KEYWORDS: readonly string[] = [
   "want to die",
   "wanna die",
   "unalive",
-  "kms",
   "self harm",
   "self-harm",
 ];
@@ -209,6 +226,13 @@ export const CONCERN_KEYWORDS: readonly string[] = [
   "mệt mỏi với cuộc sống",
   "muốn ngủ mãi mãi",
   "không còn lý do để sống",
+
+  // "kms" (Fix round 3, Finding 2): hạ từ URGENT_KEYWORDS xuống đây — vẫn giữ guard số
+  // (PHRASE_GUARDS, loại trừ khi đứng ngay sau một con số) vì đó là cách dùng phổ biến nhất
+  // của "kms" làm đơn vị km/s, nhưng guard đó không bắt hết mọi cách dùng đơn vị ("chạy vài kms
+  // nữa" không có số cụ thể) — token có độ đặc hiệu thấp này không đáng ở mức chặn model, và đã
+  // dư thừa với "kill myself"/"unalive"/gốc từ "suicid" ở URGENT_KEYWORDS.
+  "kms",
 ];
 
 /** Escape các ký tự đặc biệt của regex trong một đoạn văn bản thuần. */
@@ -343,33 +367,50 @@ const PHRASE_GUARDS: ReadonlyMap<string, PhraseGuard> = new Map([
 
 /**
  * true nếu `s` chỉ gồm chữ cái/số ASCII (không dấu tiếng Việt) — dùng để quyết định có nên bọc
- * `\b` hay không: `\b` của JS chỉ đáng tin cậy cho ASCII vì `\w` của JS không tính ký tự có dấu
- * tiếng Việt là "ký tự từ" (word character). Bọc `\b` quanh một chuỗi có dấu sẽ tạo ranh giới
- * GIẢ ngay giữa một từ tiếng Việt thật (VD: giữa "tu" và phần còn lại có dấu của "tuần"), nên
- * chỉ áp dụng cho các biến thể thuần ASCII, nơi `\b` hoạt động đúng như kỳ vọng (Fix round 2,
- * Finding 2).
+ * ranh giới hay không: biến thể thuần ASCII (bỏ dấu) mới cần bọc, vì đây là biến thể "nhân tạo"
+ * (không tồn tại trong văn bản gốc trừ khi học sinh thật sự gõ không dấu) — dễ vô tình trùng
+ * với một phần của từ khác.
  */
 function isAsciiOnly(s: string): boolean {
   return /^[a-z0-9]+$/i.test(s);
 }
 
 /**
- * Các "từ" ASCII cố ý KHÔNG được bọc `\b` dù `isAsciiOnly()` đúng — vì đây là gốc từ dùng để
- * bắt cả biến thể dài hơn: "suicid" phải khớp cả bên trong "suicidal"/"suicides" (Fix round 1,
- * Finding 3), nên đầu ra không được có ranh giới từ ở cuối.
+ * Các "từ" ASCII cố ý KHÔNG được bọc ranh giới dù `isAsciiOnly()` đúng — vì đây là gốc từ dùng
+ * để bắt cả biến thể dài hơn: "suicid" phải khớp cả bên trong "suicidal"/"suicides" (Fix round
+ * 1, Finding 3), nên đầu ra không được có ranh giới ở cuối.
  */
 const NO_BOUNDARY_WORDS: ReadonlySet<string> = new Set(["suicid"]);
 
 /**
- * Dựng fragment regex literal cho một chuỗi khớp cụ thể: bọc `\b` hai đầu nếu chuỗi thuần
- * ASCII (trừ NO_BOUNDARY_WORDS) để tránh khớp giữa chừng một từ khác (Fix round 2, Finding 2)
- * — VD "k"/"kg" không còn khớp bên trong "Ok"/"50kg" nữa. Chuỗi có dấu tiếng Việt không bọc
- * `\b` vì lý do đã nêu ở isAsciiOnly().
+ * Tập ký tự có thể là phần TIẾP THEO của cùng một âm tiết — dùng để dựng ranh giới "kiểu tiếng
+ * Việt" thay cho `\b` (Fix round 3, Finding 1). `\b` của JS không đáng tin cậy ở đây: nó coi
+ * `\w` chỉ gồm ASCII (`[A-Za-z0-9_]`), nên việc chuyển từ một ký tự ASCII sang một ký tự có dấu
+ * tiếng Việt VẪN được JS tính là một "ranh giới từ" hợp lệ — dù về ngôn ngữ học đó không phải
+ * ranh giới gì cả, chỉ là đang ở giữa MỘT âm tiết (dấu tiếng Việt luôn nằm trên nguyên âm, ở
+ * giữa âm tiết, không phải ở đầu/cuối). Đây chính là lỗ hổng: "gì" bỏ dấu thành "gi", và
+ * `\bgi\b` khớp được ngay đầu "giàu" vì `\b` coi việc chuyển "i"(ASCII)→"à"(có dấu) là một
+ * boundary — dù "già[u]" chỉ là MỘT âm tiết. `VN_LETTER_CLASS` phủ mọi ký tự có thể tiếp nối
+ * (chữ cái/số ASCII và toàn bộ nguyên âm có dấu tiếng Việt thường, dải à-ỹ phủ hết các tổ hợp
+ * dấu) — nếu ký tự liền kề nằm trong tập này thì đó KHÔNG PHẢI ranh giới thật, phải loại trừ.
+ */
+const VN_LETTER_CLASS = "a-z0-9à-ỹ";
+
+/**
+ * Dựng fragment regex literal cho một chuỗi khớp cụ thể: bọc ranh giới "kiểu tiếng Việt" hai
+ * đầu (`VN_LETTER_CLASS`, Fix round 3, Finding 1) nếu chuỗi thuần ASCII (trừ NO_BOUNDARY_WORDS)
+ * để tránh khớp giữa chừng một từ/âm tiết khác — VD "k"/"kg" không khớp bên trong "Ok"/"50kg"
+ * (Fix round 2), và "gi" (bỏ dấu của "gì") không khớp bên trong "giàu"/"giáo"/"giấy" (Fix round
+ * 3). Áp dụng ở CẢ hai đầu, kể cả từ cuối cùng của một cụm nhiều từ — khác với `\b` ở Fix
+ * round 2 vốn chỉ vô tình đủ an toàn cho từ NẰM GIỮA (nhờ `\s+` bắt buộc theo sau), không đủ an
+ * toàn cho từ CUỐI (không có gì bắt buộc theo sau để chặn). Chuỗi có dấu tiếng Việt không bọc gì
+ * — bản thân nó đã đủ đặc hiệu, và một âm tiết có dấu SAI (khác thanh điệu) sẽ không khớp chuỗi
+ * literal này ngay từ đầu (xem buildWordFragment).
  */
 function literalFragment(candidate: string): string {
   const escaped = escapeRegExp(candidate);
   if (isAsciiOnly(candidate) && !NO_BOUNDARY_WORDS.has(candidate)) {
-    return `\\b${escaped}\\b`;
+    return `(?<![${VN_LETTER_CLASS}])${escaped}(?![${VN_LETTER_CLASS}])`;
   }
   return escaped;
 }
