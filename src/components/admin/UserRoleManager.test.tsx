@@ -47,6 +47,18 @@ describe("UserRoleManager", () => {
     expect(screen.queryByRole("button", { name: /hạ xuống học sinh/i })).not.toBeInTheDocument();
   });
 
+  // Follow-up: hồ sơ vá cho tài khoản bootstrap ngoài app (ensureUserProfile) không ghi
+  // gradeLevel/school -> listUsers() (admin-users.ts) đổ về "" cho hai field này. Trang phải
+  // hiện "Không rõ" (khớp chữ mail cảnh báo khủng hoảng dùng cho cùng tình huống), không được
+  // hiện mảnh vỡ "Lớp  · " rỗng như thể document lỗi.
+  it("gradeLevel/school rỗng (hồ sơ vá cho tài khoản bootstrap ngoài app) -> hiện 'Không rõ', không hiện mảnh vỡ rỗng", () => {
+    const usersWithUnsetProfile = [
+      { uid: "u3", nickname: "quan.tri", school: "", gradeLevel: "", role: "admin" as const },
+    ];
+    render(<UserRoleManager users={usersWithUnsetProfile} currentAdminUid="a1" />);
+    expect(screen.getByText("Lớp Không rõ · Không rõ")).toBeInTheDocument();
+  });
+
   it("khi mirrorWriteFailed=true: báo trạng thái cảnh báo, KHÔNG báo lỗi", async () => {
     mockedCallSetUserRole.mockResolvedValueOnce({ ok: true, role: "admin", mirrorWriteFailed: true });
     const user = userEvent.setup();

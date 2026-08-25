@@ -73,10 +73,11 @@ describe("ensureUserProfile", () => {
     expect((writes[0]!.data.nickname as string).length).toBeGreaterThan(0);
   });
 
-  it("school là placeholder tiếng Việt rõ ràng — không bịa tên trường", async () => {
+  it("KHÔNG ghi gradeLevel/school — không có nguồn dữ liệu thật, tránh bịa (vd 'Lớp 10' sai cho tài khoản bootstrap qua CLI)", async () => {
     await ensureUserProfile("uid-4", "student", "x@y.com");
-    const school = writes[0]!.data.school as string;
-    expect(school).toBe("(chưa cập nhật trường)");
+    const written = writes[0]!.data;
+    expect("gradeLevel" in written).toBe(false);
+    expect("school" in written).toBe(false);
   });
 
   it("uid ĐÃ có hồ sơ -> KHÔNG ghi gì cả (không ghi đè)", async () => {

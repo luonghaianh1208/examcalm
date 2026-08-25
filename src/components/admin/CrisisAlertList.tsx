@@ -96,10 +96,15 @@ function StudentIdentity({ userId, student }: { userId: string; student: UserSum
   if (!student) {
     return <span className="font-mono text-sm">Mã học sinh: {userId}</span>;
   }
+  // gradeLevel/school rỗng ("") khi hồ sơ được vá cho tài khoản bootstrap ngoài app
+  // (Console/CLI — xem ensureUserProfile) không có nguồn dữ liệu thật cho hai field
+  // này. "Không rõ" khớp đúng chữ mail cảnh báo khủng hoảng (onCrisisAlertCreated.ts)
+  // đã dùng cho cùng tình huống — trang và mail phải nói cùng một điều, và tránh hiện
+  // mảnh vỡ "Lớp  · " (rỗng, đọc như document lỗi).
   return (
     <span className="text-sm">
       <span className="font-medium">{student.nickname}</span>
-      <span className="text-slate-500"> · Lớp {student.gradeLevel} · {student.school}</span>
+      <span className="text-slate-500"> · Lớp {student.gradeLevel || "Không rõ"} · {student.school || "Không rõ"}</span>
     </span>
   );
 }

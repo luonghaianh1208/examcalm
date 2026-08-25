@@ -68,21 +68,58 @@ Không thêm request nào khác — phù hợp yêu cầu "không làm chậm đ
 
 ### Các trường không có giá trị trung thực ở bước đăng nhập
 
-`nickname`, `gradeLevel`, `school` bắt buộc theo `userProfileSchema` nhưng
-không có nguồn dữ liệu thật nào ở bước đăng nhập:
+`nickname`, `gradeLevel`, `school` bắt buộc theo `userProfileSchema`, nhưng đó
+là schema TYPE — không có nơi nào trong `src/` hay `functions/` thực sự gọi
+`userProfileSchema.parse()` lên một document Firestore thật (chỉ dùng làm
+nguồn kiểu dữ liệu tĩnh, xem `src/lib/types/types.test.ts` — nơi DUY NHẤT nó
+được `.parse()`, và đó là dữ liệu test bịa, không phải dữ liệu đọc từ
+Firestore). Vì vậy hồ sơ vá **được phép bỏ trống các field không có giá trị
+thật**, không bắt buộc phải điền đủ mọi field trong type:
 
-- **`nickname`**: lấy phần trước `@` của email (vd `quan.tri@truong.edu.vn` →
-  `quan.tri`). Đây KHÔNG phải bịa — là một phần dữ liệu thật của chính người
-  dùng (email của họ). Nếu không có email, fallback `chua-dat-ten-{6 ký tự đầu uid}`.
-- **`school`**: placeholder tiếng Việt RÕ RÀNG là placeholder —
-  `"(chưa cập nhật trường)"` — không bịa tên trường trông như dữ liệu thật.
-- **`gradeLevel`**: đây là điểm hạn chế đã biết. `userProfileSchema` định nghĩa
-  `gradeLevel` là `z.enum(["10", "11", "12"])` — bắt buộc, không nullable, không
-  có giá trị "chưa rõ". Không thể bịa placeholder dạng chuỗi như `school`. Đã
-  chọn tạm `"10"` (giá trị nhỏ nhất) làm điểm neo trung lập nhất có thể trong
-  ràng buộc của enum. **Không có UI sửa hồ sơ** để người dùng tự chỉnh lại giá
-  trị này — nằm ngoài phạm vi lần vá này (theo đúng chỉ dẫn "Do NOT add a
-  profile-editing UI"). Ghi nhận đây là tech debt nhỏ nếu sau này cần UI sửa hồ sơ.
+- **`nickname`**: VẪN ghi — lấy phần trước `@` của email (vd
+  `quan.tri@truong.edu.vn` → `quan.tri`). Đây KHÔNG phải bịa — là một phần dữ
+  liệu thật của chính người dùng (email của họ). Nếu không có email, fallback
+  `chua-dat-ten-{6 ký tự đầu uid}`.
+- **`gradeLevel`, `school`**: **KHÔNG ghi vào document** (bỏ hẳn field, không
+  phải chuỗi rỗng hay placeholder). Phiên bản đầu của lần vá này từng thử điền
+  placeholder — `gradeLevel: "10"`, `school: "(chưa cập nhật trường)"` — nhưng
+  bị revert NGAY TRONG NGÀY: `gradeLevel: "10"` **đọc như dữ liệu thật** trên
+  `/admin/nguoi-dung` (`UserRoleManager.tsx`) và trang cảnh báo khủng hoảng
+  (`CrisisAlertList.tsx`) — một giáo viên bootstrap qua CLI sẽ thấy chính mình
+  "Lớp 10", một khẳng định sai. Một placeholder ĐỌC NHƯ PLACEHOLDER là trung
+  thực; một placeholder đọc như dữ liệu thì không — đây chính xác là ràng buộc
+  ban đầu (school không được bịa tên trường) nhưng áp dụng luôn cho gradeLevel.
+  `gradeLevel` là `z.enum(["10","11","12"])` — không có giá trị "chưa rõ" hợp
+  lệ trong enum để bịa một cách trung thực, nên cách đúng là KHÔNG GHI, để hai
+  nơi hiển thị tự coi field vắng mặt là "chưa rõ" (xem mục dưới).
+
+### Hai nơi hiển thị `gradeLevel`/`school` phải hiểu "vắng mặt" một cách trung thực
+
+`src/lib/firestore/admin-users.ts` (`listUsers()`, dùng bởi cả hai nơi hiển
+thị bên dưới) đã sẵn có quy ước đổ field vắng mặt về chuỗi rỗng
+(`(data.gradeLevel as string) ?? ""`, `(data.school as string) ?? ""`) — quy
+ước này có TRƯỚC lần vá này, không phải do lần vá này tạo ra. Từ khi hồ sơ vá
+không còn ghi hai field này, một tài khoản bootstrap qua CLI sẽ có
+`gradeLevel === ""` và `school === ""` khi đọc qua `listUsers()`. Hai nơi
+render trực tiếp `Lớp {gradeLevel} · {school}` mà không kiểm tra rỗng sẽ hiện
+mảnh vỡ `"Lớp  · "` — trông như document lỗi, không phải "chưa có dữ liệu":
+
+- `src/components/admin/CrisisAlertList.tsx` — `StudentIdentity()`
+- `src/components/admin/UserRoleManager.tsx` — dòng liệt kê người dùng
+
+Cả hai được sửa để thay thế chuỗi rỗng bằng `"Không rõ"`
+(`student.gradeLevel || "Không rõ"`, tương tự cho `school`) — **khớp đúng chữ**
+mà mail cảnh báo khủng hoảng (`functions/src/email/onCrisisAlertCreated.ts`,
+hàm `buildEmailBody`) đã dùng từ trước cho đúng tình huống này
+(`` `Lớp: ${fields.gradeLevel ?? "Không rõ"}` ``). Trước lần sửa này, trang và
+mail đã XỬ LÝ KHÁC NHAU cho cùng một giá trị vắng mặt — trang render mảnh vỡ
+rỗng, mail hiện "Không rõ" — giờ cả hai nói cùng một điều.
+
+Không đổi type `UserSummary.gradeLevel`/`school` (vẫn là `string`, không phải
+`string | null`) — chuỗi rỗng làm sentinel "vắng mặt" đã là quy ước sẵn có của
+`admin-users.ts` cho field này (khác `nickname`, vốn đã có fallback riêng
+`"(chưa đặt)"` ngay tại `listUsers()`); đổi type sẽ là refactor rộng hơn phạm
+vi lần vá này.
 
 ### `privacySettings` — dòng quan trọng nhất
 
@@ -124,8 +161,16 @@ tính subcollection `users/{uid}/favorites/*`) trong `src/`:
   cookie đã tồn tại trước đó (đăng nhập trước khi deploy) sẽ không kích hoạt
   vá lại — người dùng cần đăng nhập lại (hoặc đợi session hết hạn sau 5 ngày
   rồi đăng nhập lại) để hồ sơ được tạo.
-- `gradeLevel` bị ép về `"10"` do ràng buộc enum không có giá trị "chưa rõ" —
-  xem giải thích ở trên. Không có UI để tự sửa lại (ngoài phạm vi lần vá này).
+- **Một hồ sơ vá là hồ sơ THƯA (sparse) một cách CÓ CHỦ Ý** — nếu bạn đọc thấy
+  một document `users/{uid}` không có `gradeLevel`/`school`, đó không phải dữ
+  liệu bị hỏng hay migration dở dang: đó là một tài khoản bootstrap ngoài app
+  (Console/CLI) chưa từng có nguồn dữ liệu thật cho hai field này, và lần vá
+  cố tình không bịa. Bất kỳ nơi đọc `users/{uid}` nào thêm sau này PHẢI coi
+  `gradeLevel`/`school` vắng mặt là hợp lệ (không throw, không giả định luôn
+  có), giống hai nơi hiển thị đã sửa ở trên và mail cảnh báo khủng hoảng.
+- Không có UI để người dùng tự điền lại `gradeLevel`/`school` sau khi hồ sơ
+  được vá — ngoài phạm vi lần vá này (theo đúng chỉ dẫn "Do NOT add a
+  profile-editing UI").
 
 ## Không đổi
 
@@ -137,7 +182,7 @@ tính subcollection `users/{uid}/favorites/*`) trong `src/`:
 ## Kiểm chứng
 
 ```
-npx vitest run          # 619 passed (baseline 608 + 11 test mới)
+npx vitest run          # 621 passed (baseline 608 + 13 test mới)
 npm run typecheck        # sạch
 npm run build             # thành công
 npm run test:rules        # 180 passed (baseline 180, không đổi — không sửa rules)
@@ -146,13 +191,37 @@ npm run test:rules        # 180 passed (baseline 180, không đổi — không s
 Test mới:
 - `src/lib/firestore/ensure-user-profile.test.ts` (8 test) — unit test hàm vá:
   role lấy từ tham số (không mặc định student), privacySettings mặc định,
-  nickname từ email, school placeholder, KHÔNG ghi đè hồ sơ đã có, lỗi
-  Firestore không ném ra ngoài.
+  nickname từ email, KHÔNG ghi `gradeLevel`/`school` vào document, KHÔNG ghi
+  đè hồ sơ đã có, lỗi Firestore không ném ra ngoài.
 - `src/lib/firebase/session.test.ts` (+3 test) — tích hợp qua
   `createSessionCookie()`: đăng nhập uid chưa có hồ sơ → hồ sơ được tạo đúng
   role/privacySettings; đăng nhập uid đã có hồ sơ → không ghi gì; vá lỗi →
   đăng nhập vẫn thành công (cookie vẫn được set).
+- `src/components/admin/CrisisAlertList.test.tsx` (+1 test) và
+  `src/components/admin/UserRoleManager.test.tsx` (+1 test) — `gradeLevel`/
+  `school` rỗng hiện đúng "Không rõ" ở cả hai nơi, không hiện mảnh vỡ
+  `"Lớp  · "`.
 
 Test đầu tiên (`đăng nhập với uid CHƯA có hồ sơ...`) được viết TRƯỚC khi sửa
 `session.ts`, chạy và xác nhận fail đúng lý do (`writes` rỗng vì
 `ensureUserProfile` chưa được gọi), rồi mới implement.
+
+## Follow-up cùng ngày: bỏ placeholder `gradeLevel`/`school`
+
+Bản đầu của lần vá này ghi placeholder cho `gradeLevel` (`"10"`) và `school`
+(`"(chưa cập nhật trường)"`). Vấn đề: `gradeLevel: "10"` không đọc như
+placeholder — nó đọc như một khối lớp THẬT trên hai trang admin
+(`/admin/nguoi-dung`, trang cảnh báo khủng hoảng), khiến một giáo viên
+bootstrap qua CLI hiện ra như đang học "Lớp 10" — một khẳng định sai, đúng
+điều mà yêu cầu ban đầu của lần vá này (không bịa tên trường trông như dữ liệu
+thật) đã cấm, chỉ là chưa áp dụng hết cho `gradeLevel`.
+
+Sau khi xác nhận `userProfileSchema` không hề được `.parse()` lên document
+Firestore thật ở bất kỳ đâu trong `src/`/`functions/` (chỉ dùng làm nguồn
+type), đã đổi sang **bỏ hẳn hai field này khỏi document được vá** thay vì bịa
+giá trị. Nickname vẫn được giữ (lấy từ phần trước `@` của email) vì đó là dữ
+liệu thật của người dùng, không phải suy đoán.
+
+Hai nơi hiển thị (`CrisisAlertList.tsx`, `UserRoleManager.tsx`) được sửa để
+hiện "Không rõ" khi gặp `gradeLevel`/`school` rỗng — khớp đúng chữ mail cảnh
+báo khủng hoảng đã dùng từ trước. Chi tiết đầy đủ ở hai mục phía trên.

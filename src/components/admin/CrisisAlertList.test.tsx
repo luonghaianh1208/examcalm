@@ -119,6 +119,20 @@ describe("CrisisAlertList — định danh học sinh dùng được (Fix round 
 
     expect(screen.getByText(/student-u2/)).toBeInTheDocument();
   });
+
+  // Follow-up: hồ sơ vá cho tài khoản bootstrap ngoài app (ensureUserProfile) không ghi
+  // gradeLevel/school -> listUsers() (admin-users.ts) đổ về "" cho hai field này. Trang phải
+  // hiện "Không rõ" (khớp chữ mail cảnh báo khủng hoảng dùng cho cùng tình huống), không được
+  // hiện mảnh vỡ "Lớp  · " rỗng như thể document lỗi.
+  it("gradeLevel/school rỗng (hồ sơ vá cho tài khoản bootstrap ngoài app) -> hiện 'Không rõ', không hiện mảnh vỡ rỗng", async () => {
+    const unset: Record<string, UserSummary> = {
+      "student-u1": { uid: "student-u1", nickname: "Mèo con", school: "", gradeLevel: "", role: "student" },
+    };
+    await renderReady([UNHANDLED_URGENT], unset);
+
+    const label = screen.getByText(/không rõ/i);
+    expect(label.textContent).toBe(" · Lớp Không rõ · Không rõ");
+  });
 });
 
 describe("CrisisAlertList — khoá trạng thái đã xử lý theo handledBy, KHÔNG BAO GIỜ handledAt", () => {

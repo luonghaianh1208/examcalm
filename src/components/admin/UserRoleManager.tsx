@@ -42,7 +42,11 @@ export function UserRoleManager({
         {users.map((u) => (
           <li key={u.uid} className="flex flex-wrap items-center gap-3 rounded-xl border bg-white px-4 py-3">
             <span className="font-medium">{u.nickname}</span>
-            <span className="text-sm text-slate-500">Lớp {u.gradeLevel} · {u.school}</span>
+            {/* gradeLevel/school rỗng ("") khi hồ sơ được vá cho tài khoản bootstrap ngoài app
+                (Console/CLI — xem ensureUserProfile). "Không rõ" khớp đúng chữ mail cảnh báo
+                khủng hoảng (onCrisisAlertCreated.ts) dùng cho cùng tình huống, và tránh hiện
+                mảnh vỡ "Lớp  · " rỗng. */}
+            <span className="text-sm text-slate-500">Lớp {u.gradeLevel || "Không rõ"} · {u.school || "Không rõ"}</span>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-sm">{u.role}</span>
 
             {u.role === "student" && (
