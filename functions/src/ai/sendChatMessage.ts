@@ -48,6 +48,28 @@
 // nếu một client gửi liên tục các tin có từ khoá urgent. Một luồng cảnh báo tự nó là một lỗi an
 // toàn (rủi ro R6, design spec §9: cảnh báo nhầm quá nhiều khiến thầy cô bỏ qua). Phanh đặt ở
 // việc TẠO CẢNH BÁO, KHÔNG BAO GIỜ ở phản hồi cho học sinh — xem hasRecentUnhandledAlert.
+//
+// ==== Fix round 3 (review từ coordinator) — hai hệ quả của ruling Finding 2 round 2 ====
+//
+// Finding 1 (Important, an toàn): phanh chống-lụt round 2 chỉ là boolean ("có cảnh báo mở hay
+// không") — không xét severity. Hậu quả: một cảnh báo "concern" đang mở, rồi học sinh gửi một
+// tin "urgent" trong cùng cửa sổ → bị dedup, cảnh báo VẪN ở mức "concern" — thầy cô được báo,
+// nhưng ở SAI mức độ triage. Tệ hơn: nếu Lớp 1 bị dedup (gắn vào cảnh báo cũ) rồi Lớp 2 lại phát
+// hiện "urgent", bản round 2 hoàn toàn không ghi gì (layer1AlertId trả về null khi bị dedup, và
+// nhánh "tạo mới" ở Lớp 2 cũng bị chính dedup đó chặn) — mất tín hiệu hoàn toàn dù
+// combinedSeverity === "urgent" mới là thứ quyết định câu trả lời học sinh nhận được.
+//
+// SỬA: hasRecentUnhandledAlert đổi thành findRecentUnhandledAlert, trả về id VÀ severity của
+// cảnh báo đang mở (không còn boolean) — nếu tín hiệu mới NẶNG HƠN, NÂNG CẤP cảnh báo đó thay vì
+// bỏ qua; nếu KHÔNG nặng hơn, giữ nguyên (không hạ cấp) nhưng vẫn trả về id đó để phía trên biết
+// "tin nhắn này đang gắn với cảnh báo nào" — đây chính là điều khiến ca "Lớp 1 dedup, Lớp 2 phát
+// hiện urgent" giờ nâng cấp đúng document thay vì không ghi gì.
+//
+// Finding 2 (Important): findRecentUnhandledAlert giờ nằm TRÊN đường ghi CRISIS_REPLY_TEXT của
+// nhánh urgent — một lỗi truy vấn (vd. composite index chưa build kịp lúc mới deploy) sẽ làm
+// hỏng cả lượt gọi, đúng thứ Finding 4 (round 1) tồn tại để ngăn. FAIL OPEN: mọi lỗi từ
+// findRecentUnhandledAlert đều bị nuốt, coi như "không tìm thấy cảnh báo nào" — tạo cảnh báo
+// mới (chấp nhận trùng) thay vì làm hỏng phản hồi cho một học sinh đang khủng hoảng.
 
 /** Cửa sổ thời gian coi một cảnh báo CHƯA XỬ LÝ là "vẫn còn mới" — trong cửa sổ này, một cảnh
  *  báo thứ hai cho ĐÚNG học sinh đó không được tạo thêm (Fix round 2, Finding 2). "Vài phút" là
@@ -173,14 +195,15 @@ async function appendChatMessage(
   return ref.id;
 }
 
-/** true nếu đã có một cảnh báo CHƯA XỬ LÝ (`handledBy == null`) cho ĐÚNG `userId` này được tạo
- *  trong `CRISIS_ALERT_DEDUP_WINDOW_MS` gần nhất — dùng để phanh việc TẠO cảnh báo mới (Fix
- *  round 2, Finding 2), không phanh bất kỳ điều gì khác. */
-async function hasRecentUnhandledAlert(
+/** Cảnh báo CHƯA XỬ LÝ gần nhất (nếu có) cho ĐÚNG `userId`, trong `CRISIS_ALERT_DEDUP_WINDOW_MS`
+ *  gần nhất. Fix round 3, Finding 1: trả về id VÀ severity (không còn boolean) — caller cần
+ *  severity để quyết định NÂNG CẤP hay giữ nguyên, và cần id dù KHÔNG nâng cấp (để biết tin
+ *  nhắn hiện tại đang "gắn" với cảnh báo nào, cho khả năng Lớp 2 nâng cấp nó sau này). */
+async function findRecentUnhandledAlert(
   db: Firestore,
   userId: string,
   now: Date,
-): Promise<boolean> {
+): Promise<{ id: string; severity: "urgent" | "concern" } | null> {
   const windowStart = Timestamp.fromDate(new Date(now.getTime() - CRISIS_ALERT_DEDUP_WINDOW_MS));
   const snap = await db
     .collection("crisisAlerts")
@@ -189,41 +212,73 @@ async function hasRecentUnhandledAlert(
     .where("createdAt", ">=", windowStart)
     .limit(1)
     .get();
-  return !snap.empty;
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, severity: doc.data().severity as "urgent" | "concern" };
 }
 
-/** Ghi một cảnh báo khủng hoảng MỚI — CHỈ đúng sáu field cho phép (design spec §3.4,
- *  non-negotiable của task-5-brief.md): không bao giờ messageText, trích đoạn, hay tóm tắt nào
- *  lọt vào đây. Trả về `null` (KHÔNG ghi gì) nếu đã có một cảnh báo chưa xử lý gần đây cho đúng
- *  học sinh này (Fix round 2, Finding 2 — phanh TẠO cảnh báo, không phanh phản hồi cho học
- *  sinh: caller vẫn tiếp tục lưu tin nhắn và trả CRISIS_REPLY_TEXT như bình thường dù hàm này
- *  trả về null). */
+/** true nếu `a` nghiêm trọng hơn THẬT SỰ `b` — chỉ hai mức nên so sánh trực tiếp thay vì tái
+ *  dùng `maxSeverity` (maxSeverity còn phải nhận `null`; ở đây cả hai vế luôn đã là giá trị cụ
+ *  thể của một cảnh báo có thật). */
+function isMoreSevere(a: "urgent" | "concern", b: "urgent" | "concern"): boolean {
+  return a === "urgent" && b === "concern";
+}
+
+/**
+ * Ghi (hoặc GẮN VÀO) một cảnh báo khủng hoảng — CHỈ đúng sáu field cho phép (design spec §3.4,
+ * non-negotiable của task-5-brief.md): không bao giờ messageText, trích đoạn, hay tóm tắt nào
+ * lọt vào đây. LUÔN trả về id của document đang đại diện cho tín hiệu này (Fix round 3, Finding
+ * 1 — không còn trả `null` khi bị dedup): document MỚI nếu không có cảnh báo chưa xử lý nào gần
+ * đây, hoặc document ĐÃ CÓ nếu tìm thấy. Nếu tín hiệu MỚI nghiêm trọng hơn cảnh báo đã có, NÂNG
+ * CẤP severity/triggeredBy của nó thay vì bỏ qua — dedup vẫn giữ đúng nghĩa "một document mỗi
+ * đợt", nhưng tín hiệu NẶNG NHẤT trong đợt đó phải thắng, không phải tín hiệu ĐẦU TIÊN. Nếu tín
+ * hiệu mới KHÔNG nghiêm trọng hơn, cảnh báo đã có được giữ nguyên (không hạ cấp) — chỉ id của nó
+ * được trả về.
+ *
+ * Fix round 3, Finding 2: findRecentUnhandledAlert nằm TRÊN đường ghi CRISIS_REPLY_TEXT của
+ * nhánh Lớp 1 "urgent" — một lỗi truy vấn (vd. composite index chưa build kịp lúc mới deploy)
+ * không được phép làm hỏng cả lượt gọi. FAIL OPEN: mọi lỗi từ bước tìm cảnh báo cũ đều bị nuốt
+ * (log lại để chẩn đoán được, không kèm uid — cùng kỷ luật với các console.error khác trong
+ * file này), coi như "không tìm thấy cảnh báo nào" — tạo cảnh báo mới. Một cảnh báo trùng chấp
+ * nhận được; một học sinh đang khủng hoảng không nhận được câu trả lời thì không.
+ */
 async function writeCrisisAlert(
   db: Firestore,
   userId: string,
   severity: "urgent" | "concern",
   triggeredBy: "keyword" | "model" | "both",
   now: Date,
-): Promise<string | null> {
-  if (await hasRecentUnhandledAlert(db, userId, now)) {
-    return null;
+): Promise<string> {
+  let existing: { id: string; severity: "urgent" | "concern" } | null = null;
+  try {
+    existing = await findRecentUnhandledAlert(db, userId, now);
+  } catch (error) {
+    console.error(
+      "sendChatMessage: findRecentUnhandledAlert thất bại — fail-open, vẫn tạo cảnh báo mới",
+      { message: error instanceof Error ? error.message : String(error) },
+    );
+    existing = null;
   }
-  const ref = await db.collection("crisisAlerts").add({
-    userId,
-    severity,
-    triggeredBy,
-    // `Timestamp.fromDate(now)` — KHÔNG dùng FieldValue.serverTimestamp() (khác với
-    // appendChatMessage): hasRecentUnhandledAlert so `createdAt` với một cửa sổ tính từ CHÍNH
-    // `now` này. Nếu `createdAt` là giờ tường thật của server còn cửa sổ tính từ `now` do test
-    // tiêm vào, hai đồng hồ lệch nhau khiến so sánh cửa sổ vô nghĩa (đã bắt được bằng test thất
-    // bại: 6e — Fix round 2, Finding 2 — hai tin "cách nhau 6 phút" theo `now` giả định vẫn bị
-    // coi là "trong cửa sổ" vì `createdAt` thật luôn lớn hơn nhiều so với mốc cửa sổ tính từ một
-    // `now` giả định trong quá khứ).
-    createdAt: Timestamp.fromDate(now),
-    handledBy: null,
-    handledAt: null,
-  });
-  return ref.id;
+
+  if (existing === null) {
+    const ref = await db.collection("crisisAlerts").add({
+      userId,
+      severity,
+      triggeredBy,
+      // `Timestamp.fromDate(now)` — KHÔNG dùng FieldValue.serverTimestamp() (khác với
+      // appendChatMessage): findRecentUnhandledAlert so `createdAt` với một cửa sổ tính từ CHÍNH
+      // `now` này — hai đồng hồ khác nhau khiến so sánh cửa sổ vô nghĩa (Fix round 2, Finding 2).
+      createdAt: Timestamp.fromDate(now),
+      handledBy: null,
+      handledAt: null,
+    });
+    return ref.id;
+  }
+
+  if (isMoreSevere(severity, existing.severity)) {
+    await db.collection("crisisAlerts").doc(existing.id).update({ severity, triggeredBy });
+  }
+  return existing.id;
 }
 
 /** NÂNG CẤP một cảnh báo Lớp 1 đã ghi TRƯỚC đó (id đã biết) lên mức độ NẶNG HƠN kèm
@@ -444,9 +499,11 @@ export async function runSendChatMessage(
     return { messageId: assistantMessageId };
   }
   // "concern" — Fix round 2, Finding 1 (CRITICAL, sửa lỗi round 1 gây ra): ghi NGAY, không hoãn
-  // tới sau khi gọi model nữa. `layer1AlertId` giữ id document (null nếu bị phanh chống-lụt, xem
-  // writeCrisisAlert, HOẶC nếu Lớp 1 không phát hiện gì) để Lớp 2 nâng cấp đúng document đó sau
-  // này thay vì tạo document thứ hai.
+  // tới sau khi gọi model nữa. `layer1AlertId` giữ id document — LUÔN là id thật (document mới
+  // HOẶC document đã có mà tin nhắn này được "gắn" vào, xem writeCrisisAlert; Fix round 3,
+  // Finding 1: không còn null khi bị dedup) khi Lớp 1 phát hiện gì đó; chỉ null nếu Lớp 1 không
+  // phát hiện gì. Lớp 2 dùng id này để nâng cấp đúng document đó sau này thay vì tạo document
+  // thứ hai — kể cả khi document đó không phải do CHÍNH tin nhắn này tạo ra.
   const layer1Severity: InternalSeverity = layer1.severity === "concern" ? "concern" : null;
   const layer1AlertId =
     layer1Severity !== null
