@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminAuth } from "./admin";
+import { ensureUserProfile } from "@/lib/firestore/ensure-user-profile";
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_MS,
@@ -17,6 +18,10 @@ export type SessionUser = {
 };
 
 export async function createSessionCookie(idToken: string): Promise<void> {
+  // Xác minh idToken TRƯỚC để lấy uid + role claim đã xác minh — cần cho việc vá
+  // hồ sơ users/{uid} thiếu bên dưới (xem ensureUserProfile). Hành vi với token
+  // không hợp lệ không đổi: ném lỗi ở đây, POST /api/session vẫn trả 401 qua catch.
+  const decoded = await adminAuth().verifyIdToken(idToken);
   const cookie = await adminAuth().createSessionCookie(idToken, {
     expiresIn: SESSION_MAX_AGE_MS,
   });
@@ -25,6 +30,14 @@ export async function createSessionCookie(idToken: string): Promise<void> {
     SESSION_COOKIE_NAME,
     cookie,
     sessionCookieOptions(process.env.NODE_ENV === "production"),
+  );
+
+  // Vá hồ sơ THIẾU cho tài khoản bootstrap ngoài app (Console/CLI) — không bao giờ
+  // ném lỗi ra ngoài (xem ensureUserProfile), nên không ảnh hưởng gì tới đăng nhập.
+  await ensureUserProfile(
+    decoded.uid,
+    decoded.role === "admin" ? "admin" : "student",
+    decoded.email ?? null,
   );
 }
 
