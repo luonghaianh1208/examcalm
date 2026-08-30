@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signOut,
   deleteUser,
   type User,
@@ -96,6 +97,26 @@ export async function resendVerificationEmail(): Promise<void> {
   await sendEmailVerification(user);
 }
 
+/**
+ * Gửi mail đặt lại mật khẩu.
+ *
+ * Nuốt riêng auth/user-not-found: email chưa đăng ký phải cho ra CÙNG kết quả
+ * với email đã đăng ký, nếu không bất kỳ ai cũng dò được một địa chỉ bất kỳ có
+ * phải học sinh đang dùng ExamCalm hay không. Firebase bật sẵn Email Enumeration
+ * Protection nên thường đã không ném lỗi này — nhưng nếu lớp bảo vệ đó bị tắt ở
+ * Console thì đây vẫn là chốt chặn, không phụ thuộc vào một setting ngoài code.
+ */
+export async function sendPasswordReset(email: string): Promise<void> {
+  const auth = getFirebaseAuth();
+  // Không đặt thì Firebase gửi mail tiếng Anh cho học sinh.
+  auth.languageCode = "vi";
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code !== "auth/user-not-found") throw err;
+  }
+}
+
 /** Thông báo lỗi Firebase Auth bằng tiếng Việt, không lộ chi tiết kỹ thuật. */
 export function authErrorMessage(error: unknown): string {
   const code = (error as { code?: string } | null)?.code ?? "";
@@ -106,6 +127,8 @@ export function authErrorMessage(error: unknown): string {
     case "auth/wrong-password":
     case "auth/user-not-found":
       return "Email hoặc mật khẩu chưa đúng.";
+    case "auth/invalid-email":
+      return "Email không hợp lệ.";
     case "auth/weak-password":
       return "Mật khẩu này chưa đủ an toàn. Bạn thử một mật khẩu khác dài hơn nhé.";
     case "auth/too-many-requests":

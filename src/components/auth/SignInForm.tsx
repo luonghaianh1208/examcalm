@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, authErrorMessage } from "@/lib/auth-client";
 
@@ -37,6 +38,9 @@ export function SignInForm() {
         <span>Mật khẩu</span>
         <input name="password" type="password" required autoComplete="current-password" className="rounded-lg border px-3 py-2" />
       </label>
+      <Link href="/quen-mat-khau" className="-mt-2 self-end text-sm text-teal-700 underline">
+        Quên mật khẩu?
+      </Link>
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}
       <button type="submit" disabled={pending} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-60">
         {pending ? "Đang đăng nhập…" : "Đăng nhập"}
