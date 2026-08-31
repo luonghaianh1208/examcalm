@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import { getAiPublicConfig, type AiPublicConfig } from "@/lib/firestore/ai-public";
@@ -175,6 +176,17 @@ export function AiConsentSection({ uid, initialAiOptIn, initialAiConsentVersion 
           phản chiếu đã lưu.
         </p>
       )}
+
+      {/* Trước fix, ô tick bên dưới là nơi học sinh đồng ý gửi nhật ký cảm xúc của mình
+          cho một dịch vụ AI bên ngoài, nhưng KHÔNG có đường nào từ đây tới trang giải
+          thích đầy đủ (/gioi-thieu) — trang đó không được link từ bất cứ đâu trong app.
+          Người dùng là trẻ vị thành niên, nên lời giải thích phải nằm trong tầm một cú
+          bấm ngay cạnh chỗ đồng ý, không phải chỉ ở URL gõ tay. */}
+      <p className="mb-3 text-sm">
+        <Link href="/gioi-thieu" className="text-teal-700 underline">
+          Đọc kỹ trước khi đồng ý: dữ liệu của bạn được dùng thế nào
+        </Link>
+      </p>
 
       <label className="flex items-start gap-2">
         <input
