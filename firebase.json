@@ -52,7 +52,8 @@
         ".git",
         "firebase-debug.log",
         ".superpowers",
-        "tests",
+        "**/tests/e2e/**",
+        "**/tests/rules/**",
         "**/*.test.ts",
         "**/*.test.tsx",
         "WEB"
