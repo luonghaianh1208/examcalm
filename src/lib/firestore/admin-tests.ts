@@ -23,14 +23,12 @@ export type ParseResult =
   | { ok: true; value: TestDefinitionDraft }
   | { ok: false; error: string };
 
-export function parseTestDraft(json: string): ParseResult {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(json);
-  } catch {
-    return { ok: false, error: "JSON sai cú pháp. Kiểm tra lại dấu ngoặc và dấu phẩy." };
-  }
-
+/**
+ * Kiểm tra một draft ĐÃ là object. Form nhập liệu và ô "Dán JSON" dùng chung
+ * hàm này, nên bộ luật (schema + chống trùng id + ngưỡng min/max) chỉ được
+ * viết MỘT lần — chép lại cho form thì hai bên sẽ lệch nhau ngay lần sửa sau.
+ */
+export function validateTestDraft(raw: unknown): ParseResult {
   const parsed = testDraftSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -48,6 +46,16 @@ export function parseTestDraft(json: string): ParseResult {
   }
 
   return { ok: true, value: parsed.data };
+}
+
+export function parseTestDraft(json: string): ParseResult {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return { ok: false, error: "JSON sai cú pháp. Kiểm tra lại dấu ngoặc và dấu phẩy." };
+  }
+  return validateTestDraft(raw);
 }
 
 /**

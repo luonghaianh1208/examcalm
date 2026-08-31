@@ -23,14 +23,12 @@ export type CbtParseResult =
   | { ok: true; value: CbtModuleDraft }
   | { ok: false; error: string };
 
-export function parseCbtDraft(json: string): CbtParseResult {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(json);
-  } catch {
-    return { ok: false, error: "JSON sai cú pháp. Kiểm tra lại dấu ngoặc và dấu phẩy." };
-  }
-
+/**
+ * Kiểm tra một draft ĐÃ là object. Form nhập liệu và ô "Dán JSON" dùng chung
+ * hàm này, nên bộ luật (schema + chống trùng id) chỉ được viết MỘT lần — chép
+ * lại cho form thì hai bên sẽ lệch nhau ngay lần sửa schema kế tiếp.
+ */
+export function validateCbtDraft(raw: unknown): CbtParseResult {
   const parsed = cbtDraftSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -43,6 +41,16 @@ export function parseCbtDraft(json: string): CbtParseResult {
   }
 
   return { ok: true, value: parsed.data };
+}
+
+export function parseCbtDraft(json: string): CbtParseResult {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return { ok: false, error: "JSON sai cú pháp. Kiểm tra lại dấu ngoặc và dấu phẩy." };
+  }
+  return validateCbtDraft(raw);
 }
 
 /** Liệt kê tường minh — xem giải thích ở toResourceListItem() trong queries-public.ts. */

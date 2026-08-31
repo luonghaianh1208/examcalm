@@ -2,30 +2,31 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  listAllCbtModules, parseCbtDraft, publishCbtModule, saveCbtModule, type CbtModuleRecord,
+  listAllCbtModules, parseCbtDraft, publishCbtModule, saveCbtModule, validateCbtDraft,
+  type CbtModuleRecord,
 } from "@/lib/firestore/admin-cbt";
+import {
+  CbtModuleForm, cbtFormToDraft, draftToCbtForm, type CbtFormValue,
+} from "./CbtModuleForm";
+import { JsonFallbackSection } from "./JsonFallbackSection";
 
-const EMPTY_DRAFT = JSON.stringify(
-  {
-    title: "Bài tập CBT (mẫu)",
-    version: 1,
-    isSampleContent: true,
-    disclaimer: "Không thay thế chuyên gia. Kết quả chỉ mang tính tham khảo.",
-    intro: "Giới thiệu mẫu",
-    steps: [
-      { id: "s1", prompt: "Câu hỏi mẫu 1", hint: "" },
-    ],
-    closingText: "Cảm ơn bạn đã hoàn thành.",
-    suggestedResourceSlugs: [],
-  },
-  null, 2,
-);
+/** Bản mẫu cho bài mới — giữ đúng nội dung mà ô JSON trước đây điền sẵn. */
+const MAU: CbtFormValue = draftToCbtForm({
+  title: "Bài tập CBT (mẫu)",
+  version: 1,
+  isSampleContent: true,
+  disclaimer: "Không thay thế chuyên gia. Kết quả chỉ mang tính tham khảo.",
+  intro: "Giới thiệu mẫu",
+  steps: [{ id: "s1", prompt: "Câu hỏi mẫu 1", hint: "" }],
+  closingText: "Cảm ơn bạn đã hoàn thành.",
+  suggestedResourceSlugs: [],
+});
 
 export function CbtEditor({ adminUid }: { adminUid: string }) {
   const [modules, setModules] = useState<CbtModuleRecord[] | null>(null);
   const [listFailed, setListFailed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [json, setJson] = useState(EMPTY_DRAFT);
+  const [form, setForm] = useState<CbtFormValue>(MAU);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +52,8 @@ export function CbtEditor({ adminUid }: { adminUid: string }) {
     setError(null);
     setMessage(null);
 
-    const parsed = parseCbtDraft(json);
+    // Cùng bộ luật với ô "Dán JSON" — validateCbtDraft() là nguồn duy nhất.
+    const parsed = validateCbtDraft(cbtFormToDraft(form));
     if (!parsed.ok) { setError(parsed.error); return; }
 
     try {
@@ -64,15 +66,22 @@ export function CbtEditor({ adminUid }: { adminUid: string }) {
     }
   }
 
+  function handleApplyJson(json: string) {
+    setError(null);
+    setMessage(null);
+
+    const parsed = parseCbtDraft(json);
+    if (!parsed.ok) { setError(parsed.error); return; }
+
+    setForm(draftToCbtForm(parsed.value));
+    setMessage("Đã nạp JSON vào form. Kiểm tra lại rồi bấm Lưu bản nháp.");
+  }
+
   function handleEdit(mod: CbtModuleRecord) {
     setEditingId(mod.id);
     setMessage(null);
     setError(null);
-    setJson(JSON.stringify({
-      title: mod.title, version: mod.version, isSampleContent: mod.isSampleContent,
-      disclaimer: mod.disclaimer, intro: mod.intro, steps: mod.steps,
-      closingText: mod.closingText, suggestedResourceSlugs: mod.suggestedResourceSlugs,
-    }, null, 2));
+    setForm(draftToCbtForm(mod));
   }
 
   async function handleTogglePublish(mod: CbtModuleRecord) {
@@ -127,42 +136,39 @@ export function CbtEditor({ adminUid }: { adminUid: string }) {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-1 text-lg font-medium">
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">
           {editingId ? "Sửa bài tập CBT" : "Tạo bài tập CBT mới"}
         </h2>
-        <p className="mb-3 text-sm text-slate-500">
-          Nội dung chuyên môn nằm ở đây, không nằm trong code. Khi có thang đo đã thẩm định,
-          chỉ cần dán vào ô này.
+        <p className="text-sm text-slate-500">
+          Nội dung chuyên môn nằm ở đây, không nằm trong code. Điền vào form bên dưới —
+          hoặc nếu đã có bài được thẩm định, dùng mục Dán JSON ở cuối trang.
         </p>
 
-        <label className="flex flex-col gap-1">
-          <span className="sr-only">Nội dung bài tập CBT dạng JSON</span>
-          <textarea
-            value={json} onChange={(e) => setJson(e.target.value)}
-            rows={22} spellCheck={false}
-            aria-label="Nội dung bài tập CBT dạng JSON"
-            className="w-full rounded-lg border p-3 font-mono text-sm"
-          />
-        </label>
+        <CbtModuleForm value={form} onChange={setForm} />
 
-        {error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}
-        {message && <p role="status" className="mt-2 rounded-lg bg-teal-50 px-3 py-2 text-teal-800">{message}</p>}
+        {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}
+        {message && <p role="status" className="rounded-lg bg-teal-50 px-3 py-2 text-teal-800">{message}</p>}
 
-        <div className="mt-3 flex gap-3">
+        <div className="flex gap-3">
           <button type="button" onClick={() => void handleSave()} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white">
             Lưu bản nháp
           </button>
           {editingId && (
             <button
               type="button"
-              onClick={() => { setEditingId(null); setJson(EMPTY_DRAFT); setMessage(null); setError(null); }}
+              onClick={() => { setEditingId(null); setForm(MAU); setMessage(null); setError(null); }}
               className="rounded-lg border px-4 py-2"
             >
               Tạo bài mới
             </button>
           )}
         </div>
+
+        <JsonFallbackSection
+          jsonHienTai={JSON.stringify(cbtFormToDraft(form), null, 2)}
+          onApply={handleApplyJson}
+        />
       </section>
     </div>
   );

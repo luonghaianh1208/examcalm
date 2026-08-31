@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { parseTestDraft, listAllTests, saveTest, publishTest } from "@/lib/firestore/admin-tests";
 import { TestEditor } from "./TestEditor";
@@ -136,7 +136,9 @@ describe("TestEditor", () => {
     await waitFor(() => {
       expect(screen.getByText("Test hiện có")).toBeInTheDocument();
     });
-    expect(screen.getByText(/nội dung mẫu/i)).toBeInTheDocument();
+    // Khoanh vùng trong DÒNG DANH SÁCH: form bên dưới cũng có ô đánh dấu
+    // "Nội dung mẫu", nên tìm trên cả trang sẽ khớp hai chỗ.
+    expect(within(screen.getByRole("listitem")).getByText(/nội dung mẫu/i)).toBeInTheDocument();
   });
 
   it("lưu bản nháp thành công: hiện thông báo và tải lại danh sách", async () => {
@@ -160,21 +162,39 @@ describe("TestEditor", () => {
     });
   });
 
-  it("JSON sai thì báo lỗi qua role=alert và KHÔNG gọi saveTest", async () => {
+  it("form thiếu trường bắt buộc thì báo lỗi qua role=alert và KHÔNG gọi saveTest", async () => {
     mockedListAllTests.mockResolvedValue([]);
     render(<TestEditor adminUid="admin-1" />);
     await waitFor(() => {
       expect(screen.getByText(/chưa có bài test nào/i)).toBeInTheDocument();
     });
 
-    const textarea = screen.getByLabelText(/nội dung bài test dạng json/i);
-    fireEvent.change(textarea, { target: { value: "{khong-phai-json" } });
+    await userEvent.clear(screen.getByLabelText("Tiêu đề"));
     await userEvent.click(screen.getByRole("button", { name: /lưu bản nháp/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/json/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(/title/i);
     });
     expect(mockedSaveTest).not.toHaveBeenCalled();
+  });
+
+  it("JSON dán vào sai cú pháp thì báo lỗi và KHÔNG ghi đè form", async () => {
+    mockedListAllTests.mockResolvedValue([]);
+    render(<TestEditor adminUid="admin-1" />);
+    await waitFor(() => {
+      expect(screen.getByText(/chưa có bài test nào/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("Nội dung dạng JSON"), {
+      target: { value: "{khong-phai-json" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /áp dụng json/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/cú pháp/i);
+    });
+    // Nội dung đang soạn dở không được phép biến mất vì một lần dán hỏng.
+    expect(screen.getByLabelText("Tiêu đề")).toHaveValue("Test lo âu (mẫu)");
   });
 
   it("khi tải lại SAU khi lưu thất bại: chuyển sang trạng thái lỗi, KHÔNG để admin tưởng danh sách cũ vẫn còn đúng", async () => {
@@ -196,7 +216,7 @@ describe("TestEditor", () => {
     expect(screen.queryByText("Test hiện có")).not.toBeInTheDocument();
   });
 
-  it("bấm Sửa nạp đúng nội dung bài test hiện có vào ô JSON", async () => {
+  it("bấm Sửa nạp đúng nội dung bài test hiện có vào form", async () => {
     mockedListAllTests.mockResolvedValue([record1]);
     render(<TestEditor adminUid="admin-1" />);
     await waitFor(() => {
@@ -205,8 +225,8 @@ describe("TestEditor", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /^sửa$/i }));
 
-    const textarea = screen.getByLabelText(/nội dung bài test dạng json/i) as HTMLTextAreaElement;
-    expect(textarea.value).toMatch(/Test hiện có/);
+    expect(screen.getByLabelText("Tiêu đề")).toHaveValue("Test hiện có");
+    expect(screen.getByLabelText("Nội dung câu hỏi")).toHaveValue("Câu 1");
     expect(screen.getByRole("heading", { name: /sửa bài test/i })).toBeInTheDocument();
   });
 

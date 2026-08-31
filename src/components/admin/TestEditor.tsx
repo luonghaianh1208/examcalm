@@ -2,35 +2,43 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  listAllTests, parseTestDraft, publishTest, saveTest, type TestRecord,
+  listAllTests, parseTestDraft, publishTest, saveTest, validateTestDraft, type TestRecord,
 } from "@/lib/firestore/admin-tests";
+import {
+  TestDefinitionForm, draftToTestForm, testFormToDraft, type TestFormValue,
+} from "./TestDefinitionForm";
+import { JsonFallbackSection } from "./JsonFallbackSection";
 
-const EMPTY_DRAFT = JSON.stringify(
-  {
-    title: "Test lo âu (mẫu)",
-    version: 1,
-    isSampleContent: true,
-    disclaimer: "Kết quả chỉ mang tính tham khảo, không phải chẩn đoán y khoa hay tâm lý.",
-    questions: [
-      { id: "q1", text: "Câu hỏi mẫu 1", options: [
+/** Bản mẫu cho bài mới — giữ đúng nội dung mà ô JSON trước đây điền sẵn. */
+const MAU: TestFormValue = draftToTestForm({
+  title: "Test lo âu (mẫu)",
+  version: 1,
+  isSampleContent: true,
+  disclaimer: "Kết quả chỉ mang tính tham khảo, không phải chẩn đoán y khoa hay tâm lý.",
+  questions: [
+    {
+      id: "q1",
+      text: "Câu hỏi mẫu 1",
+      options: [
         { label: "Không bao giờ", score: 0 },
         { label: "Thỉnh thoảng", score: 1 },
         { label: "Thường xuyên", score: 2 },
-      ]},
-    ],
-    scoring: { thresholds: [
+      ],
+    },
+  ],
+  scoring: {
+    thresholds: [
       { min: 0, max: 1, level: "thap", interpretation: "Diễn giải mẫu cho mức thấp." },
       { min: 2, max: 2, level: "cao", interpretation: "Diễn giải mẫu cho mức cao." },
-    ]},
+    ],
   },
-  null, 2,
-);
+});
 
 export function TestEditor({ adminUid }: { adminUid: string }) {
   const [tests, setTests] = useState<TestRecord[] | null>(null);
   const [listFailed, setListFailed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [json, setJson] = useState(EMPTY_DRAFT);
+  const [form, setForm] = useState<TestFormValue>(MAU);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +64,8 @@ export function TestEditor({ adminUid }: { adminUid: string }) {
     setError(null);
     setMessage(null);
 
-    const parsed = parseTestDraft(json);
+    // Cùng bộ luật với ô "Dán JSON" — validateTestDraft() là nguồn duy nhất.
+    const parsed = validateTestDraft(testFormToDraft(form));
     if (!parsed.ok) { setError(parsed.error); return; }
 
     try {
@@ -69,14 +78,22 @@ export function TestEditor({ adminUid }: { adminUid: string }) {
     }
   }
 
+  function handleApplyJson(json: string) {
+    setError(null);
+    setMessage(null);
+
+    const parsed = parseTestDraft(json);
+    if (!parsed.ok) { setError(parsed.error); return; }
+
+    setForm(draftToTestForm(parsed.value));
+    setMessage("Đã nạp JSON vào form. Kiểm tra lại rồi bấm Lưu bản nháp.");
+  }
+
   function handleEdit(test: TestRecord) {
     setEditingId(test.id);
     setMessage(null);
     setError(null);
-    setJson(JSON.stringify({
-      title: test.title, version: test.version, isSampleContent: test.isSampleContent,
-      disclaimer: test.disclaimer, questions: test.questions, scoring: test.scoring,
-    }, null, 2));
+    setForm(draftToTestForm(test));
   }
 
   async function handleTogglePublish(test: TestRecord) {
@@ -131,42 +148,39 @@ export function TestEditor({ adminUid }: { adminUid: string }) {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-1 text-lg font-medium">
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">
           {editingId ? "Sửa bài test" : "Tạo bài test mới"}
         </h2>
-        <p className="mb-3 text-sm text-slate-500">
-          Nội dung chuyên môn nằm ở đây, không nằm trong code. Khi có thang đo đã thẩm định,
-          chỉ cần dán vào ô này.
+        <p className="text-sm text-slate-500">
+          Nội dung chuyên môn nằm ở đây, không nằm trong code. Điền vào form bên dưới —
+          hoặc nếu đã có thang đo được thẩm định, dùng mục Dán JSON ở cuối trang.
         </p>
 
-        <label className="flex flex-col gap-1">
-          <span className="sr-only">Nội dung bài test dạng JSON</span>
-          <textarea
-            value={json} onChange={(e) => setJson(e.target.value)}
-            rows={22} spellCheck={false}
-            aria-label="Nội dung bài test dạng JSON"
-            className="w-full rounded-lg border p-3 font-mono text-sm"
-          />
-        </label>
+        <TestDefinitionForm value={form} onChange={setForm} />
 
-        {error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}
-        {message && <p role="status" className="mt-2 rounded-lg bg-teal-50 px-3 py-2 text-teal-800">{message}</p>}
+        {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}
+        {message && <p role="status" className="rounded-lg bg-teal-50 px-3 py-2 text-teal-800">{message}</p>}
 
-        <div className="mt-3 flex gap-3">
+        <div className="flex gap-3">
           <button type="button" onClick={() => void handleSave()} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white">
             Lưu bản nháp
           </button>
           {editingId && (
             <button
               type="button"
-              onClick={() => { setEditingId(null); setJson(EMPTY_DRAFT); setMessage(null); setError(null); }}
+              onClick={() => { setEditingId(null); setForm(MAU); setMessage(null); setError(null); }}
               className="rounded-lg border px-4 py-2"
             >
               Tạo bài mới
             </button>
           )}
         </div>
+
+        <JsonFallbackSection
+          jsonHienTai={JSON.stringify(testFormToDraft(form), null, 2)}
+          onApply={handleApplyJson}
+        />
       </section>
     </div>
   );
