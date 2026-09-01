@@ -8,28 +8,11 @@ export const dynamic = "force-dynamic";
 
 const dateFormatter = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" });
 
-export default async function Page() {
-  await requireAdmin();
-
-  /*
-   * Chỉ lấy bài đang `hold` — đúng phần việc cần người thật.
-   *
-   * `pending` là trạng thái thoáng qua (Cloud Function đang xử lý), còn
-   * `auto_approved`/`rejected` đã xong. Đổ cả bốn trạng thái vào một danh sách
-   * sẽ biến hàng chờ thành một bảng dữ liệu, và người trực không còn biết hôm
-   * nay mình phải làm bao nhiêu việc.
-   */
-  const snap = await adminDb()
-    .collection("confessions")
-    .where("status", "==", "hold")
-    .orderBy("createdAt", "asc")
-    .limit(100)
-    .get();
-
-  // Chuyển Date sang chuỗi Ở ĐÂY: Date là object đi qua ranh giới Server →
-  // Client Component được, nhưng định dạng ngày tháng nên quyết định một lần ở
-  // phía server để mọi người duyệt thấy cùng một kiểu hiển thị.
-  const items: QueueItem[] = snap.docs.map((d) => {
+function toItems(
+  docs: FirebaseFirestore.QueryDocumentSnapshot[],
+  fallbackReason: string,
+): QueueItem[] {
+  return docs.map((d) => {
     const data = d.data();
     const createdAt = data.createdAt?.toDate?.() ?? null;
     return {
@@ -38,10 +21,45 @@ export default async function Page() {
       moderationReason:
         typeof data.moderationReason === "string" && data.moderationReason !== ""
           ? data.moderationReason
-          : "Chờ người đọc.",
+          : fallbackReason,
       createdAt: createdAt ? dateFormatter.format(createdAt) : null,
     };
   });
+}
+
+export default async function Page() {
+  await requireAdmin();
+
+  /*
+   * Hai danh sách, hai việc khác nhau.
+   *
+   * `hold` là việc PHẢI làm: bài đang chờ người đọc.
+   *
+   * `auto_approved` là đường THU HỒI. Kiểm duyệt tự động có thể sai — đo thực
+   * tế cho thấy mọi model đều có lúc bị lừa cho qua một bài lẽ ra phải giữ
+   * lại. Không có chỗ nào gỡ bài đã đăng nghĩa là khi điều đó xảy ra thì không
+   * ai làm gì được, và nội dung xấu nằm đó cho tới khi có người sửa code.
+   *
+   * `pending` không hiện: đó là trạng thái thoáng qua trong lúc Cloud Function
+   * đang chạy, không phải việc của người duyệt.
+   */
+  const [holdSnap, publishedSnap] = await Promise.all([
+    adminDb()
+      .collection("confessions")
+      .where("status", "==", "hold")
+      .orderBy("createdAt", "asc")
+      .limit(100)
+      .get(),
+    adminDb()
+      .collection("confessions")
+      .where("status", "==", "auto_approved")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get(),
+  ]);
+
+  const cho = toItems(holdSnap.docs, "Chờ người đọc.");
+  const daDang = toItems(publishedSnap.docs, "Đã đăng công khai.");
 
   return (
     <>
@@ -50,7 +68,16 @@ export default async function Page() {
         Bài đang chờ người thật đọc. Bài cũ nhất lên trước — một bài nằm đây quá lâu nghĩa là
         một học sinh đã mở lòng rồi bị im lặng.
       </p>
-      <ConfessionQueue items={items} />
+      <ConfessionQueue items={cho} />
+
+      <section className="mt-10">
+        <h2 className="mb-2 text-lg font-medium text-ink">Bài đang hiển thị công khai</h2>
+        <p className="mb-4 text-sm text-muted">
+          Kiểm duyệt tự động có thể sai. Thấy bài nào không ổn thì gỡ xuống ngay — bài sẽ biến
+          mất khỏi bảng tin của học sinh.
+        </p>
+        <ConfessionQueue items={daDang} mode="published" />
+      </section>
     </>
   );
 }

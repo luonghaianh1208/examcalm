@@ -22,7 +22,20 @@ export type QueueItem = {
  * hợp cần biết danh tính (bài có dấu hiệu tự hại) đã đi qua đường riêng: cảnh
  * báo khủng hoảng, nơi có đủ ngữ cảnh và có ghi vết.
  */
-export function ConfessionQueue({ items }: { items: QueueItem[] }) {
+export function ConfessionQueue({
+  items,
+  mode = "queue",
+}: {
+  items: QueueItem[];
+  /**
+   * "queue" — bài đang chờ duyệt: hai nút Cho đăng / Không đăng.
+   * "published" — bài ĐÃ đăng: chỉ một nút Gỡ xuống.
+   *
+   * Tách hai chế độ thay vì luôn hiện cả hai nút: ở danh sách đã đăng, nút
+   * "Cho đăng" không có nghĩa gì và chỉ tạo thêm cơ hội bấm nhầm.
+   */
+  mode?: "queue" | "published";
+}) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +54,11 @@ export function ConfessionQueue({ items }: { items: QueueItem[] }) {
   }
 
   if (items.length === 0) {
-    return (
+    return mode === "published" ? (
+      <p className="rounded-[var(--ec-radius-lg)] bg-subtle px-5 py-6 text-body">
+        Chưa có bài nào được đăng công khai.
+      </p>
+    ) : (
       <p className="rounded-[var(--ec-radius-lg)] bg-success-soft px-5 py-6 text-success">
         Không có bài nào đang chờ. Hàng chờ trống.
       </p>
@@ -68,21 +85,23 @@ export function ConfessionQueue({ items }: { items: QueueItem[] }) {
               {item.createdAt && ` · gửi lúc ${item.createdAt}`}
             </p>
             <div className="mt-3 flex flex-wrap gap-3">
-              <button
-                type="button"
-                disabled={pendingId === item.id}
-                onClick={() => quyetDinh(item.id, true)}
-                className="min-h-11 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 text-sm font-medium text-ink-inverse disabled:opacity-60"
-              >
-                Cho đăng
-              </button>
+              {mode === "queue" && (
+                <button
+                  type="button"
+                  disabled={pendingId === item.id}
+                  onClick={() => quyetDinh(item.id, true)}
+                  className="min-h-11 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 text-sm font-medium text-ink-inverse disabled:opacity-60"
+                >
+                  Cho đăng
+                </button>
+              )}
               <button
                 type="button"
                 disabled={pendingId === item.id}
                 onClick={() => quyetDinh(item.id, false)}
                 className="min-h-11 rounded-[var(--ec-radius-md)] border border-line px-5 text-sm text-body disabled:opacity-60"
               >
-                Không đăng
+                {mode === "published" ? "Gỡ xuống" : "Không đăng"}
               </button>
             </div>
           </li>
