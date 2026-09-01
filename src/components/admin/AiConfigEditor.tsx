@@ -8,6 +8,7 @@ import {
   type PromptTemplateRecord,
 } from "@/lib/firestore/admin-ai";
 import { callTestAiConnection } from "@/lib/firebase/functions-client";
+import { PROMPT_AUTHORING_NOTES, PROMPT_TEMPLATE_LIBRARY } from "@/lib/prompt-template-library";
 
 /** Tên secret trong Secret Manager — đặt qua CLI, KHÔNG BAO GIỜ nhập ở trang này (task-12-brief.md,
  *  Decision C). Chuỗi này chỉ được phép xuất hiện dưới dạng TEXT HIỂN THỊ trong file này. */
@@ -609,6 +610,52 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
         <h2 className="text-lg font-medium">
           {editingTemplateId ? "Sửa prompt" : "Soạn prompt mới"}
         </h2>
+
+        {/*
+          Kho mẫu tham khảo. Trước đây trang này mở ra là hai ô trống, không có
+          cách nào biết hệ thống mong đợi gì — và ba điều dễ sai nhất đều sai
+          một cách IM LẶNG (viết lại quy định định dạng gây mâu thuẫn với phần
+          hệ thống nối vào; dùng {{biến}} thì hiện nguyên văn cho model đọc).
+        */}
+        <div className="rounded-lg border border-line bg-subtle px-4 py-3">
+          <h3 className="font-medium text-ink">Mẫu tham khảo</h3>
+          <ul className="mt-2 flex flex-col gap-1 text-sm text-body">
+            {PROMPT_AUTHORING_NOTES.map((note) => (
+              <li key={note}>• {note}</li>
+            ))}
+          </ul>
+
+          <ul className="mt-3 flex flex-col gap-2">
+            {PROMPT_TEMPLATE_LIBRARY.map((mau) => (
+              <li
+                key={mau.id}
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[var(--ec-radius-md)] bg-surface px-3 py-2"
+              >
+                <span className="font-medium text-ink">{mau.title}</span>
+                <span className="min-w-0 flex-1 text-sm text-muted">{mau.whenToUse}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // CHỈ điền vào form, không lưu. Người soạn vẫn phải đọc,
+                    // sửa cho hợp trường mình, rồi mới bấm Lưu nháp — mẫu là
+                    // điểm xuất phát, không phải bản đã duyệt.
+                    setTemplateForm((prev) => ({
+                      ...prev,
+                      systemPrompt: mau.systemPrompt,
+                      userTemplate: mau.userTemplate,
+                    }));
+                    setTemplateMessage(
+                      `Đã điền mẫu "${mau.title}" vào form bên dưới. Chưa lưu gì — đọc lại và sửa cho hợp với trường mình trước khi lưu nháp.`,
+                    );
+                  }}
+                  className="min-h-9 shrink-0 text-sm text-link underline"
+                >
+                  Dùng mẫu này
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
 
         <label className="flex flex-col gap-1">
           <span>Tên template</span>

@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { runSaveAiConfig } from "./saveAiConfig";
-import { DEFAULT_AI_CONFIG, type AiConfig } from "../ai/config";
+import { DEFAULT_AI_CONFIG, PROVIDER_BASE_URL, PROVIDER_LABEL, type AiConfig } from "../ai/config";
 import { PermissionDeniedError, type CallerAuth } from "./guards";
 
 let app: App;
@@ -40,6 +40,14 @@ beforeEach(async () => {
 const ADMIN_AUTH: CallerAuth = { uid: "admin1", token: { role: "admin" } };
 const STUDENT_AUTH: CallerAuth = { uid: "student1", token: { role: "student" } };
 
+/*
+ * providerLabel/baseUrl ở đây CỐ Ý là một nhà cung cấp KHÁC nơi hệ thống thật
+ * sự gọi tới. Nhà cung cấp giờ được ghim cứng trong config.ts và runSaveAiConfig
+ * ép lại hai field này bất kể client gửi gì — nên payload "sai" này chính là
+ * phép thử: mọi assertion bên dưới phải thấy giá trị ĐÃ GHIM, không thấy giá trị
+ * gửi lên. Nếu một ngày nào đó test đọc lại đúng "DeepSeek", nghĩa là lớp ép đã
+ * mất và trang quản trị lại trỏ được dữ liệu học sinh đi nơi khác.
+ */
 const VALID_CONFIG: AiConfig = {
   providerLabel: "DeepSeek",
   baseUrl: "https://api.deepseek.com/v1",
@@ -78,7 +86,7 @@ describe("runSaveAiConfig", () => {
 
     const aiConfigSnap = await db.collection("systemConfig").doc("aiConfig").get();
     expect(aiConfigSnap.data()).toMatchObject({
-      providerLabel: "DeepSeek", baseUrl: VALID_CONFIG.baseUrl, model: VALID_CONFIG.model,
+      providerLabel: PROVIDER_LABEL, baseUrl: PROVIDER_BASE_URL, model: VALID_CONFIG.model,
       updatedBy: "admin1",
     });
 
@@ -87,7 +95,7 @@ describe("runSaveAiConfig", () => {
     // cho từng tính năng — VALID_CONFIG bật phản chiếu (killSwitch.moodReflection=false), tắt
     // chat (killSwitch.chat=true).
     expect(aiPublicSnap.data()).toEqual({
-      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: true, chatEnabled: false,
+      providerLabel: PROVIDER_LABEL, enabled: true, reflectionEnabled: true, chatEnabled: false,
     });
   });
 
@@ -104,7 +112,7 @@ describe("runSaveAiConfig", () => {
 
     const aiPublicSnap = await db.collection("systemConfig").doc("aiPublic").get();
     expect(aiPublicSnap.data()).toEqual({
-      providerLabel: "DeepSeek", enabled: true, reflectionEnabled: false, chatEnabled: true,
+      providerLabel: PROVIDER_LABEL, enabled: true, reflectionEnabled: false, chatEnabled: true,
     });
   });
 
@@ -154,9 +162,10 @@ describe("runSaveAiConfig", () => {
       providerLabel: "OldProvider",
       killSwitch: { moodReflection: true, chat: true },
     });
+    // after = giá trị ĐÃ GHIM, không phải giá trị client gửi lên (xem VALID_CONFIG).
     expect(entry?.after).toEqual({
-      baseUrl: "https://api.deepseek.com/v1",
-      providerLabel: "DeepSeek",
+      baseUrl: PROVIDER_BASE_URL,
+      providerLabel: PROVIDER_LABEL,
       killSwitch: { moodReflection: false, chat: true },
     });
   });

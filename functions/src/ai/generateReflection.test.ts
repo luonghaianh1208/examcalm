@@ -146,8 +146,10 @@ describe("generateReflection", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
-  it("4. aiConfig.baseUrl rỗng (chưa cấu hình) → failed-precondition, không gọi mạng", async () => {
-    await setAiConfig({ baseUrl: "" });
+  // Cổng "chưa cấu hình" giờ đọc `model`, không đọc `baseUrl`: baseUrl được ghim cứng trong
+  // config.ts nên không bao giờ rỗng, còn model thì admin vẫn phải tự điền ở trang quản trị.
+  it("4. aiConfig.model rỗng (chưa cấu hình) → failed-precondition, không gọi mạng", async () => {
+    await setAiConfig({ model: "" });
     await setUser(STUDENT_UID, true);
     await setMoodLog("m1", STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);

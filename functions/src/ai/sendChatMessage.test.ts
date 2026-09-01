@@ -7,7 +7,7 @@
 //
 // Fix round 1 (review từ coordinator) — các test dưới đây phản ánh guard order MỚI:
 // chưa đăng nhập → email chưa xác thực → input parse → aiOptIn tắt → session không tồn tại →
-// session không sở hữu → LỚP 1 → kill switch (RIÊNG cho chat) → baseUrl rỗng → quota (RIÊNG
+// session không sở hữu → LỚP 1 → kill switch (RIÊNG cho chat) → model rỗng → quota (RIÊNG
 // cho chat, cả ngân sách ngày lẫn rate limit) → provider. Và một quyết định cảnh báo GỘP (một
 // document, không phải mỗi lớp một document).
 
@@ -446,9 +446,11 @@ describe("sendChatMessage", () => {
     expect(messages[1]).toMatchObject({ text: CRISIS_REPLY_TEXT, isCrisisResponse: true });
   });
 
-  // Cùng tinh thần 6b: baseUrl rỗng cũng không được chặn một tin urgent.
-  it("6c. Lớp 1 urgent VẪN được phục vụ khi baseUrl rỗng (chưa cấu hình provider)", async () => {
-    await setAiConfig({ baseUrl: "" });
+  // Cùng tinh thần 6b: chưa cấu hình provider cũng không được chặn một tin urgent.
+  // Cổng "chưa cấu hình" đọc `model`, không đọc `baseUrl` — baseUrl ghim cứng trong config.ts
+  // nên không bao giờ rỗng; đặt baseUrl="" ở đây sẽ là một test luôn xanh vì lý do sai.
+  it("6c. Lớp 1 urgent VẪN được phục vụ khi model rỗng (chưa cấu hình provider)", async () => {
+    await setAiConfig({ model: "" });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
@@ -869,8 +871,8 @@ describe("sendChatMessage", () => {
     expect(alerts.size).toBe(1);
   });
 
-  it("7m. Lớp 1 concern đã ghi cảnh báo → baseUrl rỗng ngay sau đó → KHÔNG failed-precondition (I5): trả CRISIS_REPLY_TEXT", async () => {
-    await setAiConfig({ baseUrl: "" });
+  it("7m. Lớp 1 concern đã ghi cảnh báo → model rỗng ngay sau đó → KHÔNG failed-precondition (I5): trả CRISIS_REPLY_TEXT", async () => {
+    await setAiConfig({ model: "" });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
@@ -973,8 +975,8 @@ describe("sendChatMessage", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
-  it("9. aiConfig.baseUrl rỗng (chưa cấu hình) → failed-precondition, không gọi mạng", async () => {
-    await setAiConfig({ baseUrl: "" });
+  it("9. aiConfig.model rỗng (chưa cấu hình) → failed-precondition, không gọi mạng", async () => {
+    await setAiConfig({ model: "" });
     await setUser(STUDENT_UID, true);
     await setChatSession(SESSION_ID, STUDENT_UID);
     const fake = fakeCallChatCompletion(VALID_MODEL_TEXT);
