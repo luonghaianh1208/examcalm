@@ -4,7 +4,7 @@ export const metadata = { title: "Giới thiệu" };
 
 export default function Page() {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-10">
+    <div className="mx-auto w-full max-w-[760px] py-10">
       <h1 className="mb-6 text-2xl font-semibold">Về ExamCalm</h1>
 
       <section className="mb-8">
@@ -62,6 +62,6 @@ export default function Page() {
           Bạn mèo đồng hành xuất hiện ở góc màn hình. Bấm vào để ghi lại cảm xúc bất cứ lúc nào.
         </p>
       </section>
-    </main>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listPublishedTests } from "@/lib/firebase/queries-public";
+import { estimateMinutes } from "@/lib/test-meta";
 
 export const metadata = { title: "Bài test" };
 // Trang đọc dữ liệu do admin quản lý trong Firestore — nếu prerender lúc
@@ -12,29 +13,47 @@ export default async function Page() {
   const tests = await listPublishedTests();
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-10">
-      <h1 className="mb-2 text-2xl font-semibold">Bài test</h1>
-      <p className="mb-6 text-slate-600">
+    <div className="mx-auto w-full max-w-[760px] py-10">
+      <h1 className="mb-2 text-2xl font-semibold text-ink">Bài test</h1>
+      <p className="mb-6 text-muted">
         Các bài test giúp bạn hiểu hơn trạng thái của mình. Đây là công cụ tự tìm hiểu,
         không phải công cụ chẩn đoán.
       </p>
 
       {tests.length === 0 ? (
-        <p className="rounded-xl bg-slate-100 px-4 py-6 text-slate-600">
+        <p className="rounded-[var(--ec-radius-lg)] bg-subtle px-5 py-6 text-body">
           Chưa có bài test nào được đăng.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {tests.map((test) => (
-            <li key={test.id}>
-              <Link href={`/test/${test.id}`} className="block rounded-xl border px-4 py-4 hover:bg-slate-50">
-                <span className="font-medium">{test.title}</span>
-                <span className="block text-sm text-slate-500">{test.questions.length} câu hỏi</span>
-              </Link>
-            </li>
-          ))}
+          {tests.map((test) => {
+            const minutes = estimateMinutes(test.questions.length);
+            return (
+              <li key={test.id}>
+                <Link
+                  href={`/test/${test.id}`}
+                  className="block rounded-[var(--ec-radius-lg)] border border-line px-5 py-4 transition-colors hover:bg-subtle"
+                >
+                  <span className="font-medium text-ink">{test.title}</span>
+                  {/* Phản hồi 1.1-1.4: nói rõ mất bao lâu, bao nhiêu câu, giúp
+                      hiểu gì, đã thẩm định chưa — NGAY ở danh sách, trước khi
+                      học sinh bấm vào. */}
+                  <span className="mt-1 block text-sm text-muted">
+                    {minutes > 0 && `khoảng ${minutes} phút · `}
+                    {test.questions.length} câu
+                    {test.expertReviewedBy
+                      ? ` · đã thẩm định bởi ${test.expertReviewedBy}`
+                      : " · chưa có chuyên gia thẩm định"}
+                  </span>
+                  {test.purpose && (
+                    <span className="mt-2 block text-body">{test.purpose}</span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

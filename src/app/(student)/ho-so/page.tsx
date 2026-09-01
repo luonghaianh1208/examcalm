@@ -17,7 +17,7 @@ export default async function Page() {
   const aiConsentVersion = typeof rawAiConsentVersion === "number" ? rawAiConsentVersion : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10">
+    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 py-10">
       <h1 className="text-2xl font-semibold">Hồ sơ và quyền riêng tư</h1>
       <ResearchConsentForm uid={user.uid} initialGranted={granted} />
       <AiConsentSection
@@ -26,6 +26,6 @@ export default async function Page() {
         initialAiConsentVersion={aiConsentVersion}
       />
       <DeleteAccountSection uid={user.uid} />
-    </main>
+    </div>
   );
 }

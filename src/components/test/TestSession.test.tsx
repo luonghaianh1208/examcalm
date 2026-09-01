@@ -20,12 +20,17 @@ const TEST: TestDefinition & { id: string } = {
     { min: 0, max: 1, level: "thap", interpretation: "Mức thấp." },
     { min: 2, max: 2, level: "cao", interpretation: "Mức cao." },
   ]},
-  disclaimer: "Không phải chẩn đoán.",
+  disclaimer: "Không phải chẩn đoán.", purpose: "", expertReviewedBy: "",
   updatedBy: "admin-1",
 };
 
+/**
+ * Bài test giờ mở ra ở màn giới thiệu rồi mới tới câu hỏi (xem TestRunner) —
+ * phải bấm "Bắt đầu" trước. Fixture chỉ có một câu nên sau đó là nộp luôn.
+ */
 async function completeTest() {
   const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: /bắt đầu/i }));
   await user.click(screen.getByRole("radio", { name: "Có" }));
   await user.click(screen.getByRole("button", { name: /xem kết quả/i }));
 }

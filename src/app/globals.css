@@ -2,6 +2,14 @@
 @import "./brand-tokens.css";
 
 /*
+ * Trang bài viết trong Thư viện render Markdown và dùng class `prose`, nhưng
+ * plugin typography chưa từng được cài — nên suốt thời gian qua nội dung bài
+ * viết hiển thị KHÔNG có định dạng nào: tiêu đề trong bài to bằng chữ thường,
+ * danh sách không có dấu đầu dòng. Dòng này bật nó lên.
+ */
+@plugin "@tailwindcss/typography";
+
+/*
  * ============================================================================
  * HỆ MÀU EXAMCALM — đọc phần này trước khi viết màu ở bất kỳ đâu
  * ============================================================================
@@ -135,6 +143,29 @@
   --color-rose-700: var(--ec-text-danger);
   --color-rose-800: var(--ec-text-danger);
   --color-rose-900: var(--ec-text-danger);
+}
+
+/*
+ * Bài viết Markdown dùng token thương hiệu thay cho bảng màu mặc định của
+ * plugin typography — nếu không, chữ trong bài sẽ là màu xám của Tailwind
+ * trong khi phần còn lại của trang dùng màu ExamCalm.
+ */
+.prose {
+  --tw-prose-body: var(--ec-text-default);
+  --tw-prose-headings: var(--ec-text-strong);
+  --tw-prose-links: var(--ec-text-link);
+  --tw-prose-bold: var(--ec-text-strong);
+  --tw-prose-counters: var(--ec-text-muted);
+  --tw-prose-bullets: var(--ec-border-strong);
+  --tw-prose-hr: var(--ec-border-default);
+  --tw-prose-quotes: var(--ec-text-strong);
+  --tw-prose-quote-borders: var(--ec-border-default);
+  --tw-prose-captions: var(--ec-text-muted);
+  --tw-prose-code: var(--ec-text-strong);
+  --tw-prose-pre-bg: var(--ec-bg-subtle);
+  --tw-prose-pre-code: var(--ec-text-default);
+  --tw-prose-th-borders: var(--ec-border-default);
+  --tw-prose-td-borders: var(--ec-border-default);
 }
 
 /*

@@ -26,6 +26,21 @@ export const testDefinitionSchema = z.object({
   questions: z.array(questionSchema),
   scoring: z.object({ thresholds: z.array(thresholdSchema) }),
   disclaimer: z.string().min(1),
+  /**
+   * Bài test này giúp học sinh hiểu điều gì — phản hồi 1.3.
+   *
+   * Nội dung do thầy cô soạn, không sinh ra từ code. Để trống thì dòng này
+   * không hiện, chứ không tự bịa một câu mô tả.
+   */
+  purpose: z.string().max(300).default(""),
+  /**
+   * Tên chuyên gia đã thẩm định nội dung — phản hồi 1.4.
+   *
+   * Chuỗi rỗng nghĩa là CHƯA được thẩm định, và màn hình phải nói thẳng điều
+   * đó. Đây là dự án KHKT sẽ bị hỏi về căn cứ khoa học: im lặng để người đọc
+   * tự suy ra là đã có chuyên gia duyệt thì tệ hơn hẳn việc nói chưa có.
+   */
+  expertReviewedBy: z.string().max(200).default(""),
   updatedBy: z.string().min(1),
 });
 

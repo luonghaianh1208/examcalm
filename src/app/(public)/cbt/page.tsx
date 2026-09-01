@@ -12,7 +12,7 @@ export default async function CbtListPage() {
   const modules = await listPublishedCbtModules();
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-4">
+    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 py-10">
       <h1 className="text-2xl font-semibold text-slate-900">Bài tập nhận diện suy nghĩ</h1>
       <p className="text-slate-700">
         Những bài tập ngắn giúp bạn nhìn lại một suy nghĩ đang làm bạn lo. Làm lúc nào cũng được,
@@ -38,6 +38,6 @@ export default async function CbtListPage() {
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

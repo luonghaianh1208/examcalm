@@ -34,6 +34,8 @@ function toResourceRecord(id: string, data: Resource): ResourceRecord {
     category: data.category,
     tags: data.tags,
     content: data.content,
+    // ?? "" — document tạo trước khi có field này thì không có nó.
+    tryThis: data.tryThis ?? "",
     videoUrl: data.videoUrl,
     status: data.status,
     visibility: data.visibility,

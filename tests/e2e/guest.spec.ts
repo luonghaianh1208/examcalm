@@ -14,13 +14,30 @@ import { clickAndConfirmChecked } from "./support/hydration";
 async function openSampleTest(page: Page): Promise<void> {
   await page.goto("/test");
   await page.getByRole("link", { name: /MẪU/ }).click();
-  await expect(page.getByRole("button", { name: /xem kết quả/i })).toBeVisible();
+  // Bài test mở ra ở MÀN GIỚI THIỆU (số câu, thời gian, thẩm định, lời miễn
+  // trừ) rồi mới tới câu hỏi — xem TestRunner. Nút "Bắt đầu" chỉ có ở trang
+  // đích nên vẫn dùng được làm mốc đồng bộ điều hướng.
+  const batDau = page.getByRole("button", { name: /^bắt đầu$/i });
+  await expect(batDau).toBeVisible();
+  await batDau.click();
 }
 
+/**
+ * Trả lời "Không bao giờ" cho mọi câu.
+ *
+ * Giờ mỗi màn hình chỉ có MỘT câu, nên phải chọn rồi bấm "Tiếp theo" lặp lại
+ * cho tới câu cuối — câu cuối không còn nút "Tiếp theo" mà là "Xem kết quả".
+ */
 async function answerAllWithNever(page: Page): Promise<void> {
-  const radios = page.getByRole("radio", { name: "Không bao giờ" });
-  const count = await radios.count();
-  for (let i = 0; i < count; i++) await clickAndConfirmChecked(radios.nth(i));
+  // Trần lặp: bảo vệ khỏi vòng lặp vô hạn nếu luồng đổi lần nữa. Bài test mẫu
+  // chỉ có vài câu nên 30 là dư sức mà vẫn dừng nhanh khi có lỗi.
+  for (let i = 0; i < 30; i++) {
+    await clickAndConfirmChecked(page.getByRole("radio", { name: "Không bao giờ" }));
+    const tiepTheo = page.getByRole("button", { name: /tiếp theo/i });
+    if ((await tiepTheo.count()) === 0) return;
+    await tiepTheo.click();
+  }
+  throw new Error("Không tới được câu cuối sau 30 bước — luồng làm bài có thể đã đổi.");
 }
 
 test.describe("Khách chưa đăng nhập", () => {

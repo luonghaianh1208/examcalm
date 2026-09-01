@@ -13,12 +13,12 @@ import {
 // của một tài nguyên khác "article" (vd: "tip") vào state form.
 type FormState = {
   title: string; slug: string; type: ResourceType; category: string;
-  tags: string; content: string; videoUrl: string; visibility: "public" | "student_only";
+  tags: string; content: string; tryThis: string; videoUrl: string; visibility: "public" | "student_only";
 };
 
 const EMPTY: FormState = {
   title: "", slug: "", type: "article", category: "",
-  tags: "", content: "", videoUrl: "", visibility: "public",
+  tags: "", content: "", tryThis: "", videoUrl: "", visibility: "public",
 };
 
 export function ResourceEditor({ adminUid }: { adminUid: string }) {
@@ -73,6 +73,7 @@ export function ResourceEditor({ adminUid }: { adminUid: string }) {
       category: form.category.trim(),
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
       content: form.content,
+      tryThis: form.tryThis.trim(),
       videoUrl: form.videoUrl.trim() || null,
       visibility: form.visibility,
     });
@@ -98,7 +99,7 @@ export function ResourceEditor({ adminUid }: { adminUid: string }) {
     setError(null);
     setForm({
       title: item.title, slug: item.slug, type: item.type, category: item.category,
-      tags: item.tags.join(", "), content: item.content,
+      tags: item.tags.join(", "), content: item.content, tryThis: item.tryThis,
       videoUrl: item.videoUrl ?? "", visibility: item.visibility,
     });
   }
@@ -216,6 +217,20 @@ export function ResourceEditor({ adminUid }: { adminUid: string }) {
             value={form.content} onChange={(e) => update("content", e.target.value)}
             rows={16} className="rounded-lg border p-3 font-mono text-sm"
           />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span>Một việc có thể thử ngay</span>
+          <textarea
+            value={form.tryThis} onChange={(e) => update("tryThis", e.target.value)}
+            rows={2} maxLength={300}
+            placeholder="Ví dụ: Đặt hẹn giờ 5 phút và chỉ tập trung vào một câu hỏi duy nhất."
+            className="rounded-lg border p-3"
+          />
+          <span className="text-sm text-muted">
+            Hiện ở cuối bài, dưới dạng một hành động cụ thể học sinh làm được ngay. Để
+            trống thì khối này không hiện — đừng viết câu chung chung cho có.
+          </span>
         </label>
 
         {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}

@@ -8,9 +8,9 @@ export default async function Page() {
   const user = await requireUser();
   const all = await listPublishedResources({ includeStudentOnly: true, limit: 200 });
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-10">
+    <div className="mx-auto w-full max-w-[760px] py-10">
       <h1 className="mb-6 text-2xl font-semibold">Bài đã lưu</h1>
       <SavedResourceList uid={user.uid} allResources={all} />
-    </main>
+    </div>
   );
 }

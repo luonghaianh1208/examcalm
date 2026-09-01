@@ -22,12 +22,12 @@ export default async function CbtModulePage({ params }: PageProps<"/cbt/[moduleI
   const user = await getSessionUser();
 
   return (
-    <main>
+    <div className="mx-auto w-full max-w-[760px] py-10">
       <CbtRunner
         module={mod}
         uid={user?.uid ?? null}
         canSave={Boolean(user?.emailVerified)}
       />
-    </main>
+    </div>
   );
 }

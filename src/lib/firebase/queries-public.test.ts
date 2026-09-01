@@ -12,7 +12,7 @@ vi.mock("./admin", () => ({ adminDb: vi.fn() }));
 const { adminDb } = await import("./admin");
 const {
   filterResources, listPublishedResources, getResourceBySlug,
-  listPublishedTests, getPublishedTest, toCbtModuleListItem,
+  listPublishedTests, getPublishedTest, toCbtModuleListItem, normalizeForSearch,
 } = await import("./queries-public");
 const mockedAdminDb = vi.mocked(adminDb);
 
@@ -25,6 +25,7 @@ function makeItem(overrides: Partial<ResourceListItem> = {}): ResourceListItem {
     category: "lo-au-thi",
     tags: ["hoc-tap"],
     content: "Nội dung",
+    tryThis: "",
     videoUrl: null,
     status: "published",
     visibility: "public",
@@ -175,7 +176,8 @@ function fakeDb(getResult: unknown): Firestore {
 
 const RAW_RESOURCE = {
   title: "Bài viết", slug: "bai-viet", type: "article", category: "lo-au-thi",
-  tags: ["hoc-tap"], content: "Nội dung", videoUrl: null, status: "published",
+  tags: ["hoc-tap"], content: "Nội dung",
+  tryThis: "", videoUrl: null, status: "published",
   visibility: "public", createdBy: "teacher-1",
   // Field ngoài schema — mô phỏng đúng thứ Firestore thật sự trả về.
   createdAt: new FakeTimestamp(), updatedAt: new FakeTimestamp(),
@@ -193,13 +195,13 @@ const RAW_TEST = {
 };
 
 const EXPECTED_RESOURCE_KEYS = [
-  "id", "title", "slug", "type", "category", "tags", "content", "videoUrl",
+  "id", "title", "slug", "type", "category", "tags", "content", "tryThis", "videoUrl",
   "status", "visibility", "createdBy",
 ].sort();
 
 const EXPECTED_TEST_KEYS = [
   "id", "title", "version", "status", "isSampleContent", "questions",
-  "scoring", "disclaimer", "updatedBy",
+  "scoring", "disclaimer", "purpose", "expertReviewedBy", "updatedBy",
 ].sort();
 
 describe("hàm đọc chỉ trả về đúng field đã khai báo trong type", () => {
@@ -241,5 +243,57 @@ describe("hàm đọc chỉ trả về đúng field đã khai báo trong type", 
       "closingText", "disclaimer", "id", "intro", "isSampleContent", "status",
       "steps", "suggestedResourceSlugs", "title", "updatedBy", "version",
     ]);
+  });
+});
+
+describe("normalizeForSearch", () => {
+  it("bỏ dấu thanh và dấu nguyên âm", () => {
+    expect(normalizeForSearch("Kỹ thuật thở")).toBe("ky thuat tho");
+  });
+
+  // đ/Đ KHÔNG phân rã theo NFD nên phải xử lý riêng. Thiếu bước đó thì học
+  // sinh gõ "dong" sẽ không tìm ra bài có chữ "đông".
+  it("chuyển đ thành d", () => {
+    expect(normalizeForSearch("Đông")).toBe("dong");
+    expect(normalizeForSearch("ĐỀ THI")).toBe("de thi");
+  });
+
+  it("chuyển về chữ thường và cắt khoảng trắng thừa", () => {
+    expect(normalizeForSearch("  BÌNH TĨNH  ")).toBe("binh tinh");
+  });
+});
+
+describe("filterResources — tìm kiếm", () => {
+  const items = [
+    makeItem({ id: "a", title: "Kỹ thuật thở 4-7-8", category: "thu-gian", tags: ["tho"] }),
+    makeItem({ id: "b", title: "Chia nhỏ buổi ôn", category: "hoc-tap", tags: ["ke-hoach"] }),
+  ];
+
+  it("không có từ khoá thì trả về tất cả", () => {
+    expect(filterResources(items, { search: "" })).toHaveLength(2);
+  });
+
+  // Đây là lý do tồn tại của việc bỏ dấu: học sinh gõ nhanh trên điện thoại
+  // thường không bỏ dấu.
+  it("gõ không dấu vẫn tìm được bài có dấu", () => {
+    const found = filterResources(items, { search: "ky thuat" });
+    expect(found.map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("tìm được theo chủ đề và theo thẻ", () => {
+    expect(filterResources(items, { search: "hoc-tap" }).map((r) => r.id)).toEqual(["b"]);
+    expect(filterResources(items, { search: "ke-hoach" }).map((r) => r.id)).toEqual(["b"]);
+  });
+
+  // Cố ý KHÔNG tìm trong nội dung bài: một từ phổ biến sẽ khớp gần như toàn bộ
+  // thư viện và học sinh không đoán được vì sao ra kết quả đó.
+  it("không tìm trong nội dung bài", () => {
+    const withContent = [makeItem({ id: "c", title: "Tiêu đề khác", content: "chứa chữ độcđáo" })];
+    expect(filterResources(withContent, { search: "docdao" })).toHaveLength(0);
+  });
+
+  it("kết hợp được với lọc theo chủ đề", () => {
+    const found = filterResources(items, { category: "thu-gian", search: "tho" });
+    expect(found.map((r) => r.id)).toEqual(["a"]);
   });
 });

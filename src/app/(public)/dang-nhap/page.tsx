@@ -5,11 +5,11 @@ export const metadata = { title: "Đăng nhập" };
 
 export default function Page() {
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-10">
+    <div className="mx-auto w-full max-w-md py-10">
       <h1 className="mb-6 text-2xl font-semibold">Đăng nhập</h1>
       <Suspense fallback={<p>Đang tải…</p>}>
         <SignInForm />
       </Suspense>
-    </main>
+    </div>
   );
 }

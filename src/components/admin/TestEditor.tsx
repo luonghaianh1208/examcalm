@@ -15,6 +15,10 @@ const MAU: TestFormValue = draftToTestForm({
   version: 1,
   isSampleContent: true,
   disclaimer: "Kết quả chỉ mang tính tham khảo, không phải chẩn đoán y khoa hay tâm lý.",
+  // Bản mẫu để TRỐNG hai field này có chủ ý: điền sẵn một câu mục đích hay một
+  // tên chuyên gia giả sẽ theo bài mẫu đi thẳng ra production nếu ai đó quên sửa.
+  purpose: "",
+  expertReviewedBy: "",
   questions: [
     {
       id: "q1",

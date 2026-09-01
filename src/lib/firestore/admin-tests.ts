@@ -13,6 +13,10 @@ export const testDraftSchema = z.object({
   version: z.number().int().min(1),
   isSampleContent: z.boolean(),
   disclaimer: z.string().min(1),
+  // .default("") để bản nháp cũ và ô "Dán JSON" không bắt buộc phải có hai
+  // field này — chuỗi rỗng có nghĩa rõ ràng: chưa điền.
+  purpose: z.string().max(300).default(""),
+  expertReviewedBy: z.string().max(200).default(""),
   questions: z.array(questionSchema),
   scoring: z.object({ thresholds: z.array(thresholdSchema) }),
 });
@@ -74,6 +78,9 @@ function toTestRecord(id: string, data: TestDefinition): TestRecord {
     questions: data.questions,
     scoring: data.scoring,
     disclaimer: data.disclaimer,
+    // ?? — document tạo trước khi có field này thì không mang nó.
+    purpose: data.purpose ?? "",
+    expertReviewedBy: data.expertReviewedBy ?? "",
     updatedBy: data.updatedBy,
   };
 }

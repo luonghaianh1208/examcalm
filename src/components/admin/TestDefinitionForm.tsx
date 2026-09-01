@@ -17,6 +17,8 @@ export type TestFormValue = {
   version: string;
   isSampleContent: boolean;
   disclaimer: string;
+  purpose: string;
+  expertReviewedBy: string;
   questions: QuestionForm[];
   thresholds: ThresholdForm[];
 };
@@ -29,6 +31,8 @@ export const EMPTY_TEST_FORM: TestFormValue = {
   version: "1",
   isSampleContent: false,
   disclaimer: "Không thay thế chuyên gia. Kết quả chỉ mang tính tham khảo.",
+  purpose: "",
+  expertReviewedBy: "",
   questions: [
     { id: "q1", text: "", options: [{ label: "", score: "0" }, { label: "", score: "1" }] },
   ],
@@ -41,6 +45,8 @@ export function testFormToDraft(v: TestFormValue): unknown {
     version: Number(v.version),
     isSampleContent: v.isSampleContent,
     disclaimer: v.disclaimer.trim(),
+    purpose: v.purpose.trim(),
+    expertReviewedBy: v.expertReviewedBy.trim(),
     questions: v.questions.map((q) => ({
       id: q.id,
       text: q.text.trim(),
@@ -63,6 +69,8 @@ export function draftToTestForm(d: TestDefinitionDraft): TestFormValue {
     version: String(d.version),
     isSampleContent: d.isSampleContent,
     disclaimer: d.disclaimer,
+    purpose: d.purpose,
+    expertReviewedBy: d.expertReviewedBy,
     questions: d.questions.map((q) => ({
       id: q.id,
       text: q.text,
@@ -131,6 +139,39 @@ export function TestDefinitionForm({ value, onChange }: Props) {
           rows={2}
           className="rounded-lg border px-3 py-2"
         />
+        <span className="text-sm text-muted">
+          Học sinh phản ánh đoạn này dài và nhiều chữ IN HOA. Viết ngắn, viết thường —
+          câu ngắn dễ đọc hơn câu viết hoa.
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span>Bài này giúp học sinh hiểu điều gì</span>
+        <textarea
+          value={value.purpose}
+          onChange={(e) => dat("purpose", e.target.value)}
+          rows={2}
+          maxLength={300}
+          placeholder="Ví dụ: Nhận diện mức độ lo âu bạn đang trải qua trong hai tuần gần đây."
+          className="rounded-lg border px-3 py-2"
+        />
+        <span className="text-sm text-muted">Để trống thì không hiện.</span>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span>Chuyên gia đã thẩm định</span>
+        <input
+          value={value.expertReviewedBy}
+          onChange={(e) => dat("expertReviewedBy", e.target.value)}
+          maxLength={200}
+          placeholder="Ví dụ: TS. Nguyễn Văn A — Khoa Tâm lý, ĐH ..."
+          className="rounded-lg border px-3 py-2"
+        />
+        <span className="text-sm text-muted">
+          Để trống thì học sinh thấy dòng &ldquo;chưa có chuyên gia thẩm định&rdquo;. Chỉ
+          điền khi thật sự có người thẩm định — đây là dự án khoa học, ghi sai chỗ này là
+          nghiêm trọng.
+        </span>
       </label>
 
       <div className="flex flex-col gap-3">

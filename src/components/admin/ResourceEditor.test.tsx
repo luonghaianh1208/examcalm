@@ -28,6 +28,7 @@ const record1: ResourceRecord = {
   category: "Thư giãn",
   tags: ["tho", "thu-gian"],
   content: "Nội dung mẫu.",
+  tryThis: "",
   videoUrl: null,
   status: "draft",
   visibility: "public",

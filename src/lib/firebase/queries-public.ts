@@ -14,8 +14,28 @@ export type ListResourcesOptions = {
   includeStudentOnly?: boolean;
   category?: string;
   tag?: string;
+  /** Chuỗi học sinh gõ vào ô tìm kiếm. So khớp không phân biệt dấu. */
+  search?: string;
   limit?: number;
 };
+
+/**
+ * Bỏ dấu tiếng Việt để học sinh gõ "tho" vẫn tìm được "thở".
+ *
+ * NFD tách nguyên âm khỏi dấu thanh rồi xoá dấu, nhưng đ/Đ KHÔNG phân rã theo
+ * NFD nên phải xử lý riêng — thiếu bước này thì gõ "dong" không ra "đông".
+ *
+ * Ở đây bỏ dấu là an toàn, khác hẳn bộ dò từ khoá khủng hoảng: sai sót tệ nhất
+ * của tìm kiếm là hiện thừa một kết quả.
+ */
+export function normalizeForSearch(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
 
 /**
  * Trần số document lấy từ Firestore trước khi lọc trong bộ nhớ. Thư viện
@@ -42,6 +62,8 @@ function toResourceListItem(id: string, data: Resource): ResourceListItem {
     category: data.category,
     tags: data.tags,
     content: data.content,
+    // ?? "" — document tạo trước khi có field này thì không mang nó.
+    tryThis: data.tryThis ?? "",
     videoUrl: data.videoUrl,
     status: data.status,
     visibility: data.visibility,
@@ -60,6 +82,9 @@ function toTestListItem(id: string, data: TestDefinition): TestListItem {
     questions: data.questions,
     scoring: data.scoring,
     disclaimer: data.disclaimer,
+    // ?? — document tạo trước khi có field này thì không mang nó.
+    purpose: data.purpose ?? "",
+    expertReviewedBy: data.expertReviewedBy ?? "",
     updatedBy: data.updatedBy,
   };
 }
@@ -72,12 +97,24 @@ export function filterResources(
   items: ResourceListItem[],
   opts: ListResourcesOptions = {},
 ): ResourceListItem[] {
-  const { includeStudentOnly = false, category, tag, limit = 50 } = opts;
+  const { includeStudentOnly = false, category, tag, search, limit = 50 } = opts;
+
+  // Chỉ khớp trên tiêu đề, chủ đề và thẻ — CỐ Ý không tìm trong nội dung bài.
+  // Bài viết dài nên tìm trong nội dung sẽ khiến một từ phổ biến trả về gần
+  // như toàn bộ thư viện, học sinh không đoán được vì sao ra kết quả đó.
+  const q = search ? normalizeForSearch(search) : "";
 
   return items
     .filter((r) => includeStudentOnly || r.visibility === "public")
     .filter((r) => !category || r.category === category)
     .filter((r) => !tag || r.tags.includes(tag))
+    .filter((r) => {
+      if (!q) return true;
+      const haystack = normalizeForSearch(
+        [r.title, r.category, ...r.tags].join(" "),
+      );
+      return haystack.includes(q);
+    })
     .slice(0, limit);
 }
 

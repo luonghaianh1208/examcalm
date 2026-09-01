@@ -25,7 +25,7 @@ const VALID = JSON.stringify({
   title: "Test lo âu (mẫu)",
   version: 1,
   isSampleContent: true,
-  disclaimer: "Đây không phải chẩn đoán y khoa.",
+  disclaimer: "Đây không phải chẩn đoán y khoa.", purpose: "", expertReviewedBy: "",
   questions: [{ id: "q1", text: "Bạn có khó ngủ?", options: [
     { label: "Không", score: 0 }, { label: "Có", score: 2 },
   ]}],
@@ -79,7 +79,7 @@ const record1: TestRecord = {
   version: 1,
   status: "draft",
   isSampleContent: true,
-  disclaimer: "Không phải chẩn đoán.",
+  disclaimer: "Không phải chẩn đoán.", purpose: "", expertReviewedBy: "",
   questions: [{ id: "q1", text: "Câu 1", options: [
     { label: "Không", score: 0 }, { label: "Có", score: 1 },
   ]}],

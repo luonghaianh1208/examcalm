@@ -19,6 +19,7 @@ const mockResource: ResourceListItem = {
   category: "test",
   tags: [],
   content: "nội dung",
+  tryThis: "",
   videoUrl: null,
   status: "published",
   visibility: "public",
