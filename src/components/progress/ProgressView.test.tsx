@@ -53,11 +53,11 @@ describe("ProgressView", () => {
     render(<ProgressView uid="u1" />);
 
     await waitFor(() => {
-      expect(screen.getByText(/chưa tải được lịch sử làm test/i)).toBeInTheDocument();
+      expect(screen.getByText(/chưa tải được lịch sử làm bài/i)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/bạn chưa làm bài test nào/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/bạn chưa làm bài kiểm tra nào/i)).not.toBeInTheDocument();
     // Mục cảm xúc không bị kéo vào lỗi của mục test.
-    expect(screen.getByText("Cảm xúc gần đây")).toBeInTheDocument();
+    expect(screen.getByText("Xu hướng tự báo cáo")).toBeInTheDocument();
     expect(screen.getAllByText(/6\/10/).length).toBeGreaterThan(0);
   });
 
@@ -69,7 +69,7 @@ describe("ProgressView", () => {
     await waitFor(() => {
       expect(screen.getByText(/chưa tải được ghi chép cảm xúc/i)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/chưa có ghi chép nào/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/chưa có lần ghi nhận nào/i)).not.toBeInTheDocument();
     expect(screen.getByText("Điểm 12")).toBeInTheDocument();
   });
 
@@ -79,9 +79,9 @@ describe("ProgressView", () => {
     render(<ProgressView uid="u1" />);
 
     await waitFor(() => {
-      expect(screen.getByText(/bạn chưa làm bài test nào/i)).toBeInTheDocument();
+      expect(screen.getByText(/bạn chưa làm bài kiểm tra nào/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/chưa có ghi chép nào/i)).toBeInTheDocument();
+    expect(screen.getByText(/chưa có lần ghi nhận nào/i)).toBeInTheDocument();
     expect(screen.queryByText(/chưa tải được/i)).not.toBeInTheDocument();
   });
 

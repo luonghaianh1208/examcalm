@@ -146,6 +146,25 @@
 }
 
 /*
+ * Màu viền mặc định.
+ *
+ * Tailwind 4 đổi giá trị mặc định của `border` thành `currentColor` (v3 dùng
+ * gray-200). Kết hợp với `html, body { color: #2B4151 }` của brand-tokens, mọi
+ * class `border` không kèm màu trong codebase đang vẽ viền bằng MÀU CHỮ xanh
+ * đậm — nhìn ra ngay ở các thẻ trong Thư viện.
+ *
+ * Đặt lại mặc định về màu đường kẻ của thương hiệu, đúng như Tailwind v3 từng
+ * làm. Chỗ nào cần màu khác vẫn ghi rõ `border-<màu>` và thắng luật này.
+ */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--ec-border-default);
+  }
+}
+
+/*
  * Bài viết Markdown dùng token thương hiệu thay cho bảng màu mặc định của
  * plugin typography — nếu không, chữ trong bài sẽ là màu xám của Tailwind
  * trong khi phần còn lại của trang dùng màu ExamCalm.

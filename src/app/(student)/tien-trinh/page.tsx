@@ -6,11 +6,13 @@ export const metadata = { title: "Tiến trình" };
 export default async function Page() {
   const user = await requireUser();
   return (
-    <div className="mx-auto w-full max-w-[760px] py-10">
-      <h1 className="mb-2 text-2xl font-semibold">Tiến trình của bạn</h1>
-      <p className="mb-8 text-slate-600">
-        Đây là những gì bạn tự ghi lại. Không có xếp hạng, không có chuỗi ngày phải giữ.
-      </p>
+    // Dashboard dùng cả bề rộng (guideline: dashboard tối đa 3 cột), không bó
+    // vào cột đọc 760px như các trang bài viết.
+    //
+    // Tiêu đề và câu ranh giới ("không xếp hạng, không chẩn đoán") nằm TRONG
+    // ProgressView chứ không ở đây: đặt cả hai nơi sẽ thành hai <h1> trên cùng
+    // một trang.
+    <div className="py-8">
       <ProgressView uid={user.uid} />
     </div>
   );

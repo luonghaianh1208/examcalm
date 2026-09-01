@@ -2,7 +2,7 @@ import Link from "next/link";
 import { listPublishedTests } from "@/lib/firebase/queries-public";
 import { estimateMinutes } from "@/lib/test-meta";
 
-export const metadata = { title: "Bài test" };
+export const metadata = { title: "Bài kiểm tra" };
 // Trang đọc dữ liệu do admin quản lý trong Firestore — nếu prerender lúc
 // build (ISR), build sẽ phụ thuộc vào việc kết nối được database, cả ở CI
 // lẫn ở Cloud Build khi deploy. Render động theo từng request để build
@@ -14,15 +14,15 @@ export default async function Page() {
 
   return (
     <div className="mx-auto w-full max-w-[760px] py-10">
-      <h1 className="mb-2 text-2xl font-semibold text-ink">Bài test</h1>
+      <h1 className="mb-2 text-2xl font-semibold text-ink">Bài kiểm tra</h1>
       <p className="mb-6 text-muted">
-        Các bài test giúp bạn hiểu hơn trạng thái của mình. Đây là công cụ tự tìm hiểu,
+        Các bài kiểm tra giúp bạn hiểu hơn trạng thái của mình. Đây là công cụ tự tìm hiểu,
         không phải công cụ chẩn đoán.
       </p>
 
       {tests.length === 0 ? (
         <p className="rounded-[var(--ec-radius-lg)] bg-subtle px-5 py-6 text-body">
-          Chưa có bài test nào được đăng.
+          Chưa có bài kiểm tra nào được đăng.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">

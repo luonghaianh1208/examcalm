@@ -50,7 +50,7 @@ test.describe("Học sinh", () => {
     await expect(page).toHaveURL(/\/xac-thuc-email/);
 
     await page.goto("/tien-trinh");
-    await expect(page.getByRole("heading", { name: /tiến trình của bạn/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /hôm nay mình đi chậm nhé/i })).toBeVisible();
   });
 
   test("KHÔNG hiển thị chuỗi ngày hay streak ở trang tiến trình", async ({ page }) => {
@@ -122,14 +122,14 @@ test.describe("Học sinh", () => {
         // request.auth kịp khôi phục sẽ bị Rules từ chối.
         await expect(page).toHaveURL(/\/tien-trinh/, { timeout: 3_000 });
       }).toPass({ timeout: 20_000 });
-      await expect(page.getByRole("heading", { name: /tiến trình của bạn/i })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /hôm nay mình đi chậm nhé/i })).toBeVisible();
 
       // Không được có banner báo lỗi tải (PERMISSION_DENIED do race) ở cả hai mục.
-      await expect(page.getByText(/chưa tải được lịch sử làm test/i)).toHaveCount(0);
+      await expect(page.getByText(/chưa tải được lịch sử làm bài/i)).toHaveCount(0);
       await expect(page.getByText(/chưa tải được ghi chép cảm xúc/i)).toHaveCount(0);
 
       // Thay vào đó phải thấy trạng thái rỗng hợp lệ (tài khoản mới, chưa có dữ liệu).
-      await expect(page.getByText(/bạn chưa làm bài test nào/i)).toBeVisible();
+      await expect(page.getByText(/bạn chưa làm bài kiểm tra nào/i)).toBeVisible();
     } finally {
       await signInContext.close();
     }

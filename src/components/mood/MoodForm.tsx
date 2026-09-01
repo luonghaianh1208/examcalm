@@ -3,14 +3,7 @@
 import { useState } from "react";
 import { MOOD_ICONS, type MoodContext, type MoodIcon } from "@/lib/types/mood";
 import type { MoodInput } from "@/lib/firestore/moods";
-
-const ICON_LABELS: Record<MoodIcon, string> = {
-  very_low: "Rất mệt",
-  low: "Hơi xuống",
-  neutral: "Bình thường",
-  calm: "Dễ chịu",
-  happy: "Vui",
-};
+import { MOOD_LABELS } from "@/lib/mood-labels";
 
 type Props = {
   onSubmit: (input: MoodInput) => Promise<void>;
@@ -60,25 +53,39 @@ export function MoodForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <fieldset className="flex flex-col gap-2">
-        <legend className="font-medium">Hôm nay bạn thấy thế nào?</legend>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <fieldset className="flex flex-col gap-3">
+        <legend className="font-medium text-ink">Hôm nay bạn thấy thế nào?</legend>
         <div className="flex flex-wrap gap-2">
-          {MOOD_ICONS.map((icon) => (
-            <label key={icon} className="flex items-center gap-1 rounded-full border px-3 py-1">
-              <input
-                type="radio" name="moodIcon" value={icon}
-                checked={moodIcon === icon}
-                onChange={() => setMoodIcon(icon)}
-              />
-              <span>{ICON_LABELS[icon]}</span>
-            </label>
-          ))}
+          {MOOD_ICONS.map((icon) => {
+            const chosen = moodIcon === icon;
+            return (
+              <label
+                key={icon}
+                // has-[:focus-visible] chuyển vòng focus của ô radio (đang ẩn
+                // bằng sr-only) lên chính cái chip. Thiếu dòng này thì người
+                // dùng bàn phím không thấy mình đang ở đâu — guideline mục 11
+                // bắt buộc "focus luôn nhìn thấy".
+                className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-[var(--ec-radius-pill)] border px-4 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--ec-focus)] ${
+                  chosen ? "border-transparent bg-brand-soft font-medium text-ink" : "border-line text-body"
+                }`}
+              >
+                <input
+                  type="radio" name="moodIcon" value={icon}
+                  checked={chosen}
+                  onChange={() => setMoodIcon(icon)}
+                  className="sr-only"
+                />
+                <span className={`size-3 rounded-full ${MOOD_LABELS[icon].dot}`} aria-hidden />
+                <span>{MOOD_LABELS[icon].label}</span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
 
       <label className="flex flex-col gap-1">
-        <span>Điểm cảm xúc: {moodScore}/10</span>
+        <span className="text-ink">Điểm cảm xúc: {moodScore}/10</span>
         <input
           type="range" min={1} max={10} step={1} value={moodScore}
           aria-label="Điểm cảm xúc"
@@ -87,24 +94,54 @@ export function MoodForm({
       </label>
 
       <label className="flex flex-col gap-1">
-        <span>Ghi chú <span className="text-slate-500">(không bắt buộc)</span></span>
+        {/* Câu hỏi thay cho nhãn "Ghi chú": học sinh phản ánh từ cũ không mời
+            gọi kể lại chuyện. Câu này lấy nguyên văn từ mockup guideline
+            trang 21. */}
+        <span className="text-ink">
+          Điều gì đang chiếm nhiều chỗ nhất trong đầu bạn?{" "}
+          <span className="text-muted">(không bắt buộc)</span>
+        </span>
         <textarea
           value={note} onChange={(e) => setNote(e.target.value)}
-          maxLength={2000} rows={3} className="rounded-lg border px-3 py-2"
+          maxLength={2000} rows={4}
+          placeholder="Bạn có thể viết vài dòng, không cần viết thật hay."
+          // CỐ Ý không đặt aria-label ở đây. Đặt aria-label="Ghi chú" (tên cũ)
+          // sẽ khiến trình đọc màn hình đọc một đằng còn người nhìn thấy một
+          // nẻo — vi phạm WCAG 2.5.3 Label in Name. Nhãn nhìn thấy được của
+          // <label> bao ngoài đã là tên có thể truy cập rồi.
+          className="rounded-[var(--ec-radius-md)] border border-line bg-surface px-4 py-3"
         />
+        {/* Guideline mục 5 (Form): "Nhật ký phải nêu rõ dữ liệu riêng tư và
+            phần nào có AI xử lý." */}
+        <span className="text-sm text-muted">Chỉ bạn mới xem được nội dung này.</span>
       </label>
 
       <label className="flex flex-col gap-1">
-        <span>Thẻ ngữ cảnh <span className="text-slate-500">(không bắt buộc)</span></span>
+        {/* "Thẻ ngữ cảnh" là từ của người viết phần mềm, không phải của học
+            sinh. Tên mới do chủ sản phẩm chọn; dòng gợi ý bên dưới nói rõ đây
+            là vài từ khoá chứ không phải một câu. */}
+        <span className="text-ink">
+          Trạng thái hiện tại <span className="text-muted">(không bắt buộc)</span>
+        </span>
         <input
           type="text" value={tags} onChange={(e) => setTags(e.target.value)}
-          placeholder="ôn thi, mất ngủ" className="rounded-lg border px-3 py-2"
+          placeholder="ôn thi, mất ngủ"
+          className="min-h-11 rounded-[var(--ec-radius-md)] border border-line bg-surface px-4"
         />
+        <span className="text-sm text-muted">Vài từ khoá, cách nhau bằng dấu phẩy.</span>
       </label>
 
-      {error && <p role="alert" className="text-slate-700">{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-[var(--ec-radius-md)] bg-danger-soft px-4 py-3 text-danger">
+          {error}
+        </p>
+      )}
 
-      <button type="submit" disabled={pending} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-60">
+      <button
+        type="submit"
+        disabled={pending}
+        className="min-h-12 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 font-medium text-ink-inverse disabled:opacity-60"
+      >
         {pending ? "Đang lưu…" : submitLabel}
       </button>
     </form>

@@ -14,7 +14,7 @@ describe("MoodForm", () => {
     const user = userEvent.setup();
     render(<MoodForm onSubmit={onSubmit} />);
 
-    await user.type(screen.getByRole("textbox", { name: /ghi chú/i }), "Hôm nay ôn được 2 chương");
+    await user.type(screen.getByRole("textbox", { name: /chiếm nhiều chỗ nhất/i }), "Hôm nay ôn được 2 chương");
     await user.click(screen.getByRole("button", { name: /lưu/i }));
 
     expect(onSubmit).toHaveBeenCalledWith(
