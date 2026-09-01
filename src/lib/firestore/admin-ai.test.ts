@@ -84,6 +84,7 @@ const VALID_CONFIG: AiConfig = {
   killSwitch: { moodReflection: false, chat: true },
   crisisEmailEnabled: false,
   crisisEmailFrom: "",
+  confessionEnabled: false,
 };
 
 beforeEach(() => {

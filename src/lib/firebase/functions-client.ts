@@ -203,3 +203,19 @@ export async function callAskWebAppHelp(question: string): Promise<AskWebAppHelp
   const result = await fn({ question });
   return result.data;
 }
+
+/** Duyệt hoặc từ chối một bài Confession. Chỉ admin gọi được. */
+export type ReviewConfessionResult = { status: "auto_approved" | "rejected" };
+
+export async function callReviewConfession(
+  confessionId: string,
+  approve: boolean,
+): Promise<ReviewConfessionResult> {
+  await ensureAuthReady();
+  const fn = httpsCallable<{ confessionId: string; approve: boolean }, ReviewConfessionResult>(
+    functionsInstance(),
+    "reviewConfession",
+  );
+  const result = await fn({ confessionId, approve });
+  return result.data;
+}

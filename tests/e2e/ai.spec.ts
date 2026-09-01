@@ -220,7 +220,7 @@ test.describe("AI — đã cấu hình và bật (đường đi thuận)", () =>
     //
     // Hai nhánh đó tạo ra HAI CÂU CHỮ KHÁC NHAU — không phải đoán: đã verify trực tiếp bằng cách
     // chạy chính test này với một assertion cố tình sai để đọc text thật từ diff của Playwright.
-    // Đường (1) — callable thật sự được gọi, thất bại vì Functions Emulator không chạy trong
+    // Đường (1) — callable thật sự được gọi, thất bại vì provider trỏ tới cổng từ chối kết nối, xem
     // suite này (xem giới hạn ghi ở đầu file) — luôn đi qua nhánh "internal" của
     // mapReflectionErrorMessage() (src/lib/firestore/ai-outputs.ts), sinh đúng câu dưới đây.
     // Đường (2) — lượt gọi bị xoá — sẽ sinh câu "Không thể tải phản chiếu lúc này, thử lại sau

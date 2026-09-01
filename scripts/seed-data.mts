@@ -200,3 +200,13 @@ export const SAMPLE_RESOURCES = [
     videoUrl: null, visibility: "student_only",
   },
 ];
+
+/*
+ * KHÔNG seed nhạc cho Music Hub — có chủ ý.
+ *
+ * PRD §7.2.8 bắt buộc mỗi bài nhạc có metadata quyền sử dụng. Seed sẵn vài
+ * video tìm được trên mạng nghĩa là đẩy một tuyên bố bản quyền mà không ai
+ * kiểm chứng vào thẳng production — đúng điều quy tắc đó sinh ra để ngăn.
+ * Thầy cô tự thêm ở /admin/music, nơi trường "vì sao được phép dùng" là bắt
+ * buộc.
+ */

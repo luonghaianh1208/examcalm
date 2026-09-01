@@ -4,6 +4,7 @@ import { adminDb } from "./admin";
 import type { Resource } from "@/lib/types/resource";
 import type { TestDefinition } from "@/lib/types/test";
 import type { CbtModule } from "@/lib/types/cbt";
+import type { MusicTrack } from "@/lib/types/music";
 
 export type ResourceListItem = Resource & { id: string };
 export type TestListItem = TestDefinition & { id: string };
@@ -211,4 +212,72 @@ export async function getPublishedCbtModule(id: string): Promise<CbtModuleListIt
   const data = snap.data() as CbtModule;
   if (data.status !== "published") return null;
   return toCbtModuleListItem(snap.id, data);
+}
+
+export type MusicTrackListItem = MusicTrack & { id: string };
+
+/** Liệt kê tường minh — xem giải thích ở toResourceListItem(). */
+function toMusicTrackListItem(id: string, data: MusicTrack): MusicTrackListItem {
+  return {
+    id,
+    title: data.title,
+    artist: data.artist ?? "",
+    youtubeUrl: data.youtubeUrl,
+    mood: data.mood,
+    rightsNote: data.rightsNote,
+    status: data.status,
+    order: data.order ?? 0,
+    updatedBy: data.updatedBy,
+  };
+}
+
+/**
+ * Bài nhạc đã publish, sắp theo `order` rồi tới tiêu đề.
+ *
+ * Sắp trong bộ nhớ chứ không orderBy ở Firestore: cùng lý do với
+ * listPublishedResources — giữ đúng MỘT query shape để không sinh thêm
+ * composite index mà Emulator không kiểm tra được.
+ */
+export async function listPublishedMusicTracks(): Promise<MusicTrackListItem[]> {
+  const snap = await adminDb()
+    .collection("musicTracks")
+    .where("status", "==", "published")
+    .limit(FETCH_CAP)
+    .get();
+
+  return snap.docs
+    .map((d) => toMusicTrackListItem(d.id, d.data() as MusicTrack))
+    .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "vi"));
+}
+
+export type PublicConfession = { id: string; textContent: string; createdAt: Date | null };
+
+/**
+ * Bảng tin Confession công khai.
+ *
+ * Đọc từ `confessionsPublic` — collection KHÔNG chứa authorUid. Đây là ranh
+ * giới của lời hứa ẩn danh, nên hàm này CỐ Ý không nhận tham số nào cho phép
+ * lọc theo tác giả: không có đường nào để hỏi "bài nào là của bạn X".
+ */
+export async function listPublicConfessions(max = 50): Promise<PublicConfession[]> {
+  const snap = await adminDb()
+    .collection("confessionsPublic")
+    .orderBy("createdAt", "desc")
+    .limit(max)
+    .get();
+
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      textContent: typeof data.textContent === "string" ? data.textContent : "",
+      createdAt: data.createdAt?.toDate?.() ?? null,
+    };
+  });
+}
+
+/** true khi trường đã bật tính năng Confession. Đọc aiConfig bằng Admin SDK — client không đọc được document này. */
+export async function isConfessionEnabled(): Promise<boolean> {
+  const snap = await adminDb().collection("systemConfig").doc("aiConfig").get();
+  return snap.data()?.confessionEnabled === true;
 }

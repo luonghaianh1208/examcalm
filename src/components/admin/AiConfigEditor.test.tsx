@@ -49,6 +49,7 @@ const CONFIGURED: AiConfig = {
   killSwitch: { moodReflection: false, chat: true },
   crisisEmailEnabled: false,
   crisisEmailFrom: "",
+  confessionEnabled: false,
 };
 
 const TEMPLATE_DRAFT: PromptTemplateRecord = {

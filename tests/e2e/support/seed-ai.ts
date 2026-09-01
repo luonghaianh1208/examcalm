@@ -27,16 +27,19 @@ function adminApp(): App {
  * kiện `isAiEnabled()` (src/lib/firestore/admin-ai.ts) để `systemConfig/aiPublic.enabled = true`,
  * mở cổng cho màn hình đồng ý AI (AiConsentSection) hiện nút bật thay vì trạng thái "chưa khả dụng".
  *
- * baseUrl trỏ tới một host KHÔNG có thật (`https://e2e-fake-provider.invalid/v1`) — E2E suite này
- * không khởi động Functions emulator (xem giải thích ở đầu tests/e2e/ai.spec.ts), nên không có gì
- * thực sự gọi tới baseUrl này; nó chỉ cần khác rỗng để `isAiEnabled()` trả về true.
+ * baseUrl trỏ tới 127.0.0.1 cổng 1 — địa chỉ TỪ CHỐI KẾT NỐI ngay lập tức.
+ *
+ * Từ khi E2E chạy KÈM emulator functions, callable thật sự được gọi và thật sự
+ * đi tới baseUrl này. Một tên miền không phân giải được (`.invalid`) sẽ treo ở
+ * bước tra DNS vài giây, khác nhau tuỳ máy; cổng 1 thì lỗi tức thì và giống
+ * nhau ở mọi nơi, nên test kiểm được đúng NHÁNH LỖI mà không phải chờ.
  */
 export async function seedAiEnabled(providerLabel = "E2E Test Provider"): Promise<void> {
   const db = getFirestore(adminApp());
 
   await db.collection("systemConfig").doc("aiConfig").set({
     providerLabel,
-    baseUrl: "https://e2e-fake-provider.invalid/v1",
+    baseUrl: "http://127.0.0.1:1/v1",
     model: "e2e-fake-model",
     temperature: 0.7,
     maxTokens: 500,
@@ -82,7 +85,7 @@ export async function seedChatEnabled(providerLabel = "E2E Chat Test Provider"):
 
   await db.collection("systemConfig").doc("aiConfig").set({
     providerLabel,
-    baseUrl: "https://e2e-fake-provider.invalid/v1",
+    baseUrl: "http://127.0.0.1:1/v1",
     model: "e2e-fake-model",
     temperature: 0.7,
     maxTokens: 500,
@@ -114,4 +117,33 @@ export async function clearAiConfig(): Promise<void> {
   const db = getFirestore(adminApp());
   await db.collection("systemConfig").doc("aiConfig").delete();
   await db.collection("systemConfig").doc("aiPublic").delete();
+}
+
+/**
+ * Bật tính năng Confession nhưng KHÔNG cấu hình provider AI.
+ *
+ * Đây chính là tình trạng production hiện tại (chưa cắm API key thật), và là
+ * kịch bản cần kiểm nhất: mọi bài phải rơi vào hàng chờ người duyệt, tuyệt đối
+ * không có bài nào tự lọt ra bảng tin công khai.
+ */
+export async function seedConfessionEnabledWithoutAi(): Promise<void> {
+  const db = getFirestore(adminApp());
+  await db.collection("systemConfig").doc("aiConfig").set(
+    {
+      providerLabel: "",
+      baseUrl: "",
+      model: "",
+      temperature: 0.7,
+      maxTokens: 500,
+      quotaStudentPerDay: 5,
+      chatQuotaPerDay: 0,
+      rateLimitPerMinute: 3,
+      chatRateLimitPerMinute: 20,
+      killSwitch: { moodReflection: true, chat: true },
+      crisisEmailEnabled: false,
+      crisisEmailFrom: "",
+      confessionEnabled: true,
+    },
+    { merge: false },
+  );
 }

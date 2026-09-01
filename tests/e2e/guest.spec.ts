@@ -18,7 +18,9 @@ async function openSampleTest(page: Page): Promise<void> {
   // trừ) rồi mới tới câu hỏi — xem TestRunner. Nút "Bắt đầu" chỉ có ở trang
   // đích nên vẫn dùng được làm mốc đồng bộ điều hướng.
   const batDau = page.getByRole("button", { name: /^bắt đầu$/i });
-  await expect(batDau).toBeVisible();
+  // Timeout rộng: Next <Link> điều hướng phía client, và máy bận thì bước này
+  // lâu hơn mặc định 5s — đúng lớp lỗi mà chú thích ở trên hàm này nói tới.
+  await expect(batDau).toBeVisible({ timeout: 20_000 });
   await batDau.click();
 }
 

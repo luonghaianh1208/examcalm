@@ -46,6 +46,7 @@ type ConfigFormState = {
   // túng được hai field này (Task 3 mới thêm UI). Giữ ở đây để không làm hỏng aiConfigSchema
   // (giờ bắt buộc cả hai field) khi admin lưu các field KHÁC trên trang này.
   crisisEmailEnabled: boolean;
+  confessionEnabled: boolean;
   crisisEmailFrom: string;
 };
 
@@ -63,6 +64,7 @@ function toFormState(config: AiConfig): ConfigFormState {
     featureEnabled: !config.killSwitch.moodReflection,
     chatEnabled: !config.killSwitch.chat,
     crisisEmailEnabled: config.crisisEmailEnabled,
+    confessionEnabled: config.confessionEnabled,
     crisisEmailFrom: config.crisisEmailFrom,
   };
 }
@@ -135,6 +137,7 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
       chatRateLimitPerMinute: Number(form.chatRateLimitPerMinute),
       killSwitch: { moodReflection: !form.featureEnabled, chat: !form.chatEnabled },
       crisisEmailEnabled: form.crisisEmailEnabled,
+      confessionEnabled: form.confessionEnabled,
       crisisEmailFrom: form.crisisEmailFrom,
     };
 
@@ -477,6 +480,28 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
                   : (form.crisisEmailEnabled
                     ? "Đang bật gửi mail cảnh báo cho admin"
                     : "Đang tắt gửi mail cảnh báo")}
+              </p>
+            </div>
+
+            {/*
+              Confession sống chung document aiConfig vì kiểm duyệt tự động của
+              nó dùng chính provider AI đã cấu hình ở trên — cùng lý do
+              crisisEmail* nằm ở đây.
+            */}
+            <div className="rounded-lg border p-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.confessionEnabled}
+                  onChange={(e) => updateForm("confessionEnabled", e.target.checked)}
+                />
+                <span>Bật tính năng Confession cho học sinh</span>
+              </label>
+              <p className="mt-1 text-sm text-muted">
+                Bật mục này tạo ra một việc phải làm mỗi ngày: đọc hàng chờ ở
+                <strong> Duyệt Confession</strong>. Chưa cấu hình provider AI thì MỌI bài đều rơi
+                vào hàng chờ đó. Một bài nằm chờ quá lâu nghĩa là một học sinh đã mở lòng rồi bị
+                im lặng — đừng bật trước khi có người trực.
               </p>
             </div>
 

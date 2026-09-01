@@ -72,6 +72,17 @@ export const aiConfigSchema = z.object({
   crisisEmailEnabled: z.boolean().default(false),
   // "" là sentinel "chưa cấu hình" — cùng quy ước baseUrl/model ở trên.
   crisisEmailFrom: z.string().default(""),
+  /**
+   * Công tắc cho tính năng Confession — mặc định TẮT.
+   *
+   * Bật Confession tạo ra một nghĩa vụ vận hành liên tục: phải có người đọc
+   * hàng chờ duyệt. Mặc định tắt để trường chủ động bật khi đã sắp xếp được
+   * người trực, chứ không phải vô tình chạy vì tính năng đã có sẵn trong code.
+   *
+   * .default(false) vì document aiConfig ghi trước khi có field này thiếu hẳn
+   * nó — cùng lý do với crisisEmailEnabled ngay bên trên.
+   */
+  confessionEnabled: z.boolean().default(false),
 });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;
@@ -183,4 +194,5 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   // Spec #5: mặc định TẮT và CHƯA cấu hình — cùng nguyên tắc "hệ thống mặc định im lặng".
   crisisEmailEnabled: false,
   crisisEmailFrom: "",
+  confessionEnabled: false,
 };

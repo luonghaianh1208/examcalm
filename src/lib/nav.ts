@@ -53,8 +53,8 @@ export const STUDENT_NAV: NavItem[] = [
   { href: "/thu-vien", label: "Thư viện", dot: "bg-feature-library", primary: true, tour: "library" },
   { href: "/test", label: "Bài kiểm tra", dot: "bg-feature-test", tour: "test" },
   { href: "/cbt", label: "Bài tập CBT", dot: "bg-feature-cbt" },
-  { href: "/music", label: "Music Hub", dot: "bg-feature-music", comingSoon: true },
-  { href: "/confession", label: "Confession", dot: "bg-feature-confession", comingSoon: true },
+  { href: "/music", label: "Music Hub", dot: "bg-feature-music" },
+  { href: "/confession", label: "Confession", dot: "bg-feature-confession" },
   { href: "/tro-chuyen", label: "Trò chuyện AI với Meo", dot: "bg-feature-ai", authOnly: true, tour: "help" },
   // "Đã lưu" sẽ thành chip lọc trong Thư viện ở gói B (quyết định 2a). Giữ ở
   // đây tới lúc đó: bỏ ngay bây giờ thì nút tim lưu được mà không xem lại
@@ -69,9 +69,11 @@ export const STUDENT_NAV: NavItem[] = [
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Tổng quan", dot: "bg-feature-ai", exact: true },
   { href: "/admin/canh-bao", label: "Cảnh báo an toàn", dot: "bg-danger", group: "An toàn" },
+  { href: "/admin/confession", label: "Duyệt Confession", dot: "bg-feature-confession", group: "An toàn" },
   { href: "/admin/tests", label: "Bài test", dot: "bg-feature-test", group: "Nội dung" },
   { href: "/admin/cbt", label: "Bài tập CBT", dot: "bg-feature-cbt", group: "Nội dung" },
   { href: "/admin/thu-vien", label: "Thư viện", dot: "bg-feature-library", group: "Nội dung" },
+  { href: "/admin/music", label: "Music Hub", dot: "bg-feature-music", group: "Nội dung" },
   { href: "/admin/nguoi-dung", label: "Người dùng", dot: "bg-feature-music", group: "Hệ thống" },
   { href: "/admin/ai", label: "Cấu hình AI", dot: "bg-feature-ai", group: "Hệ thống" },
   { href: "/admin/nhat-ky-he-thong", label: "Nhật ký hệ thống", dot: "bg-feature-cbt", group: "Hệ thống" },

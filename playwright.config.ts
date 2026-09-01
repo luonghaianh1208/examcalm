@@ -1,3 +1,18 @@
+/*
+ * BẪY TRÊN WINDOWS — đọc trước khi ngờ code hỏng.
+ *
+ * Lệnh "firebase emulators:exec" tắt được emulator nhưng KHÔNG tắt được dev
+ * server do webServer bên dưới sinh ra. Tiến trình node đó sống sót, giữ cổng
+ * 3000, và lần chạy sau "reuseExistingServer" tái dùng đúng nó — một server trỏ
+ * tới emulator đã tắt. Kết quả: gần như mọi test đỏ với đủ loại lỗi khác nhau,
+ * trông y hệt một lỗi code nghiêm trọng.
+ *
+ * Dấu hiệu nhận biết: cùng một mã cho kết quả dao động mạnh giữa các lần chạy,
+ * và thời gian chạy phình từ ~2 phút lên 6-7 phút.
+ *
+ * Cách xử lý trước khi chạy lại:
+ *   Get-Process node | Stop-Process -Force
+ */
 import { defineConfig, devices } from "@playwright/test";
 import { existsSync } from "node:fs";
 

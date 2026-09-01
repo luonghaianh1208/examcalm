@@ -79,6 +79,46 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Music Hub. Cùng khuôn với nội dung do admin quản lý: ai cũng đọc được
+    // bản đã publish (khách chưa đăng nhập vẫn nghe được), chỉ admin ghi.
+    match /musicTracks/{id} {
+      allow read:  if resource.data.status == "published" || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /*
+     * Confession — hai collection TÁCH RỜI, đây là ranh giới quan trọng nhất
+     * của tính năng này (PRD mục 5.9).
+     *
+     *   confessions        có authorUid. CHỈ chủ bài và admin đọc được.
+     *   confessionsPublic  KHÔNG có authorUid. Ai cũng đọc được.
+     *
+     * Client KHÔNG BAO GIỜ ghi được confessionsPublic — chỉ Cloud Function
+     * (Admin SDK, bỏ qua rules) mới ghi sang, sau khi kiểm duyệt xong. Nếu
+     * client ghi được thì một học sinh có thể tự đẩy bài của mình ra công khai
+     * mà không qua duyệt, và toàn bộ lớp kiểm duyệt trở thành vô nghĩa.
+     */
+    match /confessions/{id} {
+      // Học sinh đã xác thực email mới gửi được, và chỉ gửi được dưới tên
+      // chính mình. status luôn bắt đầu ở "pending" — client không tự đặt
+      // trạng thái đã duyệt cho bài của mình được.
+      allow create: if isVerified()
+                    && request.resource.data.authorUid == request.auth.uid
+                    && request.resource.data.status == "pending";
+      allow read:   if (isSignedIn() && resource.data.authorUid == request.auth.uid) || isAdmin();
+      // Đổi trạng thái là việc của người duyệt (hoặc Cloud Function), không
+      // phải của tác giả.
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /confessionsPublic/{id} {
+      allow read:   if true;
+      // create/update/delete: chỉ Cloud Function. Kể cả admin cũng không ghi
+      // thẳng từ client — mọi thay đổi phải đi qua đúng một đường có ghi vết.
+      allow write:  if false;
+    }
+
     match /cbtSessions/{id} {
       allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
       // Admin KHÔNG đọc được — nội dung học sinh viết về suy nghĩ tiêu cực của

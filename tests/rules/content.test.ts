@@ -178,10 +178,23 @@ describe("auditLogs/{id}", () => {
 });
 
 describe("catch-all deny", () => {
+  /*
+   * Trước đây test này dùng `confessions` làm ví dụ collection chưa khai báo.
+   * Khi Confession được xây thật, nó trở thành collection ĐÃ khai báo và test
+   * đỏ — đúng như mong đợi.
+   *
+   * Tên mới cố ý là một chuỗi không bao giờ trở thành tính năng, để lần sau
+   * không lặp lại đúng chuyện này. Cái đang kiểm là luật catch-all, không phải
+   * một collection cụ thể nào.
+   */
+  const KHONG_BAO_GIO_TON_TAI = "khongPhaiCollectionThat";
+
   it("collection chưa khai báo bị chặn hoàn toàn", async () => {
-    await seed(env, async (db) => { await setDoc(doc(db, "confessions/c1"), { text: "x" }); });
-    await assertFails(getDoc(doc(adminDb(env), "confessions/c1")));
-    await assertFails(setDoc(doc(adminDb(env), "confessions/c2"), { text: "y" }));
-    await assertFails(deleteDoc(doc(adminDb(env), "confessions/c1")));
+    await seed(env, async (db) => {
+      await setDoc(doc(db, `${KHONG_BAO_GIO_TON_TAI}/c1`), { text: "x" });
+    });
+    await assertFails(getDoc(doc(adminDb(env), `${KHONG_BAO_GIO_TON_TAI}/c1`)));
+    await assertFails(setDoc(doc(adminDb(env), `${KHONG_BAO_GIO_TON_TAI}/c2`), { text: "y" }));
+    await assertFails(deleteDoc(doc(adminDb(env), `${KHONG_BAO_GIO_TON_TAI}/c1`)));
   });
 });

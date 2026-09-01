@@ -10,3 +10,5 @@ export { testAiConnection } from "./ai/testConnection";
 export { sendChatMessage } from "./ai/sendChatMessage";
 export { askWebAppHelp } from "./ai/askWebAppHelp";
 export { onCrisisAlertCreated } from "./email/onCrisisAlertCreated";
+export { onConfessionCreated } from "./confession/moderateConfession";
+export { reviewConfession } from "./confession/reviewConfession";
