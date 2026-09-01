@@ -114,6 +114,26 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
   const isCrisisEmailToggleDirty =
     form !== null && savedForm !== null && form.crisisEmailEnabled !== savedForm.crisisEmailEnabled;
 
+  /*
+   * Những gì CÒN chặn một tính năng dù ô tick đã bật.
+   *
+   * isReflectionEnabled()/isChatEnabled() (functions/src/ai/config.ts) là AND
+   * của ba điều kiện, nhưng trang này chỉ hiển thị một trong ba. Sự cố thật:
+   * quota mặc định là 0, admin bật ô tick, trang nói "Đang bật cho học sinh",
+   * và không học sinh nào thấy gì — không có lỗi nào ở đâu để lần ra.
+   *
+   * Chỉ liệt kê, không tự sửa hộ: quota bao nhiêu là quyết định của nhà trường.
+   */
+  function blockers(quota: string): string[] {
+    if (!form) return [];
+    const ra: string[] = [];
+    if (form.model.trim() === "") ra.push("chưa điền mã model");
+    if (!(Number(quota) > 0)) ra.push("quota mỗi học sinh mỗi ngày đang là 0");
+    return ra;
+  }
+  const blockersPhanChieu = blockers(form?.quotaStudentPerDay ?? "0");
+  const blockersTroChuyen = blockers(form?.chatQuotaPerDay ?? "0");
+
   const [configError, setConfigError] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
 
@@ -395,6 +415,17 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
                   ? (form.featureEnabled ? "Sẽ bật sau khi lưu" : "Sẽ tắt sau khi lưu")
                   : (form.featureEnabled ? "Đang bật cho học sinh" : "Đang tắt")}
               </p>
+              {/*
+                Ô tick không phải điều kiện duy nhất. isReflectionEnabled() còn
+                đòi model đã điền VÀ quota ngày > 0 — mà mặc định của quota là 0.
+                Không có dòng này thì trang nói "Đang bật cho học sinh" trong khi
+                học sinh không thấy gì, và không có chỗ nào giải thích vì sao.
+              */}
+              {form.featureEnabled && blockersPhanChieu.length > 0 && (
+                <p className="mt-1 text-sm text-amber-700">
+                  Vẫn chưa tới được học sinh: {blockersPhanChieu.join(" · ")}.
+                </p>
+              )}
             </div>
 
             <label className="flex flex-col gap-1">
@@ -435,6 +466,11 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
                   ? (form.chatEnabled ? "Sẽ bật trò chuyện sau khi lưu" : "Sẽ tắt trò chuyện sau khi lưu")
                   : (form.chatEnabled ? "Đang bật trò chuyện cho học sinh" : "Đang tắt trò chuyện")}
               </p>
+              {form.chatEnabled && blockersTroChuyen.length > 0 && (
+                <p className="mt-1 text-sm text-amber-700">
+                  Vẫn chưa tới được học sinh: {blockersTroChuyen.join(" · ")}.
+                </p>
+              )}
             </div>
 
             <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">

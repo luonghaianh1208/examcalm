@@ -6,7 +6,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { runSaveAiConfig } from "./saveAiConfig";
-import { DEFAULT_AI_CONFIG, PROVIDER_BASE_URL, PROVIDER_LABEL, type AiConfig } from "../ai/config";
+import {
+  aiConfigSchema, DEFAULT_AI_CONFIG, PROVIDER_BASE_URL, PROVIDER_LABEL, type AiConfig,
+} from "../ai/config";
 import { PermissionDeniedError, type CallerAuth } from "./guards";
 
 let app: App;
@@ -60,6 +62,7 @@ const VALID_CONFIG: AiConfig = {
   chatRateLimitPerMinute: 20,
   killSwitch: { moodReflection: false, chat: true },
   crisisEmailEnabled: false,
+  confessionEnabled: false,
   crisisEmailFrom: "",
 };
 
@@ -97,6 +100,36 @@ describe("runSaveAiConfig", () => {
     expect(aiPublicSnap.data()).toEqual({
       providerLabel: PROVIDER_LABEL, enabled: true, reflectionEnabled: true, chatEnabled: false,
     });
+  });
+
+  /*
+   * Hồi quy lỗi production 2026-09-02: document ghi xuống thiếu HẲN
+   * `confessionEnabled`. Admin tick ô "Bật Confession", bấm Lưu, trang báo
+   * thành công — nhưng học sinh vẫn thấy "Mục này chưa mở", và không có lỗi
+   * nào ở đâu để lần ra. Nguyên nhân: runSaveAiConfig liệt kê từng field bằng
+   * tay và bỏ sót field mới.
+   *
+   * Test so KEY của document với KEY của schema, chứ không kiểm từng field —
+   * để field thứ mười bốn thêm vào ngày mai cũng được canh, không cần ai nhớ
+   * quay lại sửa test này.
+   */
+  it("ghi ĐỦ mọi field của aiConfigSchema, không sót field nào", async () => {
+    await runSaveAiConfig(ADMIN_AUTH, { ...VALID_CONFIG, confessionEnabled: true }, { db });
+
+    const snap = await db.collection("systemConfig").doc("aiConfig").get();
+    const written = new Set(Object.keys(snap.data() ?? {}));
+    for (const field of Object.keys(aiConfigSchema.shape)) {
+      expect(written.has(field), `document thiếu field "${field}"`).toBe(true);
+    }
+    expect(snap.data()?.confessionEnabled).toBe(true);
+  });
+
+  it("confessionEnabled=false vẫn ghi xuống (tắt được, không chỉ bật được)", async () => {
+    await runSaveAiConfig(ADMIN_AUTH, { ...VALID_CONFIG, confessionEnabled: true }, { db });
+    await runSaveAiConfig(ADMIN_AUTH, { ...VALID_CONFIG, confessionEnabled: false }, { db });
+
+    const snap = await db.collection("systemConfig").doc("aiConfig").get();
+    expect(snap.data()?.confessionEnabled).toBe(false);
   });
 
   // Task 9 fix round 1, Finding 2 (CRITICAL — reviewer): đúng kịch bản §10 design spec — admin

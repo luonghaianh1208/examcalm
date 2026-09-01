@@ -54,7 +54,20 @@ export async function runSaveAiConfig(
   const batch = deps.db.batch();
   batch.set(deps.db.collection("systemConfig").doc("aiConfig"), {
     /*
-     * ÉP hằng số, cố tình BỎ QUA giá trị client gửi lên.
+     * Trải NGUYÊN `next` thay vì liệt kê từng field bằng tay.
+     *
+     * Bản đầu liệt kê tay và bỏ sót `confessionEnabled`: admin tick ô "Bật
+     * Confession", bấm Lưu, trang báo lưu thành công, nhưng field đó không bao
+     * giờ chạm tới Firestore — học sinh vẫn thấy "Mục này chưa mở" và không ai
+     * có cách nào biết vì sao. Một field mới thêm vào schema mà quên thêm vào
+     * danh sách này sẽ hỏng đúng kiểu đó lần nữa: im lặng, ở phía người dùng.
+     *
+     * An toàn vì `next` là kết quả của aiConfigSchema.safeParse — Zod đã cắt bỏ
+     * mọi key lạ, nên không có gì ngoài schema lọt vào document.
+     */
+    ...next,
+    /*
+     * ÉP hằng số ĐÈ LÊN giá trị client gửi lên (phải đặt SAU spread).
      *
      * Đây là địa chỉ mà ghi chú cảm xúc và bài Confession của học sinh vị
      * thành niên được gửi tới. Nhận giá trị từ client nghĩa là một tài khoản
@@ -66,16 +79,6 @@ export async function runSaveAiConfig(
      */
     providerLabel: PROVIDER_LABEL,
     baseUrl: PROVIDER_BASE_URL,
-    model: next.model,
-    temperature: next.temperature,
-    maxTokens: next.maxTokens,
-    quotaStudentPerDay: next.quotaStudentPerDay,
-    chatQuotaPerDay: next.chatQuotaPerDay,
-    rateLimitPerMinute: next.rateLimitPerMinute,
-    chatRateLimitPerMinute: next.chatRateLimitPerMinute,
-    killSwitch: next.killSwitch,
-    crisisEmailEnabled: next.crisisEmailEnabled,
-    crisisEmailFrom: next.crisisEmailFrom,
     updatedBy: auth!.uid,
     updatedAt: FieldValue.serverTimestamp(),
   });
