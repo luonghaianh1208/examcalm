@@ -35,10 +35,14 @@ for (const route of routes) {
   const slug = route === "/" ? "home" : route.replace(/^\//, "").replace(/\//g, "-");
   for (const vp of VIEWPORTS) {
     const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
-    await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
-    // Chờ font web tải xong: chụp sớm thì bắt được font dự phòng, chữ tiếng
-    // Việt trông khác hẳn bản thật và dễ báo động giả.
-    await page.waitForTimeout(600);
+    // KHÔNG dùng waitUntil: "networkidle". Firebase client SDK giữ một kết nối
+    // long-polling mở suốt, nên mạng không bao giờ "rảnh" và lệnh chờ sẽ hết
+    // giờ trên đúng những trang có dữ liệu.
+    await page.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded" });
+    // Chờ font web và dữ liệu client render xong: chụp sớm thì bắt được font
+    // dự phòng, chữ tiếng Việt trông khác hẳn bản thật và dễ báo động giả.
+    await page.waitForLoadState("load").catch(() => {});
+    await page.waitForTimeout(1200);
     await page.screenshot({ path: `${outDir}/${slug}-${vp.name}.png` });
     console.log(`${slug}-${vp.name}.png`);
     await page.close();
