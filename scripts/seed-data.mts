@@ -35,11 +35,26 @@ export const SAMPLE_TEST = {
   title: "Thang đo lo âu GAD-7",
   version: 1,
   isSampleContent: false,
+  /*
+   * Học sinh phản ánh (phản hồi 1.6) đoạn cũ quá dài và nhiều chữ IN HOA. Bản
+   * này tách làm ba theo đúng vai trò của từng câu, thay vì dồn hết vào một
+   * khối chữ mà không ai đọc hết:
+   *
+   *   - Hướng dẫn làm bài ("hai tuần vừa qua") → `purpose`, hiện ngay đầu màn
+   *     giới thiệu. Đây là chỉ dẫn để trả lời đúng, không phải lời miễn trừ.
+   *   - Tình trạng thẩm định → `expertReviewedBy`, để trống nghĩa là chưa có,
+   *     và giao diện tự nói thẳng điều đó thành một dòng riêng.
+   *   - Ranh giới an toàn → `disclaimer`, giữ lại đúng hai ý không thể bỏ.
+   *
+   * Viết thường thay vì in hoa: chữ IN HOA đọc chậm hơn chữ thường, nên dùng
+   * nó để nhấn mạnh lại phản tác dụng đúng ở câu cần người ta đọc kỹ nhất.
+   */
+  purpose:
+    "Nhìn lại mức độ lo âu của bạn trong hai tuần vừa qua. " +
+    "Hãy nghĩ về khoảng thời gian đó khi trả lời.",
+  expertReviewedBy: "",
   disclaimer:
-    "Hãy nghĩ về HAI TUẦN VỪA QUA khi trả lời. " +
-    "Đây là công cụ tự tìm hiểu, giúp bạn nhìn rõ hơn cảm giác của mình — " +
-    "nó KHÔNG phải chẩn đoán y khoa hay tâm lý, và không thay thế người có chuyên môn. " +
-    "Bản tiếng Việt của bài test này đang chờ một chuyên gia tâm lý đối chiếu và thẩm định. " +
+    "Đây là công cụ tự tìm hiểu, không phải chẩn đoán y khoa hay tâm lý. " +
     "Nếu bạn đang thấy rất khó khăn, hãy nói với phụ huynh, thầy cô hoặc cán bộ tâm lý học đường.",
   questions: [
     { id: "q1", text: "Cảm thấy lo lắng, bồn chồn hoặc căng thẳng" },
@@ -138,7 +153,12 @@ export const SAMPLE_CBT = {
   closingText:
     "Nhận ra một suy nghĩ không có nghĩa là nó biến mất. Nhưng nhìn thẳng vào nó một lần " +
     "thường làm nó bớt nặng hơn.",
-  suggestedResourceSlugs: [],
+  /*
+   * Quan hệ hai chiều: bài CBT gợi ý hai bài đọc này, VÀ trang chi tiết của
+   * hai bài đọc đó lật ngược quan hệ để hiện mục "Bài tập CBT phù hợp"
+   * (phản hồi 3.4). Bỏ trống thì mục kia không bao giờ có gì để hiện.
+   */
+  suggestedResourceSlugs: ["khi-dau-oc-trang-xoa-luc-lam-bai", "ky-thuat-tho-4-7-8"],
   updatedBy: SEED_ACTOR,
 };
 
@@ -149,6 +169,7 @@ export const SAMPLE_RESOURCES = [
     type: "guide", category: "Thư giãn", tags: ["thở", "trước khi ngủ"],
     content:
       "## Làm thế nào\n\n1. Hít vào bằng mũi, đếm thầm tới 4.\n2. Giữ hơi, đếm tới 7.\n3. Thở ra bằng miệng, đếm tới 8.\n4. Lặp lại 4 vòng.\n\n## Khi nào dùng\n\nTrước khi ngủ, hoặc ngay trước khi bước vào phòng thi.",
+    tryThis: "Thử ngay một vòng 4-7-8 trước khi đóng trang này.",
     videoUrl: null, visibility: "public",
   },
   {
@@ -157,6 +178,7 @@ export const SAMPLE_RESOURCES = [
     type: "tip", category: "Học tập", tags: ["tập trung", "quản lý thời gian"],
     content:
       "Ngồi vào bàn với ý định học 3 tiếng thường khiến ta trì hoãn.\n\nThử đặt hẹn giờ 25 phút, học một việc duy nhất, rồi nghỉ 5 phút. Sau 4 vòng thì nghỉ dài hơn.",
+    tryThis: "Đặt hẹn giờ 25 phút và chọn đúng MỘT việc để làm trong khoảng đó.",
     videoUrl: null, visibility: "public",
   },
   {
@@ -165,6 +187,7 @@ export const SAMPLE_RESOURCES = [
     type: "article", category: "Chuẩn bị thi", tags: ["phòng thi", "lo âu"],
     content:
       "Đầu óc trắng xóa là phản ứng bình thường của cơ thể khi căng thẳng, không phải dấu hiệu bạn không biết gì.\n\n**Thử theo thứ tự này:**\n\n1. Đặt bút xuống, thở ra thật chậm ba lần.\n2. Bỏ qua câu đang mắc, làm câu bạn chắc chắn nhất.\n3. Quay lại câu khó sau khi đã lấy lại nhịp.",
+    tryThis: "Tập trước ba nhịp thở chậm ngay bây giờ, để lúc cần thì tay chân đã quen.",
     videoUrl: null, visibility: "public",
   },
   {
@@ -173,6 +196,7 @@ export const SAMPLE_RESOURCES = [
     type: "tip", category: "Thư giãn", tags: ["nhật ký"],
     content:
       "Cuối ngày, viết ra ba việc bạn đã làm được — dù nhỏ tới đâu.\n\nMục tiêu không phải là thấy mình giỏi, mà là nhìn thấy ngày hôm nay không trống rỗng như cảm giác đang có.",
+    tryThis: "Viết ra ba việc của hôm nay, ngay bây giờ, kể cả khi thấy chẳng có gì đáng kể.",
     videoUrl: null, visibility: "student_only",
   },
 ];

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, authErrorMessage } from "@/lib/auth-client";
+import { PasswordField } from "./PasswordField";
 
 export function SignInForm() {
   const router = useRouter();
@@ -31,20 +32,42 @@ export function SignInForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <label className="flex flex-col gap-1">
-        <span>Email</span>
-        <input name="email" type="email" required autoComplete="email" className="rounded-lg border px-3 py-2" />
+        <span className="text-ink">Email</span>
+        <input
+          name="email" type="email" required autoComplete="email"
+          className="min-h-11 rounded-[var(--ec-radius-md)] border border-line bg-surface px-4"
+        />
       </label>
-      <label className="flex flex-col gap-1">
-        <span>Mật khẩu</span>
-        <input name="password" type="password" required autoComplete="current-password" className="rounded-lg border px-3 py-2" />
-      </label>
-      <Link href="/quen-mat-khau" className="-mt-2 self-end text-sm text-teal-700 underline">
+
+      <PasswordField
+        id="signin-password"
+        name="password"
+        label="Mật khẩu"
+        autoComplete="current-password"
+      />
+
+      <Link href="/quen-mat-khau" className="-mt-2 self-end text-sm text-link underline">
         Quên mật khẩu?
       </Link>
-      {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{error}</p>}
-      <button type="submit" disabled={pending} className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-60">
+
+      {error && (
+        <p role="alert" className="rounded-[var(--ec-radius-md)] bg-danger-soft px-4 py-3 text-danger">
+          {error}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={pending}
+        className="min-h-12 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 font-medium text-ink-inverse disabled:opacity-60"
+      >
         {pending ? "Đang đăng nhập…" : "Đăng nhập"}
       </button>
+
+      <p className="text-center text-body">
+        Chưa có tài khoản?{" "}
+        <Link href="/dang-ky" className="text-link underline">Đăng ký</Link>
+      </p>
     </form>
   );
 }

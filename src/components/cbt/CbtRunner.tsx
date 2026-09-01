@@ -31,7 +31,10 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
 
   function start() {
     setSession(newSessionRef());
-    setPhase("before");
+    // Khách chưa đăng nhập BỎ QUA bước ghi cảm xúc trước/sau: không có uid thì
+    // không lưu được gì, mà hiện một form rồi âm thầm vứt dữ liệu đi là nói dối
+    // học sinh. Vào thẳng phần bài tập — đó mới là thứ các em tới để làm.
+    setPhase(canSave ? "before" : "steps");
   }
 
   async function handleMood(input: MoodInput) {
@@ -49,7 +52,7 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
   async function finish() {
     // Chuyển sang bước cảm xúc "sau" ngay, không chờ ghi phiên xong — học
     // sinh không phải đứng nhìn màn hình chờ mạng.
-    setPhase("after");
+    setPhase(canSave ? "after" : "done");
     if (!uid || !session) return;
     try {
       await saveCbtSession(uid, session.id, {
@@ -87,13 +90,28 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
               Bắt đầu
             </button>
           ) : uid ? (
-            <Link href="/xac-thuc-email" className="rounded-lg bg-teal-600 px-4 py-2 text-center font-medium text-white">
+            <Link href="/xac-thuc-email" className="min-h-12 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 py-3 text-center font-medium text-ink-inverse">
               Xác thực email để làm bài
             </Link>
           ) : (
-            <Link href="/dang-ky" className="rounded-lg bg-teal-600 px-4 py-2 text-center font-medium text-white">
-              Đăng ký để làm bài
-            </Link>
+            <>
+              {/*
+                Phản hồi 2.2 và 5.5: trang chủ nói dùng được không cần tài
+                khoản, nhưng mở bài tập lại bị chặn đăng ký ngay. Khách LÀM THỬ
+                trọn vẹn được, chỉ không lưu lại — và chỉ được mời tạo tài khoản
+                SAU KHI đã thấy bài tập có ích hay không.
+              */}
+              <button
+                type="button" onClick={start}
+                className="min-h-12 self-start rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 font-medium text-ink-inverse"
+              >
+                Làm thử
+              </button>
+              <p className="text-sm text-muted">
+                Bạn làm thử được ngay mà không cần tài khoản. Chỉ có điều bài làm sẽ không
+                được lưu lại.
+              </p>
+            </>
           )}
         </section>
       )}
@@ -173,6 +191,36 @@ export function CbtRunner({ module: mod, uid, canSave }: Props) {
             </p>
           )}
           {uid && afterMoodLogId && <ReflectionCard moodLogId={afterMoodLogId} uid={uid} />}
+
+          {/*
+            Lời mời tạo tài khoản đặt Ở ĐÂY, sau khi khách đã làm xong — đúng
+            thứ tự phản hồi 2.2 đề nghị: "Sau khi hoàn thành mới hỏi". Mời
+            trước khi các em kịp thấy bài tập có ích hay không thì chỉ là một
+            cái cổng chắn đường.
+          */}
+          {!uid && (
+            <section className="rounded-[var(--ec-radius-lg)] bg-brand-soft px-5 py-4">
+              <h2 className="font-medium text-ink">Bạn có muốn tạo tài khoản để lưu lại không?</h2>
+              <p className="mt-1 text-body">
+                Có tài khoản thì bài này được lưu, và bạn xem lại được thay đổi của mình theo
+                thời gian. Không tạo cũng không sao — bạn vẫn làm thử tiếp được bất cứ lúc nào.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Link
+                  href="/dang-ky"
+                  className="min-h-11 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 py-2.5 font-medium text-ink-inverse"
+                >
+                  Tạo tài khoản
+                </Link>
+                <Link
+                  href="/cbt"
+                  className="min-h-11 rounded-[var(--ec-radius-md)] border border-line px-5 py-2.5 text-body"
+                >
+                  Để sau
+                </Link>
+              </div>
+            </section>
+          )}
           {mod.suggestedResourceSlugs.length > 0 && (
             <nav className="flex flex-col gap-2">
               <h2 className="font-medium text-slate-900">Có thể bạn muốn đọc thêm</h2>

@@ -2,26 +2,29 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { OnboardingTour } from "./OnboardingTour";
-import { setHideTooltips } from "@/lib/firestore/onboarding";
+import { setGuideProgress } from "@/lib/firestore/onboarding";
 
 vi.mock("@/lib/firestore/onboarding", () => ({
+  setGuideProgress: vi.fn().mockResolvedValue(undefined),
   setHideTooltips: vi.fn().mockResolvedValue(undefined),
 }));
 
-const mockedSetHideTooltips = vi.mocked(setHideTooltips);
+const mockedSetGuideProgress = vi.mocked(setGuideProgress);
 
-/** Bốn anchor thật mà tour sẽ đo vị trí — không có thì reposition() chỉ bỏ qua styling. */
+/** Năm anchor thật mà tour sẽ đo vị trí — không có thì reposition() chỉ bỏ qua styling. */
 function renderAnchors() {
   document.body.innerHTML = `
-    <button data-tour="mood">Mèo</button>
-    <a data-tour="test" href="/test">Bài test</a>
+    <a data-tour="home" href="/">Trang chủ</a>
+    <a data-tour="journal" href="/nhat-ky">Nhật ký</a>
+    <a data-tour="dashboard" href="/tien-trinh">Dashboard</a>
     <a data-tour="library" href="/thu-vien">Thư viện</a>
-    <a data-tour="progress" href="/tien-trinh">Tiến trình</a>
+    <a data-tour="help" href="/tro-chuyen">Hỏi về web app</a>
   `;
 }
 
+/** Năm bước nên bấm "Tiếp" bốn lần là tới bước cuối. */
 async function goToLastStep(user: ReturnType<typeof userEvent.setup>) {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     await user.click(screen.getByRole("button", { name: "Tiếp" }));
   }
 }
@@ -46,31 +49,69 @@ describe("OnboardingTour — hideTooltips", () => {
 });
 
 describe("OnboardingTour — điều hướng bước", () => {
-  it("chỉ hiện checkbox 'không hiện lại' ở bước cuối cùng", async () => {
+  it("đúng năm bước, có chỉ báo đang ở bước nào", async () => {
     renderAnchors();
     const user = userEvent.setup();
     render(<OnboardingTour uid="u1" hideTooltips={false} />);
 
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Bước 1/5")).toBeInTheDocument();
     await goToLastStep(user);
-    expect(screen.getByRole("checkbox", { name: /không hiện lại hướng dẫn này/i })).toBeInTheDocument();
+    expect(screen.getByText("Bước 5/5")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Xong" })).toBeInTheDocument();
   });
 
-  it("tick checkbox ở bước cuối -> gọi setHideTooltips(uid, true)", async () => {
+  it("ghi tiến độ sau mỗi bước để 'Để sau' mở lại đúng chỗ", async () => {
+    renderAnchors();
+    const user = userEvent.setup();
+    render(<OnboardingTour uid="u1" hideTooltips={false} />);
+
+    await user.click(screen.getByRole("button", { name: "Tiếp" }));
+    expect(mockedSetGuideProgress).toHaveBeenCalledWith("u1", "active", 1);
+  });
+
+  it("bấm Xong ở bước cuối -> ghi completed", async () => {
     renderAnchors();
     const user = userEvent.setup();
     render(<OnboardingTour uid="u1" hideTooltips={false} />);
 
     await goToLastStep(user);
-    await user.click(screen.getByRole("checkbox", { name: /không hiện lại hướng dẫn này/i }));
+    await user.click(screen.getByRole("button", { name: "Xong" }));
 
-    expect(mockedSetHideTooltips).toHaveBeenCalledWith("u1", true);
+    expect(mockedSetGuideProgress).toHaveBeenCalledWith("u1", "completed", 5);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("mở lại đúng bước đang dở khi initialStep được truyền vào", () => {
+    renderAnchors();
+    render(<OnboardingTour uid="u1" hideTooltips={false} initialStep={2} />);
+    expect(screen.getByText("Bước 3/5")).toBeInTheDocument();
+  });
+
+  // Số bước có thể GIẢM ở bản sau; một guideStep cũ vượt quá mảng sẽ làm
+  // STEPS[stepIndex] thành undefined rồi vỡ ở reposition().
+  it("initialStep vượt quá số bước bị kẹp về bước cuối, không vỡ", () => {
+    renderAnchors();
+    render(<OnboardingTour uid="u1" hideTooltips={false} initialStep={99} />);
+    expect(screen.getByText("Bước 5/5")).toBeInTheDocument();
   });
 });
 
-describe("OnboardingTour — 'Bỏ qua'", () => {
-  it("kết thúc tour ngay lập tức, KHÔNG gọi setHideTooltips (nên lần sau vẫn hiện lại)", async () => {
+describe("OnboardingTour — 'Để sau' và 'Bỏ qua' là hai việc khác nhau", () => {
+  // Đây là toàn bộ lý do guideline §6.1 đòi cả hai nút: gộp làm một thì hoặc
+  // quấy rầy người đã từ chối, hoặc bỏ rơi người định quay lại.
+  it("'Để sau' ghi paused KÈM bước đang dở", async () => {
+    renderAnchors();
+    const user = userEvent.setup();
+    render(<OnboardingTour uid="u1" hideTooltips={false} />);
+
+    await user.click(screen.getByRole("button", { name: "Tiếp" }));
+    await user.click(screen.getByRole("button", { name: "Để sau" }));
+
+    expect(mockedSetGuideProgress).toHaveBeenCalledWith("u1", "paused", 1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("'Bỏ qua' ghi dismissed để KHÔNG tự chạy lại", async () => {
     renderAnchors();
     const user = userEvent.setup();
     render(<OnboardingTour uid="u1" hideTooltips={false} />);
@@ -78,12 +119,12 @@ describe("OnboardingTour — 'Bỏ qua'", () => {
     await user.click(screen.getByRole("button", { name: "Bỏ qua" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(mockedSetHideTooltips).not.toHaveBeenCalled();
+    expect(mockedSetGuideProgress).toHaveBeenCalledWith("u1", "dismissed", 0);
   });
 });
 
 describe("OnboardingTour — Escape", () => {
-  it("Escape hoạt động giống 'Bỏ qua': đóng tour, không gọi setHideTooltips", async () => {
+  it("Escape hoạt động giống 'Bỏ qua': đóng tour và ghi dismissed", async () => {
     renderAnchors();
     const user = userEvent.setup();
     render(<OnboardingTour uid="u1" hideTooltips={false} />);
@@ -91,12 +132,12 @@ describe("OnboardingTour — Escape", () => {
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(mockedSetHideTooltips).not.toHaveBeenCalled();
+    expect(mockedSetGuideProgress).toHaveBeenCalledWith("u1", "dismissed", 0);
   });
 });
 
 describe("OnboardingTour — backdrop", () => {
-  it("bấm vào lớp nền phía sau card -> đóng tour giống 'Bỏ qua', không gọi setHideTooltips", async () => {
+  it("bấm vào lớp nền phía sau card -> đóng tour giống 'Bỏ qua'", async () => {
     renderAnchors();
     const user = userEvent.setup();
     const { container } = render(<OnboardingTour uid="u1" hideTooltips={false} />);
@@ -106,6 +147,6 @@ describe("OnboardingTour — backdrop", () => {
     await user.click(backdrop!);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(mockedSetHideTooltips).not.toHaveBeenCalled();
+    expect(mockedSetGuideProgress).toHaveBeenCalledWith("u1", "dismissed", 0);
   });
 });

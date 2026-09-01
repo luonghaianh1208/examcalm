@@ -178,3 +178,28 @@ export async function callSendChatMessage(
   const result = await fn({ sessionId, text });
   return result.data;
 }
+
+/**
+ * Bề mặt "Hỏi về web app" — Brand Guideline §6.2.
+ *
+ * KHÔNG đi qua đồng ý AI, hạn mức hay kill switch: câu trả lời lấy từ FAQ trên
+ * server, không có dữ liệu nào rời khỏi hệ thống. Nhưng vẫn đi qua lớp phát
+ * hiện khủng hoảng — xem askWebAppHelp.ts.
+ */
+export type AskWebAppHelpResult = {
+  answer: string;
+  href?: string;
+  hrefLabel?: string;
+  isCrisisReply: boolean;
+};
+
+export async function callAskWebAppHelp(question: string): Promise<AskWebAppHelpResult> {
+  // Đóng race giống các hàm callXxx khác — xem giải thích ensureAuthReady() ở client.ts.
+  await ensureAuthReady();
+  const fn = httpsCallable<{ question: string }, AskWebAppHelpResult>(
+    functionsInstance(),
+    "askWebAppHelp",
+  );
+  const result = await fn({ question });
+  return result.data;
+}

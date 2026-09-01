@@ -69,10 +69,38 @@ describe("CbtRunner", () => {
     expect(screen.getByRole("note")).toBeInTheDocument();
   });
 
-  it("Guest thấy lời mời đăng ký, không thấy nút bắt đầu", () => {
+  /*
+   * ĐỔI HÀNH VI có chủ ý (phản hồi 2.2 và 5.5 của học sinh).
+   *
+   * Trước đây khách bị chặn ngay ở màn giới thiệu bằng một lời mời đăng ký,
+   * trong khi trang chủ nói "dùng được ngay mà không cần tài khoản" — đúng mâu
+   * thuẫn các em chỉ ra. Giờ khách làm thử trọn vẹn, chỉ không lưu, và chỉ
+   * được mời tạo tài khoản SAU KHI hoàn thành.
+   */
+  it("Khách làm thử được, không bị chặn ở màn giới thiệu", () => {
     render(<CbtRunner module={MODULE} uid={null} canSave={false} />);
-    expect(screen.getByRole("link", { name: /đăng ký/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /bắt đầu/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /làm thử/i })).toBeInTheDocument();
+    expect(screen.getByText(/không cần tài khoản/i)).toBeInTheDocument();
+    // Lời mời tạo tài khoản CHƯA xuất hiện lúc này.
+    expect(screen.queryByRole("link", { name: /tạo tài khoản/i })).not.toBeInTheDocument();
+  });
+
+  it("Khách được mời tạo tài khoản SAU KHI làm xong, không phải trước", async () => {
+    const user = userEvent.setup();
+    render(<CbtRunner module={MODULE} uid={null} canSave={false} />);
+
+    await user.click(screen.getByRole("button", { name: /làm thử/i }));
+    // Khách bỏ qua bước ghi cảm xúc: không có uid thì không lưu được, hiện form
+    // rồi âm thầm vứt dữ liệu là nói dối học sinh.
+    expect(screen.queryByText(/bạn đang thấy thế nào/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /tiếp tục/i }));
+    await user.click(screen.getByRole("button", { name: /hoàn thành/i }));
+
+    expect(screen.getByText(/muốn tạo tài khoản để lưu lại/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /tạo tài khoản/i })).toBeInTheDocument();
+    // Luôn có đường "để sau" — không ép ai phải tạo tài khoản mới đi tiếp được.
+    expect(screen.getByRole("link", { name: /để sau/i })).toBeInTheDocument();
   });
 
   it("học sinh chưa xác thực email thấy lời mời xác thực, không phải đăng ký", () => {

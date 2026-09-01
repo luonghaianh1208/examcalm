@@ -73,9 +73,20 @@ export function MoodWidget({ uid, canSave }: Props) {
         // lên nút "Tất cả", đúng điều Brand Guideline mục 11 cấm: "không che
         // CTA quan trọng, input, nút lưu hoặc bottom navigation". Từ md trở lên
         // không còn thanh dưới nên trả về 1rem.
-        className="fixed bottom-[calc(var(--ec-mobile-bottom-nav-height)+1rem+env(safe-area-inset-bottom))] right-4 z-40 rounded-full bg-white p-2 shadow-lg motion-safe:transition-transform motion-safe:hover:scale-105 md:bottom-[calc(1rem+env(safe-area-inset-bottom))]"
+        className="fixed bottom-[calc(var(--ec-mobile-bottom-nav-height)+1rem+env(safe-area-inset-bottom))] right-4 z-40 flex items-center gap-2 rounded-[var(--ec-radius-pill)] bg-surface py-2 pl-2 pr-4 shadow-[var(--ec-shadow-floating)] motion-safe:transition-transform motion-safe:hover:scale-105 md:bottom-[calc(1rem+env(safe-area-inset-bottom))]"
       >
-        <CatMascot expression={open ? "listen" : "calm"} size={56} />
+        <CatMascot expression={open ? "listen" : "calm"} size={44} />
+        {/*
+          Nhãn chữ NHÌN THẤY ĐƯỢC, không chỉ aria-label — phản hồi 5.4: "widget
+          Meo chưa nói rõ dùng để làm gì". Một hình mèo tròn ở góc màn hình
+          không tự nói lên rằng bấm vào sẽ ghi được cảm xúc.
+
+          aria-hidden vì aria-label của nút đã là tên gọi đầy đủ; để cả hai thì
+          trình đọc màn hình đọc hai lần.
+        */}
+        <span className="text-sm font-medium text-ink" aria-hidden>
+          {open ? "Đóng" : "Ghi cảm xúc"}
+        </span>
       </button>
 
       {open && (

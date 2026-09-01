@@ -1,15 +1,20 @@
 import { requireUser } from "@/lib/firebase/session";
-import { ChatWindow } from "@/components/chat/ChatWindow";
+import { WebAppHelpChat } from "@/components/chat/WebAppHelpChat";
 
-export const metadata = { title: "Trò chuyện" };
+export const metadata = { title: "Hỏi về web app" };
 
 export default async function Page() {
-  const user = await requireUser();
+  await requireUser();
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 py-10">
-      <h1 className="text-2xl font-semibold">Trò chuyện cùng mèo</h1>
-      <ChatWindow uid={user.uid} />
+      {/*
+        Tên hiển thị trong navigation vẫn là "Trò chuyện AI với Meo" theo mục 1
+        của motion spec (không đổi tên tính năng), còn "Hỏi về web app" là nhãn
+        của chính bề mặt này theo §6.2. Hai nhãn khác nhau là cố ý.
+      */}
+      <h1 className="text-2xl font-semibold text-ink">Hỏi về web app</h1>
+      <WebAppHelpChat />
     </div>
   );
 }

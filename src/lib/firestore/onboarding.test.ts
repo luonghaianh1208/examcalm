@@ -65,13 +65,13 @@ describe("getOnboarding", () => {
 
     const state = await getOnboarding("u1");
 
-    expect(state).toEqual({ welcomeSeenAt: null, hideTooltips: false });
+    expect(state).toEqual({ welcomeSeenAt: null, hideTooltips: false, guideStatus: "not_started" as const, guideStep: 0 });
   });
 
   it("đọc đúng welcomeSeenAt/hideTooltips đã lưu", async () => {
     const seenAt = fakeTimestamp(new Date("2026-08-20T00:00:00Z"));
     mockedGetDoc.mockResolvedValue(
-      fakeSnap({ onboarding: { welcomeSeenAt: seenAt, hideTooltips: true } }),
+      fakeSnap({ onboarding: { welcomeSeenAt: seenAt, hideTooltips: true, guideStatus: "not_started" as const, guideStep: 0 } }),
     );
 
     const state = await getOnboarding("u1");
@@ -85,7 +85,7 @@ describe("getOnboarding", () => {
 
     const state = await getOnboarding("u1");
 
-    expect(state).toEqual({ welcomeSeenAt: null, hideTooltips: false });
+    expect(state).toEqual({ welcomeSeenAt: null, hideTooltips: false, guideStatus: "not_started" as const, guideStep: 0 });
   });
 });
 

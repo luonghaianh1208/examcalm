@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useState, type CSSProperties } from "react";
-import { setHideTooltips } from "@/lib/firestore/onboarding";
+import { setGuideProgress } from "@/lib/firestore/onboarding";
 import { useFocusTrap } from "./useFocusTrap";
 
 /**
@@ -9,22 +9,33 @@ import { useFocusTrap } from "./useFocusTrap";
  * CSS hay text hiển thị — cả hai đều có thể đổi và âm thầm làm gãy anchor).
  * Xem MoodWidget.tsx và SiteHeader.tsx.
  */
+/**
+ * Năm bước theo Brand Guideline §6.1: Trang chủ → Nhật ký cảm xúc → Dashboard
+ * → Thư viện → nút "Hỏi về web app".
+ *
+ * Mỗi bước nêu MỘT lợi ích và MỘT hành động — guideline cấm mô tả cả sản phẩm
+ * trong một bong bóng. Mốc neo là data-tour trong src/lib/nav.ts.
+ */
 const STEPS: { selector: string; text: string }[] = [
   {
-    selector: '[data-tour="mood"]',
-    text: "Chú mèo ở góc màn hình là nơi bạn ghi lại cảm xúc mỗi ngày — chỉ vài giây thôi.",
+    selector: '[data-tour="home"]',
+    text: "Trang chủ hỏi bạn cần gì lúc này, rồi mở đúng một lối đi — bạn không phải tự tìm.",
   },
   {
-    selector: '[data-tour="test"]',
-    text: '"Bài test" giúp bạn hiểu rõ hơn trạng thái của mình lúc này, không phải để xếp hạng.',
+    selector: '[data-tour="journal"]',
+    text: "Nhật ký cảm xúc là nơi bạn ghi lại điều đang diễn ra. Chỉ mình bạn đọc được.",
+  },
+  {
+    selector: '[data-tour="dashboard"]',
+    text: "Dashboard cho bạn xem lại chính mình theo thời gian. Không xếp hạng, không chấm điểm.",
   },
   {
     selector: '[data-tour="library"]',
-    text: '"Thư viện" có các kỹ thuật thư giãn ngắn, dễ áp dụng ngay khi bạn cần.',
+    text: "Thư viện có các kỹ thuật ngắn, đọc xong là làm được ngay. Có ô tìm kiếm ở đầu trang.",
   },
   {
-    selector: '[data-tour="progress"]',
-    text: '"Tiến trình" lưu lại những gì bạn đã tự ghi nhận — chỉ mình bạn xem được.',
+    selector: '[data-tour="help"]',
+    text: "Bí chỗ nào thì hỏi Meo ở đây — mình chỉ giúp về cách dùng web thôi, không phải nơi tư vấn tâm lý.",
   },
 ];
 
@@ -32,25 +43,33 @@ type Props = {
   uid: string;
   /** true: học sinh đã tick "không hiện lại" ở lần trước — không render gì cả. */
   hideTooltips: boolean;
+  /** Bước để mở lại khi học sinh từng chọn "Để sau" (trạng thái paused). */
+  initialStep?: number;
 };
 
 const MARGIN = 16;
 
-export function OnboardingTour({ uid, hideTooltips }: Props) {
-  const [stepIndex, setStepIndex] = useState(0);
+export function OnboardingTour({ uid, hideTooltips, initialStep = 0 }: Props) {
+  // Kẹp vào khoảng hợp lệ: số bước có thể GIẢM ở bản sau, và một guideStep cũ
+  // vượt quá mảng sẽ làm STEPS[stepIndex] thành undefined rồi vỡ ở reposition.
+  const [stepIndex, setStepIndex] = useState(() =>
+    Math.min(Math.max(0, initialStep), STEPS.length - 1),
+  );
   const [closed, setClosed] = useState(false);
-  const [checked, setChecked] = useState(false);
   const [style, setStyle] = useState<CSSProperties>({});
 
   const isLastStep = stepIndex === STEPS.length - 1;
   const active = !hideTooltips && !closed;
 
+  /**
+   * "Bỏ qua" và Escape → trạng thái dismissed: KHÔNG tự chạy lại (guideline
+   * §6.1). Khác "Để sau" ở chỗ không nhớ đang dở bước nào — đây là lời từ
+   * chối, không phải lời hứa quay lại.
+   */
   const handleClose = useCallback(() => {
-    // KHÔNG ghi hideTooltips ở đây — "Bỏ qua"/Escape chỉ đóng cho phiên này,
-    // đúng hành vi được yêu cầu: không tick "không hiện lại" thì lần sau vẫn
-    // hiện lại tour.
     setClosed(true);
-  }, []);
+    void setGuideProgress(uid, "dismissed", 0);
+  }, [uid]);
 
   const containerRef = useFocusTrap(active, handleClose);
 
@@ -118,15 +137,28 @@ export function OnboardingTour({ uid, hideTooltips }: Props) {
   function handleNext() {
     if (isLastStep) {
       setClosed(true);
+      void setGuideProgress(uid, "completed", STEPS.length);
       return;
     }
-    setStepIndex((i) => i + 1);
+    const tiep = stepIndex + 1;
+    setStepIndex(tiep);
+    // Ghi từng bước để "Để sau" ở bất kỳ đâu cũng mở lại đúng chỗ, kể cả khi
+    // học sinh đóng tab thay vì bấm nút.
+    void setGuideProgress(uid, "active", tiep);
   }
 
-  function handleCheckbox(next: boolean) {
-    setChecked(next);
-    void setHideTooltips(uid, next);
+  /**
+   * "Để sau" → trạng thái paused, NHỚ đang dở bước nào.
+   *
+   * Guideline §6.1 đòi cả hai nút và chúng khác nhau thật sự: "Bỏ qua" là từ
+   * chối, "Để sau" là hoãn. Gộp làm một thì hoặc ta quấy rầy người đã từ chối,
+   * hoặc bỏ rơi người định quay lại.
+   */
+  function handlePause() {
+    setClosed(true);
+    void setGuideProgress(uid, "paused", stepIndex);
   }
+
 
   return (
     <>
@@ -149,25 +181,19 @@ export function OnboardingTour({ uid, hideTooltips }: Props) {
       >
         <p className="mb-4">{step.text}</p>
 
-        {isLastStep && (
-          <label className="mb-4 flex items-start gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => handleCheckbox(e.target.checked)}
-            />
-            <span>Không hiện lại hướng dẫn này</span>
-          </label>
-        )}
+        <p className="mb-3 text-sm text-muted">Bước {stepIndex + 1}/{STEPS.length}</p>
 
-        <div className="flex items-center justify-between gap-3">
-          <button type="button" onClick={handleClose} className="text-slate-600 underline">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button type="button" onClick={handleClose} className="min-h-11 text-body underline">
             Bỏ qua
+          </button>
+          <button type="button" onClick={handlePause} className="min-h-11 text-body underline">
+            Để sau
           </button>
           <button
             type="button"
             onClick={handleNext}
-            className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white"
+            className="ml-auto min-h-11 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 font-medium text-ink-inverse"
           >
             {isLastStep ? "Xong" : "Tiếp"}
           </button>

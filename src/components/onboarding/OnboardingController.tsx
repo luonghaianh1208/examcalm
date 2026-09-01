@@ -79,5 +79,23 @@ export function OnboardingController({ user }: Props) {
     return <WelcomeDialog uid={user.uid} onDismiss={handleWelcomeDismiss} />;
   }
 
-  return <OnboardingTour uid={user.uid} hideTooltips={state.hideTooltips} />;
+  /*
+   * Guideline §6.1: "Sau khi completed/dismissed, KHÔNG tự chạy lại."
+   *
+   * paused thì CÓ chạy lại — và mở đúng bước đang dở, vì "Để sau" là lời hứa
+   * quay lại chứ không phải lời từ chối.
+   *
+   * hideTooltips giữ nguyên như một cổng riêng: nó có từ trước máy trạng thái
+   * và các helper E2E đang dùng để tắt tour.
+   */
+  const daXong = state.guideStatus === "completed" || state.guideStatus === "dismissed";
+  if (daXong) return null;
+
+  return (
+    <OnboardingTour
+      uid={user.uid}
+      hideTooltips={state.hideTooltips}
+      initialStep={state.guideStatus === "paused" ? state.guideStep : 0}
+    />
+  );
 }

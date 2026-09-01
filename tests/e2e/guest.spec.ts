@@ -46,6 +46,10 @@ test.describe("Khách chưa đăng nhập", () => {
   // test gắn cờ isSampleContent=true để verify banner cảnh báo, nên tự seed
   // thêm một bài test riêng cho E2E (xem tests/e2e/support/seed-sample-test.ts).
   test.beforeAll(async () => {
+    // 60s thay vì mặc định 30s: từ khi E2E chạy kèm emulator functions, mọi
+    // ghi Firestore còn phải đi qua lớp trigger nên bước seed chậm hơn hẳn.
+    // Ngưỡng cũ nằm sát mép và hỏng lúc máy bận.
+    test.setTimeout(60_000);
     await seedSampleContentTest();
   });
 

@@ -26,7 +26,7 @@ const UNVERIFIED: SessionUser = { uid: "u2", email: "a@b.com", emailVerified: fa
 beforeEach(() => {
   vi.clearAllMocks();
   mockedUsePathname.mockReturnValue("/");
-  mockedGetOnboarding.mockResolvedValue({ welcomeSeenAt: null, hideTooltips: false });
+  mockedGetOnboarding.mockResolvedValue({ welcomeSeenAt: null, hideTooltips: false, guideStatus: "not_started" as const, guideStep: 0 });
 });
 
 describe("OnboardingController — điều kiện hiển thị", () => {
@@ -76,13 +76,13 @@ describe("OnboardingController — welcome dialog rồi tới tour", () => {
   });
 
   it("đã thấy welcome, chưa ẩn tour -> hiện OnboardingTour thẳng", async () => {
-    mockedGetOnboarding.mockResolvedValue({ welcomeSeenAt: new Date(), hideTooltips: false });
+    mockedGetOnboarding.mockResolvedValue({ welcomeSeenAt: new Date(), hideTooltips: false, guideStatus: "not_started" as const, guideStep: 0 });
     render(<OnboardingController user={STUDENT} />);
     expect(await screen.findByRole("dialog", { name: /hướng dẫn sử dụng/i })).toBeInTheDocument();
   });
 
   it("đã tick 'không hiện lại' (hideTooltips=true) -> không hiện gì kể cả sau khi đã thấy welcome", async () => {
-    mockedGetOnboarding.mockResolvedValue({ welcomeSeenAt: new Date(), hideTooltips: true });
+    mockedGetOnboarding.mockResolvedValue({ welcomeSeenAt: new Date(), hideTooltips: true, guideStatus: "not_started" as const, guideStep: 0 });
     render(<OnboardingController user={STUDENT} />);
     // Chờ getOnboarding() resolve xong rồi mới khẳng định KHÔNG có gì — nếu
     // assert ngay, test có thể pass "giả" chỉ vì promise chưa kịp resolve.

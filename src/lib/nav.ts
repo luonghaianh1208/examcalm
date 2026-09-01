@@ -45,17 +45,17 @@ export type NavItem = {
 };
 
 export const STUDENT_NAV: NavItem[] = [
-  { href: "/", label: "Trang chủ", dot: "bg-feature-ai", primary: true, exact: true },
-  { href: "/nhat-ky", label: "Nhật ký cảm xúc", dot: "bg-feature-journal", authOnly: true, primary: true },
+  { href: "/", label: "Trang chủ", dot: "bg-feature-ai", primary: true, exact: true, tour: "home" },
+  { href: "/nhat-ky", label: "Nhật ký cảm xúc", dot: "bg-feature-journal", authOnly: true, primary: true, tour: "journal" },
   // Route vẫn là /tien-trinh; gói B dựng lại trang này thành báo cáo cá nhân
   // hoá và mới đổi route. Nhãn đổi trước vì guideline gọi nó là Dashboard.
-  { href: "/tien-trinh", label: "Dashboard", dot: "bg-feature-test", authOnly: true, primary: true, tour: "progress" },
+  { href: "/tien-trinh", label: "Dashboard", dot: "bg-feature-test", authOnly: true, primary: true, tour: "dashboard" },
   { href: "/thu-vien", label: "Thư viện", dot: "bg-feature-library", primary: true, tour: "library" },
   { href: "/test", label: "Bài kiểm tra", dot: "bg-feature-test", tour: "test" },
   { href: "/cbt", label: "Bài tập CBT", dot: "bg-feature-cbt" },
   { href: "/music", label: "Music Hub", dot: "bg-feature-music", comingSoon: true },
   { href: "/confession", label: "Confession", dot: "bg-feature-confession", comingSoon: true },
-  { href: "/tro-chuyen", label: "Trò chuyện AI với Meo", dot: "bg-feature-ai", authOnly: true },
+  { href: "/tro-chuyen", label: "Trò chuyện AI với Meo", dot: "bg-feature-ai", authOnly: true, tour: "help" },
   // "Đã lưu" sẽ thành chip lọc trong Thư viện ở gói B (quyết định 2a). Giữ ở
   // đây tới lúc đó: bỏ ngay bây giờ thì nút tim lưu được mà không xem lại
   // được — đúng lỗi vừa sửa xong tuần trước.
