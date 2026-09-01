@@ -63,7 +63,17 @@ export function OnboardingTour({ uid, hideTooltips }: Props) {
       // stepIndex luôn nằm trong [0, STEPS.length) — chỉ tăng dần và bị chặn
       // ở bước cuối (xem handleNext) — non-null an toàn ở đây.
       const currentStep = STEPS[stepIndex]!;
-      const anchor = document.querySelector<HTMLElement>(currentStep.selector);
+      // querySelectorAll chứ không phải querySelector: cùng một mốc tồn tại ở
+      // CẢ sidebar (desktop) lẫn bottom nav (mobile), nhưng mỗi lúc chỉ một cái
+      // hiện. querySelector luôn trả về cái đầu tiên trong DOM — trên mobile đó
+      // là bản sidebar đang display:none, getBoundingClientRect() ra toàn số 0
+      // và bong bóng hướng dẫn nhảy về góc trái trên màn hình.
+      const anchor = Array.from(
+        document.querySelectorAll<HTMLElement>(currentStep.selector),
+      ).find((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
       const card = containerRef.current;
       if (!anchor || !card) {
         setStyle({});

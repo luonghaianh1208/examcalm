@@ -1,6 +1,8 @@
 # ExamCalm — Phạm vi đợt dựng lại theo Brand Guideline v1.1
 
-> Trạng thái: **chờ chủ sản phẩm duyệt**. Đây chưa phải spec thiết kế.
+> Trạng thái: **đã duyệt 01/09/2026**. Cách chia A → B → C → D được chấp nhận.
+> Ba quyết định ở mục 5 đã có câu trả lời: **1c · 2a · 3 = AI duyệt tự động**.
+> Đây vẫn chưa phải spec thiết kế — spec từng gói viết riêng.
 > Đây là tài liệu chia việc: nó chốt *làm gì trước, làm gì sau*, và nêu
 > những quyết định phải có câu trả lời trước khi viết dòng code đầu tiên.
 >
@@ -245,7 +247,10 @@ tiên deep link hoặc CTA tới đúng màn hình"* — đó chính là mô t�
 1a lẫn 1b đều cho ra một tính năng **không dùng được** cho tới khi anh cắm key
 thật; còn 1c dùng được ngay.
 
-> **Anh chọn: ☐ 1a ☐ 1b ☐ 1c ☐ khác — ghi rõ:**
+> **ĐÃ CHỌN (01/09/2026): 1c.** Giữ nguyên lớp phát hiện khủng hoảng; phần trả
+> lời làm bằng FAQ có deep link, không gọi mô hình ngôn ngữ. Hệ quả kèm theo:
+> bề mặt "Hỏi về web app" chạy được ngay cả khi AI đang tắt, và **không tiêu
+> hạn mức AI** của học sinh.
 
 ---
 
@@ -263,24 +268,43 @@ lỗi vừa mới sửa xong tuần trước.
 
 **Đề xuất của trợ lý: 2a.**
 
-> **Anh chọn: ☐ 2a ☐ 2b ☐ 2c ☐ khác — ghi rõ:**
+> **ĐÃ CHỌN (01/09/2026): 2a.** "Đã lưu" thành chip lọc trong Thư viện. Route
+> `/da-luu` giữ lại hay bỏ hẳn sẽ chốt trong spec gói B (nơi làm Thư viện);
+> nếu bỏ thì phải có redirect, vì link cũ có thể đã nằm trong bookmark của
+> học sinh.
 
 ---
 
-### Câu hỏi 3 — Confession: ai trực hàng chờ duyệt? *(chưa cần trả lời ngay)*
+### Câu hỏi 3 — Confession: ai trực hàng chờ duyệt?
 
-Câu này thuộc gói D nên anh còn thời gian. Ghi lại đây để không quên.
+> **ĐÃ CHỌN (01/09/2026): tích hợp AI để duyệt tự động** theo pipeline PRD §8.2.
 
-AI đang tắt nên không có tự động kiểm duyệt — **mọi bài sẽ phải người thật
-duyệt trước khi hiện công khai**. Roadmap cũ đã cảnh báo đúng chỗ đau:
+**Hai điều kèm theo mà quyết định này KHÔNG xoá được — ghi lại để gói D không
+bị hụt phạm vi:**
+
+**1. Hàng chờ người thật vẫn tồn tại.** PRD §8.2 có ba nhánh, không phải hai:
+
+| Nhánh | Xử lý |
+|---|---|
+| `auto_approved` | AI thấy rủi ro thấp → ghi sang `confessionsPublic` ngay |
+| `hold` | AI không chắc hoặc rủi ro cao → **chờ người duyệt** |
+| `reject` | Vi phạm rõ ràng → chặn |
+
+AI làm hàng chờ **ngắn đi**, không làm nó biến mất. Gói D vẫn phải xây AI
+Moderation Console (PRD §7.3.2) và câu "ai trực nhánh `hold`, trong bao lâu"
+vẫn cần một câu trả lời — chỉ là nhẹ hơn nhiều so với duyệt 100% thủ công.
+Cảnh báo cũ của roadmap vẫn đúng với riêng nhánh này:
 
 > *"Một bài bị hold mà không ai duyệt trong ba ngày là một học sinh bị bỏ rơi
 > sau khi đã mở lòng."*
 
-Ba phương án: gửi mail cho toàn bộ admin khi có bài chờ · xây đủ nhưng để kill
-switch tắt cho tới khi sắp xếp được người trực · một người trực cố định.
+**2. Cần API key thật.** `EXAMCALM_AI_API_KEY` hiện đang là giá trị giả
+(`CHUA-CAU-HINH-...`). Không có key thật thì mọi bài rơi hết vào `hold` — tức
+quay về đúng kịch bản duyệt thủ công 100%. Gói D còn xa nên chưa gấp, nhưng
+đây là điều kiện tiên quyết, không phải chi tiết kỹ thuật phụ.
 
-> **Trả lời sau, khi gói D bắt đầu.**
+**Chưa cần trả lời ngay:** ngưỡng rủi ro của AI, taxonomy phân loại, và ai
+trực nhánh `hold`. Ba thứ này chốt trong spec gói D.
 
 ---
 

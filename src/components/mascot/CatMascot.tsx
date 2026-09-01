@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-type Expression = "calm" | "cheer" | "listen";
+type Expression = "calm" | "cheer" | "listen" | "home" | "welcome" | "journal";
 
 type Props = {
   expression?: Expression;
@@ -14,22 +14,27 @@ type Props = {
 };
 
 /**
- * Mascot chính thức của ExamCalm.
+ * Meo — mascot chính thức của ExamCalm.
  *
- * Ảnh nguồn nằm ở WEB/MASCOT/ (500x500 PNG, ~130–200KB mỗi file). Bản dùng trong
- * app đã được nén sang WebP 160x160 (5–8KB) ở public/brand/ — hiển thị tối đa 72px
- * nên 160px là đủ cho màn hình 2x. Đổi mascot chỉ cần thay ba file webp đó và
- * chạy lại lệnh nén; không component nào khác phải sửa.
+ * Ảnh gốc nằm ở BRAND GUIDELINE/assets/meo/ (1254×1254 PNG). Bản dùng trong app
+ * là WebP 512×512 ở public/brand/meo/, sinh ra bằng
+ * `npx tsx scripts/build-brand-assets.mts`. Đổi mascot thì thay ảnh gốc rồi
+ * chạy lại script; không component nào phải sửa.
  *
- * Ba trạng thái tương ứng ba tư thế:
- *   calm   — mèo cuộn tròn ngủ, dùng làm mặc định
- *   listen — mèo ngồi ngước nhìn, dùng khi mở nhật ký cảm xúc
- *   cheer  — mèo đứng, dùng khi động viên
+ * Brand Guideline trang 10 quy định mỗi tư thế cho một ngữ cảnh, và cấm dùng
+ * lặp lại Meo trong mọi card: "Meo xuất hiện ở điểm hướng dẫn, phản hồi, Nhật
+ * ký và trạng thái trống".
+ *
+ * Ba tên calm/listen/cheer giữ nguyên từ bộ ảnh cũ để không phải sửa các chỗ
+ * đang gọi; chúng trỏ sang ảnh chính thức tương ứng.
  */
 const POSE: Record<Expression, { src: string; alt: string }> = {
-  calm: { src: "/brand/meo-calm.webp", alt: "Mèo đồng hành của ExamCalm đang nằm nghỉ" },
-  listen: { src: "/brand/meo-listen.webp", alt: "Mèo đồng hành của ExamCalm đang lắng nghe" },
-  cheer: { src: "/brand/meo-cheer.webp", alt: "Mèo đồng hành của ExamCalm đang vui" },
+  calm: { src: "/brand/meo/rest.webp", alt: "Meo đang nằm nghỉ" },
+  listen: { src: "/brand/meo/listen.webp", alt: "Meo đang lắng nghe" },
+  cheer: { src: "/brand/meo/cheer.webp", alt: "Meo đang cổ vũ" },
+  home: { src: "/brand/meo/home.webp", alt: "Meo đứng chào ở trang chủ" },
+  welcome: { src: "/brand/meo/welcome.webp", alt: "Meo vẫy tay chào mừng" },
+  journal: { src: "/brand/meo/journal.webp", alt: "Meo trong nhật ký cảm xúc" },
 };
 
 export function CatMascot({ expression = "calm", size = 72, className, priority = false }: Props) {

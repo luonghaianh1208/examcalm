@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminAuth } from "./admin";
@@ -46,8 +47,17 @@ export async function clearSessionCookie(): Promise<void> {
   store.delete(SESSION_COOKIE_NAME);
 }
 
-/** Trả về user đã xác minh, hoặc null. Không bao giờ ném lỗi. */
-export async function getSessionUser(): Promise<SessionUser | null> {
+/**
+ * Trả về user đã xác minh, hoặc null. Không bao giờ ném lỗi.
+ *
+ * Bọc trong cache() của React: root layout, layout của route group và các
+ * trang con đều cần user. Không có cache thì mỗi lần gọi là một lượt
+ * verifySessionCookie(checkRevoked: true) đi tới máy chủ Firebase Auth — bốn,
+ * năm lượt mạng cho đúng một request. cache() gộp chúng lại trong phạm vi một
+ * lần render, và KHÔNG chia sẻ giữa các request khác nhau nên không có nguy cơ
+ * lẫn phiên của người này sang người khác.
+ */
+export const getSessionUser = cache(async function getSessionUser(): Promise<SessionUser | null> {
   try {
     // cookies() có thể ném lỗi ngoài request context (vd: prerender tĩnh) —
     // phải nằm trong try để giữ đúng cam kết "không bao giờ ném lỗi".
@@ -68,7 +78,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   } catch {
     return null;
   }
-}
+});
 
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();

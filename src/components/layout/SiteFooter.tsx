@@ -10,7 +10,11 @@ import Link from "next/link";
  */
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t px-4 py-3 text-center text-xs text-slate-500">
+    // md:pb-20 — widget Meo nổi ở góc phải dưới, neo theo khung nhìn nên khi
+    // cuộn tới cuối trang nó nằm đè lên đây. Ở 820px nó cắt mất đuôi dòng số
+    // 111, mà đó là dòng an toàn nhất trên trang. Chừa khoảng trống bên dưới
+    // để widget nổi vào chỗ trống thay vì lên chữ.
+    <footer className="mt-auto border-t border-line px-4 py-3 text-center text-xs text-muted md:pb-20">
       <p>
         Cần ai đó lắng nghe ngay bây giờ? Tổng đài Quốc gia Bảo vệ Trẻ em —{" "}
         <a href="tel:111" className="font-medium text-teal-700 underline">

@@ -68,7 +68,12 @@ export function MoodWidget({ uid, canSave }: Props) {
         onClick={handleToggle}
         aria-expanded={open}
         aria-label="Mở nhật ký cảm xúc"
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 rounded-full bg-white p-2 shadow-lg motion-safe:transition-transform motion-safe:hover:scale-105"
+        // Trên mobile phải nâng lên KHỎI thanh điều hướng dưới (68px + safe
+        // area). Widget này z-40, thanh nav z-30 — để nguyên 1rem thì nó đè
+        // lên nút "Tất cả", đúng điều Brand Guideline mục 11 cấm: "không che
+        // CTA quan trọng, input, nút lưu hoặc bottom navigation". Từ md trở lên
+        // không còn thanh dưới nên trả về 1rem.
+        className="fixed bottom-[calc(var(--ec-mobile-bottom-nav-height)+1rem+env(safe-area-inset-bottom))] right-4 z-40 rounded-full bg-white p-2 shadow-lg motion-safe:transition-transform motion-safe:hover:scale-105 md:bottom-[calc(1rem+env(safe-area-inset-bottom))]"
       >
         <CatMascot expression={open ? "listen" : "calm"} size={56} />
       </button>
@@ -76,7 +81,9 @@ export function MoodWidget({ uid, canSave }: Props) {
       {open && (
         <div
           role="dialog" aria-label="Nhật ký cảm xúc"
-          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 shadow-xl"
+          // Cùng lý do với nút mở ở trên: bảng nhập cảm xúc cũng phải nằm trên
+          // thanh điều hướng dưới khi ở mobile.
+          className="fixed bottom-[calc(var(--ec-mobile-bottom-nav-height)+5.5rem+env(safe-area-inset-bottom))] right-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 shadow-xl md:bottom-[calc(5.5rem+env(safe-area-inset-bottom))]"
         >
           {canSave ? (
             savedMoodLogId ? (

@@ -1,26 +1,148 @@
 @import "tailwindcss";
+@import "./brand-tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * ============================================================================
+ * HỆ MÀU EXAMCALM — đọc phần này trước khi viết màu ở bất kỳ đâu
+ * ============================================================================
+ *
+ * Nguồn sự thật là Brand Guideline v1.1. Mọi giá trị dưới đây trỏ về biến
+ * --ec-* trong brand-tokens.css, không có màu nào được gõ tay ở file này.
+ *
+ * CÓ HAI TỪ VỰNG cùng tồn tại trong giai đoạn chuyển đổi:
+ *
+ *   1. TỪ VỰNG MỚI (dùng cho mọi code mới)
+ *      bg-canvas · bg-surface · bg-subtle · bg-inverse
+ *      text-ink · text-body · text-muted · text-link
+ *      border-line · feature-test · feature-cbt · ...
+ *
+ *   2. TỪ VỰNG CŨ (teal-* slate-* amber-* rose-*) — xem khối "LỚP ÁNH XẠ"
+ *      bên dưới. ĐỪNG dùng cho code mới.
+ *
+ * Guideline không có chế độ tối. Khối prefers-color-scheme: dark của
+ * boilerplate Next.js đã bị gỡ: không component nào từng dùng biến thể dark:,
+ * nên nó chỉ làm chữ sáng nằm trên card trắng khi máy học sinh bật chế độ tối.
+ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* --- Nền ------------------------------------------------------------- */
+  --color-canvas: var(--ec-bg-canvas);
+  --color-surface: var(--ec-bg-surface);
+  --color-subtle: var(--ec-bg-subtle);
+  --color-inverse: var(--ec-bg-inverse);
+  --color-brand-soft: var(--ec-bg-brand-soft);
+  --color-success-soft: var(--ec-bg-success-soft);
+  --color-warning-soft: var(--ec-bg-warning-soft);
+  --color-danger-soft: var(--ec-bg-danger-soft);
+
+  /* --- Chữ -------------------------------------------------------------- */
+  /* ink/body/muted thay cho strong/default/muted của guideline: "text-default"
+     đọc rất tối nghĩa trong JSX, còn text-ink/text-body thì rõ ngay. */
+  --color-ink: var(--ec-text-strong);
+  --color-body: var(--ec-text-default);
+  --color-muted: var(--ec-text-muted);
+  /* Tách khỏi --color-inverse: nền inverse là xanh đậm, CHỮ inverse là trắng. */
+  --color-ink-inverse: var(--ec-text-inverse);
+  --color-link: var(--ec-text-link);
+  --color-success: var(--ec-text-success);
+  --color-warning: var(--ec-text-warning);
+  --color-danger: var(--ec-text-danger);
+  --color-disabled: var(--ec-text-disabled);
+
+  /* --- Viền và trạng thái ------------------------------------------------ */
+  --color-line: var(--ec-border-default);
+  --color-line-strong: var(--ec-border-strong);
+  --color-focus: var(--ec-focus);
+
+  /* --- Màu theo tính năng ------------------------------------------------
+     Guideline mục 2.1: CHỈ dùng cho icon, chấm định vị, chart, viền hoặc tint
+     nền 4-12%. KHÔNG dùng làm màu chữ nội dung. */
+  --color-feature-test: var(--ec-feature-test);
+  --color-feature-cbt: var(--ec-feature-cbt);
+  --color-feature-library: var(--ec-feature-library);
+  --color-feature-journal: var(--ec-feature-journal);
+  --color-feature-music: var(--ec-feature-music);
+  --color-feature-confession: var(--ec-feature-confession);
+  --color-feature-ai: var(--ec-feature-ai-meo);
+
+  /* --- Bo góc, đổ bóng, font --------------------------------------------- */
+  --radius-sm: var(--ec-radius-sm);
+  --radius-md: var(--ec-radius-md);
+  --radius-lg: var(--ec-radius-lg);
+  --radius-xl: var(--ec-radius-xl);
+  --shadow-card: var(--ec-shadow-card);
+  --shadow-floating: var(--ec-shadow-floating);
+
+  --font-sans: var(--font-be-vietnam-pro), "Be Vietnam Pro", Inter, system-ui, sans-serif;
+  --font-meo: var(--font-nunito), Nunito, "Be Vietnam Pro", sans-serif;
+
+  /* ======================================================================
+   * LỚP ÁNH XẠ TƯƠNG THÍCH — chỉ tồn tại trong giai đoạn chuyển đổi
+   * ======================================================================
+   *
+   * 49 file .tsx đang dùng 4 bảng màu Tailwind mặc định. Thay vì sửa 373 chỗ
+   * trong gói nền này (rồi gói B/C/D lại viết lại phần lớn số đó), ta trỏ các
+   * nấc màu cũ về giá trị token. Màn hình chưa dựng lại vẫn hiện đúng màu
+   * thương hiệu mà không phải chạm vào file nào.
+   *
+   * HỆ QUẢ CẦN BIẾT: class `teal-600` KHÔNG còn ra màu teal. Nó ra Ocean 700.
+   * Đây là cố ý. Code mới dùng từ vựng mới ở trên.
+   *
+   * Một số nấc gộp vào cùng một giá trị (slate-50 và slate-100 cùng ra
+   * bg-subtle). Cố ý: guideline chỉ định nghĩa các bậc ngữ nghĩa, không định
+   * nghĩa thang 10 nấc. Bịa thêm giá trị trung gian sẽ vi phạm chính nguyên
+   * tắc "không hard-code màu ngoài token file".
+   *
+   * Khối này BỊ XOÁ khi gói D xong và không còn file nào dùng từ vựng cũ.
+   */
+
+  /* teal → Ocean, màu chính của thương hiệu */
+  --color-teal-50: var(--ec-bg-brand-soft);
+  --color-teal-100: var(--ec-aqua-200);
+  --color-teal-300: var(--ec-ocean-300);
+  --color-teal-400: var(--ec-ocean-500);
+  --color-teal-600: var(--ec-ocean-700);
+  --color-teal-700: var(--ec-ocean-800);
+  --color-teal-800: var(--ec-ocean-900);
+
+  /* slate → thang trung tính */
+  --color-slate-50: var(--ec-bg-subtle);
+  --color-slate-100: var(--ec-bg-subtle);
+  --color-slate-200: var(--ec-border-default);
+  --color-slate-400: var(--ec-text-disabled);
+  --color-slate-500: var(--ec-text-muted);
+  --color-slate-600: var(--ec-text-muted);
+  --color-slate-700: var(--ec-text-default);
+  --color-slate-900: var(--ec-text-strong);
+
+  /* amber → cảnh báo không khẩn cấp và điểm nhấn nắng */
+  --color-amber-50: var(--ec-bg-warning-soft);
+  --color-amber-100: var(--ec-sun-200);
+  --color-amber-300: var(--ec-sun-500);
+  --color-amber-700: var(--ec-warning);
+  --color-amber-800: var(--ec-warning);
+  --color-amber-900: var(--ec-text-warning);
+
+  /* rose → LỖI, không phải màu tính năng Confession.
+     Guideline có riêng một màu rose cho Confession (#D98FB0), nhưng code hiện
+     tại dùng rose-* cho thông báo lỗi và cảnh báo khủng hoảng. Ánh xạ theo
+     CÔNG DỤNG THẬT trong code, không theo trùng tên. Confession sau này dùng
+     feature-confession, không dùng rose-*. */
+  --color-rose-50: var(--ec-bg-danger-soft);
+  --color-rose-100: var(--ec-bg-danger-soft);
+  --color-rose-200: var(--ec-bg-danger-soft);
+  --color-rose-400: var(--ec-danger);
+  --color-rose-700: var(--ec-text-danger);
+  --color-rose-800: var(--ec-text-danger);
+  --color-rose-900: var(--ec-text-danger);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/*
+ * body KHÔNG còn khai báo font-family ở đây.
+ *
+ * Boilerplate Next.js để `font-family: Arial, Helvetica, sans-serif`, ghi đè
+ * luôn biến font đã cấu hình — nên app chưa bao giờ thật sự dùng font nào khác
+ * Arial. Giờ font đặt bằng class `font-sans` ở thẻ <body> trong layout.tsx.
+ *
+ * Nền và màu chữ mặc định do brand-tokens.css lo (html, body).
+ */

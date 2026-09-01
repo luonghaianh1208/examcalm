@@ -1,21 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, Nunito } from "next/font/google";
 import { getSessionUser } from "@/lib/firebase/session";
 import { MoodWidget } from "@/components/mascot/MoodWidget";
 import { FirebaseBootstrap } from "@/components/FirebaseBootstrap";
-import { SiteHeader } from "@/components/layout/SiteHeader";
-import { SiteFooter } from "@/components/layout/SiteFooter";
 import { OnboardingController } from "@/components/onboarding/OnboardingController";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+/*
+ * Brand Guideline v1.1, trang 09: Be Vietnam Pro cho toàn bộ giao diện; Nunito
+ * CHỈ dành cho lời thoại ngắn của Meo.
+ *
+ * subset "vietnamese" là bắt buộc, không phải tuỳ chọn: thiếu nó thì mọi chữ
+ * có dấu rơi về font dự phòng của hệ điều hành, chữ trong cùng một câu sẽ lệch
+ * kiểu — lỗi này chỉ lộ ra với người đọc tiếng Việt.
+ *
+ * Be Vietnam Pro cần khai báo weight vì đây không phải font biến thiên.
+ * 400/500/600/700 khớp đúng thang chữ của guideline.
+ */
+const beVietnamPro = Be_Vietnam_Pro({
+  variable: "--font-be-vietnam-pro",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -33,13 +45,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="vi"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${beVietnamPro.variable} ${nunito.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* Vỏ app (sidebar, logo, bottom nav, footer) do layout của TỪNG route
+          group dựng — xem AppShell. Đặt ở đây thì trang quản trị sẽ lồng hai vỏ
+          vào nhau, vì mọi route đều đi qua layout gốc này.
+          Nền và màu chữ mặc định do brand-tokens.css lo. */}
+      <body className="min-h-full font-sans">
         <FirebaseBootstrap />
-        <SiteHeader user={user} />
         {children}
-        <SiteFooter />
         <MoodWidget uid={user?.uid ?? null} canSave={Boolean(user?.emailVerified)} />
         <OnboardingController user={user} />
       </body>

@@ -1,0 +1,309 @@
+/*
+ * NGUỒN: BRAND GUIDELINE/examcalm-design-tokens.v1.1.css — bản sao nguyên văn.
+ *
+ * ĐỪNG SỬA TAY FILE NÀY. Muốn đổi token thì sửa bản gốc trong BRAND GUIDELINE
+ * rồi chép lại sang đây.
+ *
+ * Vì sao phải chép thay vì @import thẳng từ BRAND GUIDELINE: thư mục đó nằm
+ * trong danh sách ignore của App Hosting (firebase.json) để 6 MB tài liệu thiết
+ * kế không đi theo bản build. Trỏ thẳng vào đó thì local chạy được nhưng
+ * production hỏng.
+ */
+:root {
+  /* Brand palette: raw colors. Do not use raw feature colors as body-text colors. */
+  --ec-ocean-900: #173B57;
+  --ec-ocean-800: #214F70;
+  --ec-ocean-700: #2D6688;
+  --ec-ocean-600: #3E7EA4;
+  --ec-ocean-500: #5C99BC;
+  --ec-ocean-300: #9BC8DF;
+  --ec-aqua-600: #369EA1;
+  --ec-aqua-500: #55B7B6;
+  --ec-aqua-200: #CDEDEC;
+  --ec-sage-600: #568C73;
+  --ec-sage-500: #78AA91;
+  --ec-sage-200: #D8EADF;
+  --ec-sun-500: #F0B560;
+  --ec-sun-200: #FBE6BE;
+  --ec-peach-500: #EFA58C;
+  --ec-peach-200: #FBE0D6;
+  --ec-lavender-500: #8F91DA;
+  --ec-lavender-200: #E4E4F8;
+  --ec-rose-500: #D98FB0;
+  --ec-rose-200: #F5DCE8;
+
+  /* Semantic backgrounds. */
+  --ec-bg-canvas: #FFF9F1;
+  --ec-bg-surface: #FFFFFF;
+  --ec-bg-subtle: #F6FAFC;
+  --ec-bg-inverse: #173B57;
+  --ec-bg-brand-soft: #EAF7FA;
+  --ec-bg-success-soft: #E8F4EE;
+  --ec-bg-warning-soft: #FFF4DF;
+  --ec-bg-danger-soft: #FBEAEA;
+  --ec-bg-overlay: rgba(23, 59, 87, 0.48);
+
+  /* Semantic foregrounds. v1.1 muted is darker than v1.0 for AA on canvas. */
+  --ec-text-strong: #183247;
+  --ec-text-default: #2B4151;
+  --ec-text-muted: #5C6F7D;
+  --ec-text-inverse: #FFFFFF;
+  --ec-text-link: #214F70;
+  --ec-text-success: #216A49;
+  --ec-text-warning: #7A4B00;
+  --ec-text-danger: #9B3030;
+  --ec-text-disabled: #82919B;
+
+  /* Borders, icons and states. */
+  --ec-border-default: #D9E5EA;
+  --ec-border-strong: #9CB4C0;
+  --ec-icon-default: #2D6688;
+  --ec-focus: #245CFF;
+  --ec-success: #2E8B62;
+  --ec-warning: #A66A16;
+  --ec-danger: #B74747;
+
+  /* Legacy aliases kept for a low-risk migration from v1.0. */
+  --ec-canvas: var(--ec-bg-canvas);
+  --ec-surface-subtle: var(--ec-bg-subtle);
+  --ec-surface-card: var(--ec-bg-surface);
+  --ec-ink: var(--ec-text-strong);
+  --ec-text: var(--ec-text-default);
+  --ec-muted: var(--ec-text-muted);
+  --ec-line: var(--ec-border-default);
+
+  /* Feature colors are navigation accents, icons, charts or 4-12% tints. */
+  --ec-feature-test: #68A8D1;
+  --ec-feature-cbt: #8F91DA;
+  --ec-feature-library: #E8AA4F;
+  --ec-feature-journal: #EFA58C;
+  --ec-feature-music: #55B7B6;
+  --ec-feature-confession: #D98FB0;
+  --ec-feature-ai-meo: #4B9F89;
+  --ec-feature-garden-pending: #78AA91;
+
+  --ec-gradient-hero: linear-gradient(135deg, #F1F4FF 0%, #EAF7FA 55%, #FFF6E9 100%);
+  --ec-gradient-journal: linear-gradient(135deg, #FFF4ED 0%, #F2F8F3 100%);
+  --ec-gradient-dashboard: linear-gradient(135deg, #F4F7FF 0%, #EEF9F7 100%);
+
+  --ec-font-ui: "Be Vietnam Pro", Inter, system-ui, sans-serif;
+  --ec-font-meo: Nunito, "Be Vietnam Pro", sans-serif;
+
+  --ec-space-1: 4px;
+  --ec-space-2: 8px;
+  --ec-space-3: 12px;
+  --ec-space-4: 16px;
+  --ec-space-5: 20px;
+  --ec-space-6: 24px;
+  --ec-space-7: 28px;
+  --ec-space-8: 32px;
+  --ec-space-10: 40px;
+  --ec-space-12: 48px;
+  --ec-space-16: 64px;
+
+  --ec-radius-sm: 8px;
+  --ec-radius-md: 12px;
+  --ec-radius-lg: 16px;
+  --ec-radius-xl: 24px;
+  --ec-radius-pill: 999px;
+  --ec-shadow-card: 0 8px 24px rgba(23, 59, 87, 0.08);
+  --ec-shadow-floating: 0 14px 40px rgba(23, 59, 87, 0.14);
+  --ec-shadow-focus: 0 0 0 3px rgba(36, 92, 255, 0.28);
+
+  --ec-content-max: 1200px;
+  --ec-sidebar-width: 248px;
+  --ec-topbar-height: 72px;
+  --ec-mobile-topbar-height: 88px;
+  --ec-mobile-bottom-nav-height: 68px;
+  --ec-touch-target: 44px;
+
+  /* App-logo placement. Values define the rendered logo box, not source pixels. */
+  --ec-logo-width-desktop: 120px;
+  --ec-logo-width-tablet: 96px;
+  --ec-logo-width-mobile: 72px;
+  --ec-logo-offset-desktop: 24px;
+  --ec-logo-offset-tablet: 20px;
+  --ec-logo-offset-mobile: 16px;
+  --ec-logo-heading-gap-desktop: 32px;
+  --ec-logo-heading-gap-tablet: 28px;
+  --ec-logo-heading-gap-mobile: 24px;
+  --ec-brand-zone-desktop: 168px;
+  --ec-brand-zone-tablet: 136px;
+  --ec-brand-zone-mobile: 96px;
+
+  /* Onboarding mascot and reactive web-app help chatbot. */
+  --ec-guide-max-width: 320px;
+  --ec-chatbot-width: 360px;
+  --ec-chatbot-max-height: min(640px, calc(100dvh - 32px));
+  --ec-floating-edge: 24px;
+  --ec-guide-z: 700;
+  --ec-chatbot-z: 720;
+
+  --ec-duration-instant: 80ms;
+  --ec-duration-fast: 120ms;
+  --ec-duration-base: 180ms;
+  --ec-duration-page: 240ms;
+  --ec-duration-expressive: 420ms;
+  --ec-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --ec-ease-enter: cubic-bezier(0, 0, .2, 1);
+  --ec-ease-exit: cubic-bezier(.4, 0, 1, 1);
+  --ec-ease-gentle-pop: cubic-bezier(.34, 1.3, .64, 1);
+  --ec-stagger: 60ms;
+}
+
+/* Default light theme pairings. */
+html,
+body {
+  background: var(--ec-bg-canvas);
+  color: var(--ec-text-default);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.ec-text-strong {
+  color: var(--ec-text-strong);
+}
+
+.ec-text-default { color: var(--ec-text-default); }
+.ec-text-muted { color: var(--ec-text-muted); }
+.ec-text-inverse { color: var(--ec-text-inverse); }
+.ec-link { color: var(--ec-text-link); text-decoration-thickness: .08em; text-underline-offset: .18em; }
+.ec-link:hover { color: var(--ec-ocean-900); }
+.ec-bg-canvas { background: var(--ec-bg-canvas); color: var(--ec-text-default); }
+.ec-bg-surface { background: var(--ec-bg-surface); color: var(--ec-text-default); }
+.ec-bg-subtle { background: var(--ec-bg-subtle); color: var(--ec-text-default); }
+.ec-bg-inverse { background: var(--ec-bg-inverse); color: var(--ec-text-inverse); }
+.ec-tone-success { background: var(--ec-bg-success-soft); color: var(--ec-text-success); }
+.ec-tone-warning { background: var(--ec-bg-warning-soft); color: var(--ec-text-warning); }
+.ec-tone-danger { background: var(--ec-bg-danger-soft); color: var(--ec-text-danger); }
+
+/* Product logo: top-left of the app shell. Never place it inside page content cards. */
+.ec-app-shell__brand {
+  box-sizing: border-box;
+  min-block-size: var(--ec-brand-zone-desktop);
+  padding-block-start: var(--ec-logo-offset-desktop);
+  padding-inline-start: var(--ec-logo-offset-desktop);
+}
+
+.ec-app-logo {
+  display: block;
+  inline-size: var(--ec-logo-width-desktop);
+  block-size: auto;
+  object-fit: contain;
+}
+
+/* Use when logo and page heading are intentionally stacked in one column. */
+.ec-brand-heading-stack > .ec-page-heading {
+  margin-block-start: var(--ec-logo-heading-gap-desktop);
+}
+
+.ec-page-heading {
+  color: var(--ec-text-strong);
+  margin-block-end: var(--ec-space-4);
+}
+
+/* Proactive guide: shown only for first-time onboarding after account creation. */
+.ec-onboarding-guide {
+  position: fixed;
+  inset-inline-end: calc(var(--ec-floating-edge) + 64px);
+  inset-block-end: var(--ec-floating-edge);
+  z-index: var(--ec-guide-z);
+  max-inline-size: min(var(--ec-guide-max-width), calc(100vw - 112px));
+  background: var(--ec-bg-surface);
+  color: var(--ec-text-default);
+  border: 1px solid var(--ec-border-default);
+  border-radius: var(--ec-radius-lg);
+  box-shadow: var(--ec-shadow-floating);
+}
+
+/* Reactive chatbot: opened only by a user action and scoped to web-app help. */
+.ec-chatbot-launcher {
+  position: fixed;
+  inset-inline-end: var(--ec-floating-edge);
+  inset-block-end: var(--ec-floating-edge);
+  z-index: var(--ec-chatbot-z);
+  min-inline-size: var(--ec-touch-target);
+  min-block-size: var(--ec-touch-target);
+}
+
+.ec-chatbot-panel {
+  position: fixed;
+  inset-inline-end: var(--ec-floating-edge);
+  inset-block-end: calc(var(--ec-floating-edge) + 56px);
+  z-index: var(--ec-chatbot-z);
+  inline-size: min(var(--ec-chatbot-width), calc(100vw - 32px));
+  max-block-size: var(--ec-chatbot-max-height);
+  overflow: auto;
+  background: var(--ec-bg-surface);
+  color: var(--ec-text-default);
+  border: 1px solid var(--ec-border-default);
+  border-radius: var(--ec-radius-lg);
+  box-shadow: var(--ec-shadow-floating);
+}
+
+.ec-page-enter {
+  animation: ec-page-enter var(--ec-duration-page) var(--ec-ease-enter) both;
+}
+
+@keyframes ec-page-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ec-meo-idle {
+  transform-origin: 50% 85%;
+  animation: ec-meo-breathe 2.4s var(--ec-ease-standard) 2;
+}
+
+@keyframes ec-meo-breathe {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-2px) scaleY(1.015); }
+}
+
+:focus-visible {
+  outline: 2px solid var(--ec-focus);
+  outline-offset: 2px;
+  box-shadow: var(--ec-shadow-focus);
+}
+
+@media (max-width: 1023px) {
+  .ec-app-shell__brand {
+    min-block-size: var(--ec-brand-zone-tablet);
+    padding-block-start: var(--ec-logo-offset-tablet);
+    padding-inline-start: var(--ec-logo-offset-tablet);
+  }
+  .ec-app-logo { inline-size: var(--ec-logo-width-tablet); }
+  .ec-brand-heading-stack > .ec-page-heading { margin-block-start: var(--ec-logo-heading-gap-tablet); }
+}
+
+@media (max-width: 767px) {
+  .ec-app-shell__brand {
+    min-block-size: var(--ec-brand-zone-mobile);
+    padding-block-start: 8px;
+    padding-inline-start: var(--ec-logo-offset-mobile);
+  }
+  .ec-app-logo { inline-size: var(--ec-logo-width-mobile); }
+  .ec-brand-heading-stack > .ec-page-heading { margin-block-start: var(--ec-logo-heading-gap-mobile); }
+  .ec-onboarding-guide {
+    inset-inline: 16px;
+    inset-block-end: 80px;
+    max-inline-size: none;
+  }
+  .ec-chatbot-launcher { inset-inline-end: 16px; inset-block-end: 16px; }
+  .ec-chatbot-panel { inset-inline: 16px; inset-block-end: 72px; inline-size: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 80ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 80ms !important;
+  }
+  .ec-page-enter { transform: none !important; }
+  .ec-meo-idle { animation: none !important; }
+}
