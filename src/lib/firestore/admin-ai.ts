@@ -62,7 +62,9 @@ export function isAiEnabled(
     "baseUrl" | "model" | "killSwitch" | "quotaStudentPerDay" | "chatQuotaPerDay"
   >,
 ): boolean {
-  if (config.baseUrl === "" || config.model === "") return false;
+  // baseUrl là hằng số PROVIDER_BASE_URL nên luôn hợp lệ — chỉ còn tên model
+  // do thầy cô nhập mới quyết định đã cấu hình xong hay chưa.
+  if (config.model === "") return false;
   const moodReflectionReady =
     config.killSwitch.moodReflection === false && config.quotaStudentPerDay > 0;
   const chatReady = config.killSwitch.chat === false && config.chatQuotaPerDay > 0;

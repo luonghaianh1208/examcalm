@@ -11,7 +11,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { assertCallerIsAdmin, PermissionDeniedError, type CallerAuth } from "../admin/guards";
-import { aiConfigSchema, type AiConfig } from "./config";
+import { aiConfigSchema, type AiConfig, PROVIDER_BASE_URL } from "./config";
 import {
   callChatCompletion as callChatCompletionDefault,
   AiProviderError,
@@ -84,7 +84,7 @@ export async function runTestAiConnection(
       message: "Cấu hình AI (systemConfig/aiConfig) chưa tồn tại hoặc không hợp lệ.",
     };
   }
-  if (config.baseUrl === "" || config.model === "") {
+  if (config.model === "") {
     return {
       ok: false,
       kind: "not_configured",
@@ -94,7 +94,7 @@ export async function runTestAiConnection(
 
   try {
     await deps.callChatCompletion({
-      baseUrl: config.baseUrl,
+      baseUrl: PROVIDER_BASE_URL,
       apiKey: deps.apiKey,
       model: config.model,
       systemPrompt: TEST_SYSTEM_PROMPT,

@@ -34,17 +34,9 @@ describe("isAiEnabled — Task 9, quyết định OR giữa hai tính năng", ()
     chatQuotaPerDay: 30,
   };
 
-  it("baseUrl rỗng -> false dù cả hai tính năng đều bật", () => {
-    expect(
-      isAiEnabled({
-        baseUrl: "",
-        model: "m",
-        killSwitch: { moodReflection: false, chat: false },
-        quotaStudentPerDay: 5,
-        chatQuotaPerDay: 30,
-      }),
-    ).toBe(false);
-  });
+  // Bỏ test "baseUrl rỗng" cũ: nhà cung cấp đã đóng cứng thành hằng số nên
+  // baseUrl không còn là điều kiện. Sentinel duy nhất còn lại là model rỗng —
+  // đã có test ngay bên dưới.
 
   it("model rỗng -> false dù cả hai tính năng đều bật", () => {
     expect(
@@ -156,8 +148,10 @@ describe("isReflectionEnabled / isChatEnabled — Task 9 fix round 1, Finding 2"
     }
   });
 
-  it("baseUrl/model rỗng -> cả hai đều false dù killSwitch/quota hợp lệ (điều kiện provider CHUNG)", () => {
-    expect(isReflectionEnabled({ ...MOOD_ONLY, baseUrl: "" })).toBe(false);
+  it("model rỗng -> cả hai đều false dù killSwitch/quota hợp lệ (điều kiện provider CHUNG)", () => {
+    // baseUrl bỏ khỏi điều kiện vì đã là hằng số; model rỗng vẫn là sentinel
+    // "chưa cấu hình" chung cho cả hai tính năng.
+    expect(isReflectionEnabled({ ...MOOD_ONLY, model: "" })).toBe(false);
     expect(isChatEnabled({ ...CHAT_ONLY, model: "" })).toBe(false);
   });
 });

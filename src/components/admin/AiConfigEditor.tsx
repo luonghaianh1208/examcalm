@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { aiConfigSchema, type AiConfig } from "@/lib/types/ai";
+import { aiConfigSchema, type AiConfig, PROVIDER_BASE_URL, PROVIDER_LABEL } from "@/lib/types/ai";
 import {
   getAiConfig, saveAiConfig, listPromptTemplates, saveDraftPromptTemplate,
   promptTemplateDraftSchema, publishPromptTemplate, unpublishPromptTemplate,
@@ -126,8 +126,10 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
     setConfigMessage(null);
 
     const candidate = {
-      providerLabel: form.providerLabel.trim(),
-      baseUrl: form.baseUrl.trim(),
+      // Gửi hằng số, không gửi giá trị trong form — server cũng ép lại lần nữa
+      // (saveAiConfig.ts). Hai lớp cùng chặn để không ai đổi được nơi nhận dữ liệu.
+      providerLabel: PROVIDER_LABEL,
+      baseUrl: PROVIDER_BASE_URL,
       model: form.model.trim(),
       temperature: Number(form.temperature),
       maxTokens: Number(form.maxTokens),
@@ -304,32 +306,35 @@ export function AiConfigEditor({ adminUid }: { adminUid: string }) {
           <div aria-busy="true" className="h-20 animate-pulse rounded-xl bg-slate-200" />
         ) : (
           <>
-            <label className="flex flex-col gap-1">
-              <span>Tên nhà cung cấp (hiển thị cho học sinh ở màn hình đồng ý)</span>
-              <input
-                value={form.providerLabel}
-                onChange={(e) => updateForm("providerLabel", e.target.value)}
-                className="rounded-lg border px-3 py-2"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span>Base URL</span>
-              <input
-                value={form.baseUrl}
-                onChange={(e) => updateForm("baseUrl", e.target.value)}
-                placeholder="https://api.openai.com/v1"
-                className="rounded-lg border px-3 py-2 font-mono text-sm"
-              />
-            </label>
+            {/*
+              Nhà cung cấp KHÔNG còn sửa được ở đây — đóng cứng trong mã nguồn.
+              Đây là địa chỉ mà ghi chú cảm xúc và bài Confession của học sinh
+              được gửi tới; để nó sửa được từ giao diện nghĩa là một tài khoản
+              quản trị bị chiếm đủ để chuyển hướng toàn bộ dữ liệu đó đi nơi
+              khác. Hiện ra dạng chỉ-đọc để thầy cô vẫn biết dữ liệu đi đâu.
+            */}
+            <div className="rounded-lg bg-subtle px-4 py-3">
+              <p className="font-medium text-ink">Nhà cung cấp AI</p>
+              <p className="mt-1 text-body">{PROVIDER_LABEL}</p>
+              <p className="font-mono text-sm text-muted">{PROVIDER_BASE_URL}</p>
+              <p className="mt-2 text-sm text-muted">
+                Cố định trong mã nguồn, không sửa được từ đây. Đổi nhà cung cấp phải qua một
+                lần cập nhật mã và deploy — có review và có dấu vết.
+              </p>
+            </div>
 
             <label className="flex flex-col gap-1">
               <span>Model</span>
               <input
                 value={form.model}
                 onChange={(e) => updateForm("model", e.target.value)}
+                placeholder="req/gpt-5.6-terra"
                 className="rounded-lg border px-3 py-2 font-mono text-sm"
               />
+              <span className="text-sm text-muted">
+                Tên model do Stali cung cấp. Đổi được bất cứ lúc nào — bấm &ldquo;Thử kết
+                nối&rdquo; bên dưới trước khi lưu.
+              </span>
             </label>
 
             <label className="flex flex-col gap-1">

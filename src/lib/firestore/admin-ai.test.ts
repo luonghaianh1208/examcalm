@@ -134,14 +134,9 @@ describe("isAiEnabled", () => {
     ).toBe(true);
   });
 
-  it("false khi baseUrl rỗng", () => {
-    expect(
-      isAiEnabled({
-        baseUrl: "", model: "m", killSwitch: { moodReflection: false, chat: true },
-        quotaStudentPerDay: 5, chatQuotaPerDay: 0,
-      }),
-    ).toBe(false);
-  });
+  // Bỏ test "baseUrl rỗng" cũ: nhà cung cấp đã đóng cứng thành hằng số nên
+  // baseUrl không còn quyết định gì. Sentinel "chưa cấu hình" duy nhất còn lại
+  // là model rỗng, đã có test riêng ngay bên dưới.
 
   it("false khi model rỗng", () => {
     expect(

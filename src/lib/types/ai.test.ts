@@ -4,6 +4,8 @@ import {
   promptTemplateSchema,
   aiJournalOutputSchema,
   DEFAULT_AI_CONFIG,
+  PROVIDER_BASE_URL,
+  PROVIDER_LABEL,
 } from "@/lib/types/ai";
 
 const VALID_AI_CONFIG = {
@@ -176,10 +178,25 @@ describe("aiConfigSchema", () => {
 });
 
 describe("DEFAULT_AI_CONFIG", () => {
-  it("có baseUrl rỗng, model rỗng, và kill switch đang tắt (true)", () => {
-    expect(DEFAULT_AI_CONFIG.baseUrl).toBe("");
+  /*
+   * baseUrl KHÔNG còn rỗng: nhà cung cấp đã đóng cứng thành hằng số trong mã
+   * nguồn, nên mặc định mang sẵn giá trị thật. Sentinel "chưa cấu hình" duy
+   * nhất còn lại là `model` rỗng — cùng với killSwitch bật, hai thứ đó vẫn giữ
+   * đúng tính chất quan trọng nhất của mặc định: hệ thống im lặng cho tới khi
+   * thầy cô chủ động bật.
+   */
+  it("mang sẵn nhà cung cấp đã đóng cứng, model rỗng, và kill switch đang tắt (true)", () => {
+    expect(DEFAULT_AI_CONFIG.baseUrl).toBe(PROVIDER_BASE_URL);
+    expect(DEFAULT_AI_CONFIG.providerLabel).toBe(PROVIDER_LABEL);
     expect(DEFAULT_AI_CONFIG.model).toBe("");
     expect(DEFAULT_AI_CONFIG.killSwitch.moodReflection).toBe(true);
+  });
+
+  // Rào chắn: hằng số này là địa chỉ dữ liệu học sinh được gửi tới. Đổi nó phải
+  // là một quyết định có ý thức, không phải một lần gõ nhầm lọt qua review.
+  it("nhà cung cấp đóng cứng đúng địa chỉ Stali qua https", () => {
+    expect(PROVIDER_BASE_URL).toBe("https://api.stali.vn/v1");
+    expect(PROVIDER_BASE_URL.startsWith("https://")).toBe(true);
   });
 
   it("rateLimitPerMinute mặc định > 0 — 0 ở field này nghĩa là KHÔNG rate limit " +

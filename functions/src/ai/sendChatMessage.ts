@@ -138,7 +138,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { z } from "zod";
-import { aiConfigSchema, DEFAULT_AI_CONFIG, CURRENT_AI_CONSENT_VERSION, type AiConfig } from "./config";
+import { aiConfigSchema, DEFAULT_AI_CONFIG, CURRENT_AI_CONSENT_VERSION, type AiConfig, PROVIDER_BASE_URL } from "./config";
 import {
   callChatCompletion as callChatCompletionDefault,
   AiProviderError,
@@ -628,7 +628,7 @@ export async function runSendChatMessage(
   }
 
   // 8. baseUrl chưa cấu hình — trạng thái mặc định của hệ thống là im lặng.
-  if (config.baseUrl === "") {
+  if (config.model === "") {
     if (layer1Detected) {
       return serveCrisisReplyBypassingGate(deps.db, sessionId, auth.uid, text);
     }
@@ -694,7 +694,7 @@ export async function runSendChatMessage(
   let result: ChatCompletionResult;
   try {
     result = await deps.callChatCompletion({
-      baseUrl: config.baseUrl,
+      baseUrl: PROVIDER_BASE_URL,
       apiKey: deps.apiKey,
       model: config.model,
       messages,

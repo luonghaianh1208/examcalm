@@ -5,6 +5,28 @@ import { z } from "zod";
 // http://127.0.0.1 (bất kỳ port/path nào) để cắm Ollama chạy máy nội bộ.
 const LOCAL_HTTP_BASE_URL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/;
 
+/**
+ * Nhà cung cấp AI — ĐÓNG CỨNG trong mã nguồn, không đọc từ Firestore.
+ *
+ * Trước đây admin nhập baseUrl ở trang quản trị. Bỏ đi vì hai lý do:
+ *
+ *   1. AN TOÀN. Đây là địa chỉ mà ghi chú cảm xúc và bài Confession của học
+ *      sinh vị thành niên được gửi tới. Còn sửa được từ giao diện nghĩa là một
+ *      tài khoản quản trị bị chiếm — hoặc một lần gõ nhầm — đủ để chuyển hướng
+ *      toàn bộ dữ liệu đó sang một máy chủ khác. Hằng số trong mã nguồn thì
+ *      phải qua review và deploy mới đổi được.
+ *
+ *   2. TRUNG THỰC VỚI HỌC SINH. Màn hình xin đồng ý nói rõ tên nơi nhận dữ
+ *      liệu. Tên đó lấy từ PROVIDER_LABEL, nên nó không bao giờ lệch khỏi nơi
+ *      dữ liệu thật sự đi tới.
+ *
+ * Hai field baseUrl và providerLabel vẫn còn trong schema để document cũ parse
+ * được, nhưng MỌI nơi gọi provider đều dùng hai hằng số này, KHÔNG đọc document.
+ * Tên model thì vẫn nhập được ở trang quản trị — đổi model là việc thường ngày.
+ */
+export const PROVIDER_BASE_URL = "https://api.stali.vn/v1";
+export const PROVIDER_LABEL = "Stali";
+
 export const aiConfigSchema = z.object({
   // Tên provider hiển thị cho học sinh ở màn hình đồng ý — không phải giá trị bí mật.
   providerLabel: z.string(),
@@ -126,8 +148,10 @@ export const aiConfigSchema = z.object({
 export type AiConfig = z.infer<typeof aiConfigSchema>;
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
-  providerLabel: "",
-  baseUrl: "",
+  // Hai field này KHÔNG còn là sentinel "chưa cấu hình" nữa — nhà cung cấp đã
+  // đóng cứng trong mã nguồn. Sentinel duy nhất còn lại là `model` rỗng.
+  providerLabel: PROVIDER_LABEL,
+  baseUrl: PROVIDER_BASE_URL,
   model: "",
   temperature: 0.7,
   maxTokens: 500,

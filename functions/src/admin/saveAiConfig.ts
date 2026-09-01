@@ -19,7 +19,7 @@ import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firesto
 import { assertCallerIsAdmin, PermissionDeniedError, type CallerAuth } from "./guards";
 import {
   aiConfigSchema, DEFAULT_AI_CONFIG, isAiEnabled, isReflectionEnabled, isChatEnabled,
-  type AiConfig,
+  type AiConfig, PROVIDER_BASE_URL, PROVIDER_LABEL,
 } from "../ai/config";
 import { writeAuditLog } from "../audit/writeAuditLog";
 
@@ -53,8 +53,19 @@ export async function runSaveAiConfig(
 
   const batch = deps.db.batch();
   batch.set(deps.db.collection("systemConfig").doc("aiConfig"), {
-    providerLabel: next.providerLabel,
-    baseUrl: next.baseUrl,
+    /*
+     * ÉP hằng số, cố tình BỎ QUA giá trị client gửi lên.
+     *
+     * Đây là địa chỉ mà ghi chú cảm xúc và bài Confession của học sinh vị
+     * thành niên được gửi tới. Nhận giá trị từ client nghĩa là một tài khoản
+     * quản trị bị chiếm đủ để chuyển hướng toàn bộ dữ liệu đó đi nơi khác.
+     *
+     * Ghi vào document chỉ để trang quản trị và màn hình đồng ý đọc lại cho
+     * tiện; các nơi GỌI provider không đọc field này mà dùng thẳng hằng số —
+     * xem PROVIDER_BASE_URL trong ai/config.ts.
+     */
+    providerLabel: PROVIDER_LABEL,
+    baseUrl: PROVIDER_BASE_URL,
     model: next.model,
     temperature: next.temperature,
     maxTokens: next.maxTokens,
@@ -72,7 +83,10 @@ export async function runSaveAiConfig(
   // đồng ý. reflectionEnabled/chatEnabled RIÊNG cho ReflectionCard.tsx/ChatWindow.tsx gate đúng
   // tính năng — ghi CẢ BA trong CÙNG một batch với aiConfig để không bao giờ lệch nhau.
   batch.set(deps.db.collection("systemConfig").doc("aiPublic"), {
-    providerLabel: next.providerLabel,
+    // Nhãn HẰNG SỐ, không lấy từ client: đây chính là chữ hiện trên màn hình
+    // xin đồng ý của học sinh ("dữ liệu được gửi tới ..."). Lấy từ client thì
+    // nó có thể nói một đằng còn dữ liệu đi một nẻo.
+    providerLabel: PROVIDER_LABEL,
     enabled: isAiEnabled(next),
     reflectionEnabled: isReflectionEnabled(next),
     chatEnabled: isChatEnabled(next),
@@ -85,7 +99,7 @@ export async function runSaveAiConfig(
     targetType: "aiConfig",
     targetId: "aiConfig",
     before: { baseUrl: before.baseUrl, providerLabel: before.providerLabel, killSwitch: before.killSwitch },
-    after: { baseUrl: next.baseUrl, providerLabel: next.providerLabel, killSwitch: next.killSwitch },
+    after: { baseUrl: PROVIDER_BASE_URL, providerLabel: PROVIDER_LABEL, killSwitch: next.killSwitch },
   });
 
   return { ok: true };

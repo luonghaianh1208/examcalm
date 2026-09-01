@@ -16,7 +16,7 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore";
-import { aiConfigSchema, DEFAULT_AI_CONFIG, type AiConfig } from "../ai/config";
+import { aiConfigSchema, DEFAULT_AI_CONFIG, type AiConfig, PROVIDER_BASE_URL } from "../ai/config";
 import { callChatCompletion } from "../ai/openaiClient";
 import { detectCrisisKeywords } from "../ai/crisisDetector";
 import { writeCrisisAlert } from "../ai/crisisAlerts";
@@ -99,7 +99,7 @@ export async function decideModeration(
    * Muốn dừng hẳn Confession thì tắt `confessionEnabled` — bài sẽ không gửi
    * được ngay từ đầu, thay vì gửi được rồi ùn lại.
    */
-  const chuaCauHinh = config.baseUrl === "" || config.model === "" || apiKey === "";
+  const chuaCauHinh = config.model === "" || apiKey === "";
   if (chuaCauHinh) {
     return {
       status: "hold",
@@ -110,7 +110,7 @@ export async function decideModeration(
   let text2: string;
   try {
     const result = await callModel({
-      baseUrl: config.baseUrl,
+      baseUrl: PROVIDER_BASE_URL,
       apiKey,
       model: config.model,
       messages: [

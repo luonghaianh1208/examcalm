@@ -68,7 +68,9 @@ async function renderReady(config: AiConfig = DEFAULT_AI_CONFIG, templates: Prom
   mockedListPromptTemplates.mockResolvedValue(templates);
   render(<AiConfigEditor adminUid="admin-1" />);
   await waitFor(() => {
-    expect(screen.getByLabelText(/tên nhà cung cấp/i)).toBeInTheDocument();
+    // Mốc chờ đổi sang nhãn Model: ô "Tên nhà cung cấp" và "Base URL" đã bị bỏ
+    // khỏi giao diện khi nhà cung cấp được đóng cứng thành hằng số.
+    expect(screen.getByLabelText(/^model/i)).toBeInTheDocument();
   });
 }
 
@@ -80,9 +82,10 @@ describe("AiConfigEditor — nạp cấu hình", () => {
   it("nạp đúng giá trị đã lưu vào form", async () => {
     await renderReady(CONFIGURED);
 
-    expect((screen.getByLabelText(/tên nhà cung cấp/i) as HTMLInputElement).value).toBe("OpenAI");
-    expect((screen.getByLabelText(/^base url/i) as HTMLInputElement).value).toBe("https://api.openai.com/v1");
     expect((screen.getByLabelText(/^model/i) as HTMLInputElement).value).toBe("gpt-4o-mini");
+    // Nhà cung cấp hiện dạng CHỈ ĐỌC, không còn là ô nhập.
+    expect(screen.getByText("https://api.stali.vn/v1")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^base url/i)).not.toBeInTheDocument();
   });
 
   it("tải lỗi -> hiện thông báo lỗi kèm nút thử lại", async () => {
@@ -97,51 +100,12 @@ describe("AiConfigEditor — nạp cấu hình", () => {
   });
 });
 
-describe("AiConfigEditor — validate baseUrl (Decision, dùng lại aiConfigSchema)", () => {
-  it("baseUrl http:// ngoài localhost -> chặn lưu, hiện lỗi rõ ràng, KHÔNG gọi saveAiConfig", async () => {
-    await renderReady(CONFIGURED);
-
-    const baseUrlInput = screen.getByLabelText(/^base url/i);
-    await userEvent.clear(baseUrlInput);
-    await userEvent.type(baseUrlInput, "http://evil-provider.com/v1");
-
-    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/https/i);
-    });
-    expect(mockedSaveAiConfig).not.toHaveBeenCalled();
-  });
-
-  it("baseUrl http://localhost -> hợp lệ (ngoại lệ Ollama), lưu thành công", async () => {
-    await renderReady(CONFIGURED);
-
-    const baseUrlInput = screen.getByLabelText(/^base url/i);
-    await userEvent.clear(baseUrlInput);
-    await userEvent.type(baseUrlInput, "http://localhost:11434/v1");
-
-    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
-
-    await waitFor(() => {
-      expect(mockedSaveAiConfig).toHaveBeenCalled();
-    });
-  });
-
-  it("baseUrl sai định dạng (không phải URL) -> chặn lưu", async () => {
-    await renderReady(CONFIGURED);
-
-    const baseUrlInput = screen.getByLabelText(/^base url/i);
-    await userEvent.clear(baseUrlInput);
-    await userEvent.type(baseUrlInput, "khong-phai-url");
-
-    await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-    });
-    expect(mockedSaveAiConfig).not.toHaveBeenCalled();
-  });
-});
+/*
+ * Khối "validate baseUrl" cũ đã bỏ: ô nhập Base URL không còn tồn tại. Nhà
+ * cung cấp đóng cứng thành hằng số trong mã nguồn (PROVIDER_BASE_URL), nên
+ * không có đường nào để nhập một URL sai từ giao diện nữa — thứ mà ba test đó
+ * canh gác đã biến mất cùng ô nhập.
+ */
 
 describe("AiConfigEditor — kill switch (Decision D)", () => {
   it("không render checkbox nào có nhãn 'killSwitch' thô", async () => {
@@ -303,7 +267,7 @@ describe("AiConfigEditor — thông báo lưu nêu tên nhà cung cấp (Fix rou
     await userEvent.click(screen.getByRole("button", { name: /lưu cấu hình/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(/openai/i);
+      expect(screen.getByRole("status")).toHaveTextContent(/stali/i);
     });
     expect(screen.getByRole("status")).toHaveTextContent(/màn hình đồng ý/i);
   });
@@ -471,7 +435,8 @@ describe("AiConfigEditor — Thử kết nối (Decision E)", () => {
   it("form còn thay đổi chưa lưu -> nút 'Thử kết nối' bị disable", async () => {
     await renderReady(CONFIGURED);
 
-    await userEvent.type(screen.getByLabelText(/^base url/i), "1");
+    // Gõ vào ô Model — ô Base URL đã bị bỏ khi nhà cung cấp thành hằng số.
+    await userEvent.type(screen.getByLabelText(/^model/i), "1");
 
     expect(screen.getByRole("button", { name: /thử kết nối/i })).toBeDisabled();
     expect(mockedCallTestAiConnection).not.toHaveBeenCalled();

@@ -18,7 +18,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore";
 import { z } from "zod";
-import { aiConfigSchema, DEFAULT_AI_CONFIG, type AiConfig } from "./config";
+import { aiConfigSchema, DEFAULT_AI_CONFIG, type AiConfig, PROVIDER_BASE_URL } from "./config";
 import {
   callChatCompletion as callChatCompletionDefault,
   AiProviderError,
@@ -177,7 +177,7 @@ export async function runGenerateReflection(
   }
 
   // 4. baseUrl chưa cấu hình — trạng thái mặc định của hệ thống là im lặng.
-  if (config.baseUrl === "") {
+  if (config.model === "") {
     throw new HttpsError("failed-precondition", "Tính năng phản chiếu AI chưa sẵn sàng.");
   }
 
@@ -236,7 +236,7 @@ export async function runGenerateReflection(
   let result: ChatCompletionResult;
   try {
     result = await deps.callChatCompletion({
-      baseUrl: config.baseUrl,
+      baseUrl: PROVIDER_BASE_URL,
       apiKey: deps.apiKey,
       model: config.model,
       systemPrompt,
