@@ -1,0 +1,225 @@
+{
+  "meta": {
+    "name": "ExamCalm Design System",
+    "version": "1.1.0",
+    "status": "approved direction",
+    "designDirection": "Calm Modern x Healing Garden",
+    "updated": "2026-09-01",
+    "note": "v1.1 làm rõ cặp màu foreground/background, vị trí logo trong web app và ranh giới giữa onboarding mascot với chatbot hỗ trợ web app.",
+    "migration": "color.text.muted đổi từ #667986 thành #5C6F7D để đạt WCAG AA trên canvas #FFF9F1. mobileTopbar đổi từ 60px thành 88px để chứa logo 72px với vùng đệm an toàn."
+  },
+  "color": {
+    "brand": {
+      "ocean900": { "$type": "color", "$value": "#173B57" },
+      "ocean800": { "$type": "color", "$value": "#214F70" },
+      "ocean700": { "$type": "color", "$value": "#2D6688" },
+      "ocean600": { "$type": "color", "$value": "#3E7EA4" },
+      "ocean500": { "$type": "color", "$value": "#5C99BC" },
+      "ocean300": { "$type": "color", "$value": "#9BC8DF" },
+      "aqua600": { "$type": "color", "$value": "#369EA1" },
+      "aqua500": { "$type": "color", "$value": "#55B7B6" },
+      "aqua200": { "$type": "color", "$value": "#CDEDEC" },
+      "sage600": { "$type": "color", "$value": "#568C73" },
+      "sage500": { "$type": "color", "$value": "#78AA91" },
+      "sage200": { "$type": "color", "$value": "#D8EADF" },
+      "sun500": { "$type": "color", "$value": "#F0B560" },
+      "sun200": { "$type": "color", "$value": "#FBE6BE" },
+      "peach500": { "$type": "color", "$value": "#EFA58C" },
+      "peach200": { "$type": "color", "$value": "#FBE0D6" },
+      "lavender500": { "$type": "color", "$value": "#8F91DA" },
+      "lavender200": { "$type": "color", "$value": "#E4E4F8" },
+      "rose500": { "$type": "color", "$value": "#D98FB0" },
+      "rose200": { "$type": "color", "$value": "#F5DCE8" }
+    },
+    "background": {
+      "canvas": { "$type": "color", "$value": "#FFF9F1" },
+      "surface": { "$type": "color", "$value": "#FFFFFF" },
+      "subtle": { "$type": "color", "$value": "#F6FAFC" },
+      "inverse": { "$type": "color", "$value": "#173B57" },
+      "brandSoft": { "$type": "color", "$value": "#EAF7FA" },
+      "successSoft": { "$type": "color", "$value": "#E8F4EE" },
+      "warningSoft": { "$type": "color", "$value": "#FFF4DF" },
+      "dangerSoft": { "$type": "color", "$value": "#FBEAEA" },
+      "overlay": { "$type": "color", "$value": "rgba(23,59,87,0.48)" }
+    },
+    "surface": {
+      "canvas": { "$type": "color", "$value": "#FFF9F1" },
+      "subtle": { "$type": "color", "$value": "#F6FAFC" },
+      "card": { "$type": "color", "$value": "#FFFFFF" },
+      "line": { "$type": "color", "$value": "#D9E5EA" }
+    },
+    "text": {
+      "strong": { "$type": "color", "$value": "#183247" },
+      "default": { "$type": "color", "$value": "#2B4151" },
+      "muted": { "$type": "color", "$value": "#5C6F7D" },
+      "inverse": { "$type": "color", "$value": "#FFFFFF" },
+      "link": { "$type": "color", "$value": "#214F70" },
+      "success": { "$type": "color", "$value": "#216A49" },
+      "warning": { "$type": "color", "$value": "#7A4B00" },
+      "danger": { "$type": "color", "$value": "#9B3030" },
+      "disabled": { "$type": "color", "$value": "#82919B" }
+    },
+    "border": {
+      "default": { "$type": "color", "$value": "#D9E5EA" },
+      "strong": { "$type": "color", "$value": "#9CB4C0" },
+      "focus": { "$type": "color", "$value": "#245CFF" }
+    },
+    "state": {
+      "focus": { "$type": "color", "$value": "#245CFF" },
+      "success": { "$type": "color", "$value": "#2E8B62" },
+      "warning": { "$type": "color", "$value": "#A66A16" },
+      "danger": { "$type": "color", "$value": "#B74747" }
+    },
+    "feature": {
+      "test": { "$type": "color", "$value": "#68A8D1" },
+      "cbt": { "$type": "color", "$value": "#8F91DA" },
+      "library": { "$type": "color", "$value": "#E8AA4F" },
+      "journal": { "$type": "color", "$value": "#EFA58C" },
+      "music": { "$type": "color", "$value": "#55B7B6" },
+      "confession": { "$type": "color", "$value": "#D98FB0" },
+      "aiMeo": { "$type": "color", "$value": "#4B9F89" },
+      "gardenPending": { "$type": "color", "$value": "#78AA91" }
+    },
+    "pairing": {
+      "canvasText": { "$type": "string", "$value": "background.canvas + text.strong/default/muted" },
+      "surfaceText": { "$type": "string", "$value": "background.surface + text.strong/default/muted" },
+      "inverseText": { "$type": "string", "$value": "background.inverse + text.inverse" },
+      "featureTintText": { "$type": "string", "$value": "feature tint 4-12% + text.strong" },
+      "successText": { "$type": "string", "$value": "background.successSoft + text.success" },
+      "warningText": { "$type": "string", "$value": "background.warningSoft + text.warning" },
+      "dangerText": { "$type": "string", "$value": "background.dangerSoft + text.danger" }
+    }
+  },
+  "gradient": {
+    "hero": { "$type": "gradient", "$value": "linear-gradient(135deg, #F1F4FF 0%, #EAF7FA 55%, #FFF6E9 100%)" },
+    "journal": { "$type": "gradient", "$value": "linear-gradient(135deg, #FFF4ED 0%, #F2F8F3 100%)" },
+    "dashboard": { "$type": "gradient", "$value": "linear-gradient(135deg, #F4F7FF 0%, #EEF9F7 100%)" }
+  },
+  "font": {
+    "family": {
+      "ui": { "$type": "fontFamily", "$value": "Be Vietnam Pro, Inter, system-ui, sans-serif" },
+      "meo": { "$type": "fontFamily", "$value": "Nunito, Be Vietnam Pro, sans-serif" }
+    },
+    "weight": {
+      "regular": { "$type": "fontWeight", "$value": 400 },
+      "medium": { "$type": "fontWeight", "$value": 500 },
+      "semibold": { "$type": "fontWeight", "$value": 600 },
+      "bold": { "$type": "fontWeight", "$value": 700 }
+    },
+    "size": {
+      "xs": { "$type": "dimension", "$value": "12px" },
+      "sm": { "$type": "dimension", "$value": "14px" },
+      "body": { "$type": "dimension", "$value": "16px" },
+      "lg": { "$type": "dimension", "$value": "18px" },
+      "h3": { "$type": "dimension", "$value": "22px" },
+      "h2": { "$type": "dimension", "$value": "28px" },
+      "h1Mobile": { "$type": "dimension", "$value": "34px" },
+      "h1Desktop": { "$type": "dimension", "$value": "44px" }
+    },
+    "lineHeight": {
+      "tight": { "$type": "number", "$value": 1.2 },
+      "heading": { "$type": "number", "$value": 1.3 },
+      "body": { "$type": "number", "$value": 1.55 }
+    }
+  },
+  "space": {
+    "0": { "$type": "dimension", "$value": "0px" },
+    "1": { "$type": "dimension", "$value": "4px" },
+    "2": { "$type": "dimension", "$value": "8px" },
+    "3": { "$type": "dimension", "$value": "12px" },
+    "4": { "$type": "dimension", "$value": "16px" },
+    "5": { "$type": "dimension", "$value": "20px" },
+    "6": { "$type": "dimension", "$value": "24px" },
+    "7": { "$type": "dimension", "$value": "28px" },
+    "8": { "$type": "dimension", "$value": "32px" },
+    "9": { "$type": "dimension", "$value": "36px" },
+    "10": { "$type": "dimension", "$value": "40px" },
+    "11": { "$type": "dimension", "$value": "44px" },
+    "12": { "$type": "dimension", "$value": "48px" },
+    "13": { "$type": "dimension", "$value": "52px" },
+    "14": { "$type": "dimension", "$value": "56px" },
+    "15": { "$type": "dimension", "$value": "60px" },
+    "16": { "$type": "dimension", "$value": "64px" }
+  },
+  "radius": {
+    "sm": { "$type": "dimension", "$value": "8px" },
+    "md": { "$type": "dimension", "$value": "12px" },
+    "lg": { "$type": "dimension", "$value": "16px" },
+    "xl": { "$type": "dimension", "$value": "24px" },
+    "pill": { "$type": "dimension", "$value": "999px" }
+  },
+  "shadow": {
+    "card": { "$type": "shadow", "$value": "0 8px 24px rgba(23,59,87,0.08)" },
+    "floating": { "$type": "shadow", "$value": "0 14px 40px rgba(23,59,87,0.14)" },
+    "focus": { "$type": "shadow", "$value": "0 0 0 3px rgba(36,92,255,0.28)" }
+  },
+  "layout": {
+    "contentMax": { "$type": "dimension", "$value": "1200px" },
+    "sidebar": { "$type": "dimension", "$value": "248px" },
+    "topbar": { "$type": "dimension", "$value": "72px" },
+    "mobileTopbar": { "$type": "dimension", "$value": "88px" },
+    "mobileBottomNav": { "$type": "dimension", "$value": "68px" },
+    "touchTarget": { "$type": "dimension", "$value": "44px" },
+    "breakpointMobile": { "$type": "dimension", "$value": "767px" },
+    "breakpointTablet": { "$type": "dimension", "$value": "1023px" },
+    "breakpointDesktop": { "$type": "dimension", "$value": "1280px" },
+    "logo": {
+      "widthDesktop": { "$type": "dimension", "$value": "120px" },
+      "widthTablet": { "$type": "dimension", "$value": "96px" },
+      "widthMobile": { "$type": "dimension", "$value": "72px" },
+      "offsetDesktop": { "$type": "dimension", "$value": "24px" },
+      "offsetTablet": { "$type": "dimension", "$value": "20px" },
+      "offsetMobile": { "$type": "dimension", "$value": "16px" },
+      "headingGapDesktop": { "$type": "dimension", "$value": "32px" },
+      "headingGapTablet": { "$type": "dimension", "$value": "28px" },
+      "headingGapMobile": { "$type": "dimension", "$value": "24px" },
+      "brandZoneDesktop": { "$type": "dimension", "$value": "168px" },
+      "brandZoneTablet": { "$type": "dimension", "$value": "136px" },
+      "brandZoneMobile": { "$type": "dimension", "$value": "96px" }
+    }
+  },
+  "component": {
+    "assistant": {
+      "floatingEdge": { "$type": "dimension", "$value": "24px" },
+      "guideMaxWidth": { "$type": "dimension", "$value": "320px" },
+      "chatbotWidth": { "$type": "dimension", "$value": "360px" },
+      "guideZIndex": { "$type": "number", "$value": 700 },
+      "chatbotZIndex": { "$type": "number", "$value": 720 }
+    }
+  },
+  "interaction": {
+    "mascotOnboarding": {
+      "mode": { "$type": "string", "$value": "proactive" },
+      "trigger": { "$type": "string", "$value": "first-session-after-account-created" },
+      "scope": { "$type": "string", "$value": "navigation, feature-intro, privacy-controls" },
+      "textInput": { "$type": "boolean", "$value": false },
+      "dismissible": { "$type": "boolean", "$value": true },
+      "resumable": { "$type": "boolean", "$value": true },
+      "maxSteps": { "$type": "number", "$value": 5 }
+    },
+    "chatbot": {
+      "mode": { "$type": "string", "$value": "reactive" },
+      "trigger": { "$type": "string", "$value": "user-initiated" },
+      "entryLabel": { "$type": "string", "$value": "Hỏi về web app" },
+      "scope": { "$type": "string", "$value": "web-app usage, navigation, settings, privacy and account help" },
+      "autoStartsOnboarding": { "$type": "boolean", "$value": false }
+    }
+  },
+  "motion": {
+    "duration": {
+      "instant": { "$type": "duration", "$value": "80ms" },
+      "fast": { "$type": "duration", "$value": "120ms" },
+      "base": { "$type": "duration", "$value": "180ms" },
+      "page": { "$type": "duration", "$value": "240ms" },
+      "expressive": { "$type": "duration", "$value": "420ms" }
+    },
+    "easing": {
+      "standard": { "$type": "cubicBezier", "$value": [0.2, 0, 0, 1] },
+      "enter": { "$type": "cubicBezier", "$value": [0, 0, 0.2, 1] },
+      "exit": { "$type": "cubicBezier", "$value": [0.4, 0, 1, 1] },
+      "gentlePop": { "$type": "cubicBezier", "$value": [0.34, 1.3, 0.64, 1] }
+    },
+    "stagger": { "$type": "duration", "$value": "60ms" },
+    "pageOffset": { "$type": "dimension", "$value": "10px" }
+  }
+}

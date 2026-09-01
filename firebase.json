@@ -56,7 +56,8 @@
         "**/tests/rules/**",
         "**/*.test.ts",
         "**/*.test.tsx",
-        "WEB"
+        "WEB",
+        "BRAND GUIDELINE"
       ]
     }
   ]
