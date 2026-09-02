@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   listAllMusicTracks,
+  listMusicSuggestions,
   musicDraftSchema,
   publishMusicTrack,
+  reviewMusicSuggestion,
   saveMusicTrack,
   type MusicRecord,
+  type MusicSuggestionRecord,
 } from "@/lib/firestore/admin-music";
+import { MusicSuggestionQueue } from "@/components/admin/MusicSuggestionQueue";
 import { MUSIC_MOODS, MUSIC_MOOD_LABELS, type MusicMood } from "@/lib/types/music";
 
 type FormState = {
@@ -38,13 +42,59 @@ export function MusicEditor({ uid }: { uid: string }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const [suggestions, setSuggestions] = useState<MusicSuggestionRecord[]>([]);
+  const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
+
   const load = useCallback(() => {
     listAllMusicTracks()
       .then((r) => { setItems(r); setListFailed(false); })
       .catch(() => setListFailed(true));
+    // Hàng chờ đề xuất hỏng thì KHÔNG chặn phần quản lý kho — hai việc độc lập.
+    listMusicSuggestions()
+      .then(setSuggestions)
+      .catch(() => setSuggestions([]));
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Nhận một đề xuất = điền sẵn form, KHÔNG tự thêm bài.
+   *
+   * Ô ghi chú bản quyền cố ý để trống: đó là thứ duy nhất học sinh không thể
+   * cung cấp, và cũng là lý do bước duyệt này tồn tại.
+   */
+  function useSuggestion(item: MusicSuggestionRecord) {
+    setEditingId(null);
+    setForm({
+      title: item.title,
+      artist: item.artist,
+      youtubeUrl: item.youtubeUrl,
+      mood: item.mood,
+      rightsNote: "",
+      order: "0",
+    });
+    setError(null);
+    setMessage(
+      `Đã điền đề xuất "${item.title}" vào form bên dưới. Hãy ghi nguồn/quyền dùng rồi lưu — ` +
+        "bài chưa được thêm vào kho.",
+    );
+    void markSuggestion(item, "approved");
+  }
+
+  async function markSuggestion(
+    item: MusicSuggestionRecord,
+    status: "approved" | "rejected",
+  ): Promise<void> {
+    setBusySuggestionId(item.id);
+    try {
+      await reviewMusicSuggestion(item.id, status, uid);
+      setSuggestions((prev) => prev.filter((s) => s.id !== item.id));
+    } catch {
+      setError("Chưa cập nhật được đề xuất. Kiểm tra lại quyền quản trị và kết nối mạng.");
+    } finally {
+      setBusySuggestionId(null);
+    }
+  }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -106,6 +156,13 @@ export function MusicEditor({ uid }: { uid: string }) {
           {message}
         </p>
       )}
+
+      <MusicSuggestionQueue
+        items={suggestions}
+        onUse={useSuggestion}
+        onReject={(item) => void markSuggestion(item, "rejected")}
+        busyId={busySuggestionId}
+      />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <h2 className="font-medium text-ink">{editingId ? "Sửa bài" : "Thêm bài mới"}</h2>

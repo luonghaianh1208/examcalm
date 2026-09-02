@@ -11,7 +11,19 @@ import type { MusicTrackListItem } from "@/lib/firebase/queries-public";
  * autoplay." Nhúng sẵn cả chục iframe YouTube lúc mở trang vừa nặng, vừa để
  * YouTube đặt cookie/theo dõi trước khi học sinh làm bất cứ điều gì.
  */
-export function MusicTrackCard({ track }: { track: MusicTrackListItem }) {
+export function MusicTrackCard({
+  track,
+  saved,
+  onToggleSave,
+}: {
+  track: MusicTrackListItem;
+  /**
+   * `null` = không hiện nút lưu (khách chưa đăng nhập). Kho nhạc cố ý đọc được
+   * mà không cần tài khoản — nút lưu là thứ DUY NHẤT đòi đăng nhập ở đây.
+   */
+  saved: boolean | null;
+  onToggleSave?: () => void;
+}) {
   const [playing, setPlaying] = useState(false);
 
   return (
@@ -21,15 +33,27 @@ export function MusicTrackCard({ track }: { track: MusicTrackListItem }) {
           <p className="font-medium text-ink">{track.title}</p>
           {track.artist && <p className="text-sm text-muted">{track.artist}</p>}
         </div>
-        {!playing && (
-          <button
-            type="button"
-            onClick={() => setPlaying(true)}
-            className="min-h-11 shrink-0 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 text-sm font-medium text-ink-inverse"
-          >
-            Phát
-          </button>
-        )}
+        <div className="flex shrink-0 gap-2">
+          {saved !== null && (
+            <button
+              type="button"
+              onClick={onToggleSave}
+              aria-pressed={saved}
+              className="min-h-11 rounded-[var(--ec-radius-md)] border border-line px-4 text-sm text-body"
+            >
+              {saved ? "Bỏ lưu" : "Lưu"}
+            </button>
+          )}
+          {!playing && (
+            <button
+              type="button"
+              onClick={() => setPlaying(true)}
+              className="min-h-11 rounded-[var(--ec-radius-md)] bg-[var(--ec-ocean-700)] px-5 text-sm font-medium text-ink-inverse"
+            >
+              Phát
+            </button>
+          )}
+        </div>
       </div>
 
       {playing && (

@@ -1,10 +1,12 @@
 "use client";
 
-import { addDoc, collection, doc, getDocs, serverTimestamp, updateDoc } from "firebase/firestore";
+import {
+  addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc, where,
+} from "firebase/firestore";
 import { z } from "zod";
 import { getDb, ensureAuthReady } from "@/lib/firebase/client";
 import { getYouTubeEmbedUrl } from "@/lib/video";
-import { MUSIC_MOODS, type MusicTrack } from "@/lib/types/music";
+import { MUSIC_MOODS, type MusicSuggestion, type MusicTrack } from "@/lib/types/music";
 
 export const musicDraftSchema = z.object({
   title: z.string().min(1, "Hãy nhập tên bài.").max(200),
@@ -81,6 +83,63 @@ export async function saveMusicTrack(
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export type MusicSuggestionRecord = MusicSuggestion & { id: string };
+
+/**
+ * Đề xuất nhạc từ học sinh, bài chờ lâu nhất lên trước.
+ *
+ * Sắp trong bộ nhớ chứ không orderBy ở Firestore — cùng lý do với
+ * listAllMusicTracks ở trên: giữ đúng một query shape, không sinh thêm
+ * composite index mà Emulator không kiểm tra được.
+ */
+export async function listMusicSuggestions(): Promise<MusicSuggestionRecord[]> {
+  await ensureAuthReady();
+  const snap = await getDocs(
+    query(collection(getDb(), "musicSuggestions"), where("status", "==", "pending")),
+  );
+  // Thời điểm gửi giữ ở Map riêng thay vì nhét thêm field vào record: record
+  // trả ra khớp đúng MusicSuggestion, không mang theo field chỉ dùng để sắp.
+  const luc = new Map<string, number>();
+  const records: MusicSuggestionRecord[] = snap.docs.map((d) => {
+    const data = d.data() as MusicSuggestion & { createdAt?: { toMillis?: () => number } };
+    luc.set(d.id, data.createdAt?.toMillis?.() ?? 0);
+    return {
+      id: d.id,
+      authorUid: data.authorUid,
+      title: data.title,
+      artist: data.artist ?? "",
+      youtubeUrl: data.youtubeUrl,
+      mood: data.mood,
+      status: data.status,
+      reviewedBy: data.reviewedBy ?? "",
+    };
+  });
+
+  // Bài chờ lâu nhất lên trước — một đề xuất nằm quên nghĩa là một học sinh đã
+  // góp gì đó rồi không nhận được hồi âm nào.
+  return records.sort((a, b) => (luc.get(a.id) ?? 0) - (luc.get(b.id) ?? 0));
+}
+
+/**
+ * Đánh dấu một đề xuất đã xử lý.
+ *
+ * CỐ Ý không tự tạo bài trong `musicTracks`: `rightsNote` là bắt buộc và chỉ
+ * thầy cô mới có căn cứ điền. Nhận đề xuất = mở form thêm bài với thông tin
+ * điền sẵn, thầy cô ghi nguồn rồi mới lưu. Hàm này chỉ dọn hàng chờ.
+ */
+export async function reviewMusicSuggestion(
+  suggestionId: string,
+  status: "approved" | "rejected",
+  adminUid: string,
+): Promise<void> {
+  await ensureAuthReady();
+  await updateDoc(doc(getDb(), "musicSuggestions", suggestionId), {
+    status,
+    reviewedBy: adminUid,
+    reviewedAt: serverTimestamp(),
+  });
 }
 
 export async function publishMusicTrack(trackId: string, publish: boolean): Promise<void> {

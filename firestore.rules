@@ -83,6 +83,40 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Kho nhạc RIÊNG của học sinh. Hai collection con, cùng một luật: chỉ chủ
+    // tài khoản đọc và ghi — admin CŨNG KHÔNG đọc được.
+    //
+    // Cố ý chặt hơn users/{uid} (admin đọc được, để hỗ trợ tài khoản): nhạc một
+    // học sinh nghe lúc nửa đêm không phải thứ nhà trường cần biết. Bài nào em
+    // ấy muốn thầy cô thấy thì tự bấm đề xuất — đường đó đi qua
+    // musicSuggestions bên dưới, và chỉ mang theo đúng bài được chọn.
+    match /users/{uid}/musicSaved/{trackId} {
+      allow read, write: if isOwner(uid);
+    }
+    match /users/{uid}/musicOwn/{trackId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Đề xuất nhạc cho kho chung.
+    match /musicSuggestions/{id} {
+      // Học sinh chỉ đọc lại đề xuất của CHÍNH mình (để biết đã được nhận
+      // chưa); admin đọc tất cả để duyệt.
+      allow read: if isAdmin() || (isSignedIn() && resource.data.authorUid == request.auth.uid);
+
+      // Tạo: phải tự đứng tên, và luôn vào hàng chờ. Không cho client tự đặt
+      // status — nếu không, một tài khoản học sinh gửi thẳng status "approved"
+      // và hàng chờ của thầy cô không bao giờ thấy bài đó.
+      allow create: if isVerified()
+                    && request.resource.data.authorUid == request.auth.uid
+                    && request.resource.data.status == "pending"
+                    && request.resource.data.reviewedBy == "";
+
+      // Đổi trạng thái là việc của người duyệt. Học sinh rút lại đề xuất của
+      // mình thì xoá — không cần một trạng thái riêng cho việc đó.
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.authorUid == request.auth.uid);
+    }
+
     /*
      * Confession — hai collection TÁCH RỜI, đây là ranh giới quan trọng nhất
      * của tính năng này (PRD mục 5.9).

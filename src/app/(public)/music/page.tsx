@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { listPublishedMusicTracks } from "@/lib/firebase/queries-public";
-import { MUSIC_MOODS, MUSIC_MOOD_LABELS } from "@/lib/types/music";
-import { MusicTrackCard } from "@/components/music/MusicTrackCard";
+import { getSessionUser } from "@/lib/firebase/session";
+import { MusicHub } from "@/components/music/MusicHub";
 
 export const metadata: Metadata = { title: "Music Hub" };
 
@@ -10,7 +10,9 @@ export const metadata: Metadata = { title: "Music Hub" };
 export const dynamic = "force-dynamic";
 
 export default async function MusicPage() {
-  const tracks = await listPublishedMusicTracks();
+  // Kho CHUNG đọc ở server (ai cũng đọc được). Kho RIÊNG do MusicHub tự tải ở
+  // client bằng phiên của chính học sinh — rules chỉ cho chủ tài khoản đọc.
+  const [tracks, user] = await Promise.all([listPublishedMusicTracks(), getSessionUser()]);
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 py-10">
@@ -21,26 +23,7 @@ export default async function MusicPage() {
         </p>
       </div>
 
-      {tracks.length === 0 ? (
-        <p className="rounded-[var(--ec-radius-lg)] bg-subtle px-5 py-6 text-body">
-          Chưa có bài nào. Bạn quay lại sau nhé.
-        </p>
-      ) : (
-        MUSIC_MOODS.map((mood) => {
-          const cua = tracks.filter((t) => t.mood === mood);
-          // Nhóm rỗng thì không hiện tiêu đề trống — thầy cô có thể mới chỉ
-          // thêm nhạc cho một nhóm.
-          if (cua.length === 0) return null;
-          return (
-            <section key={mood}>
-              <h2 className="mb-3 text-lg font-medium text-ink">{MUSIC_MOOD_LABELS[mood]}</h2>
-              <ul className="flex flex-col gap-3">
-                {cua.map((t) => <MusicTrackCard key={t.id} track={t} />)}
-              </ul>
-            </section>
-          );
-        })
-      )}
+      <MusicHub tracks={tracks} uid={user?.uid ?? null} />
     </div>
   );
 }

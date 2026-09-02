@@ -39,3 +39,52 @@ export const musicTrackSchema = z.object({
 
 export type MusicMood = (typeof MUSIC_MOODS)[number];
 export type MusicTrack = z.infer<typeof musicTrackSchema>;
+
+/**
+ * Bài học sinh tự thêm vào kho riêng — `users/{uid}/musicOwn/{id}`.
+ *
+ * KHÔNG có `rightsNote` và `status`: bài này chỉ chủ tài khoản đọc được (rules
+ * `isOwner`), không phát tán cho ai, nên không cần ghi chú bản quyền cũng
+ * không cần ai duyệt. Cả hai thứ đó chỉ xuất hiện khi bài được đề xuất vào kho
+ * CHUNG — lúc ấy thầy cô tự điền. Xem src/lib/music-personal.ts.
+ */
+export const studentTrackSchema = z.object({
+  title: z.string().min(1).max(200),
+  artist: z.string().max(200).default(""),
+  youtubeUrl: z.string().url(),
+  mood: z.enum(MUSIC_MOODS),
+  /** Id document trong `musicSuggestions`, hoặc "" khi chưa đề xuất bao giờ. */
+  suggestionId: z.string().default(""),
+});
+
+export type StudentTrack = z.infer<typeof studentTrackSchema>;
+
+export const MUSIC_SUGGESTION_STATUSES = ["pending", "approved", "rejected"] as const;
+export type MusicSuggestionStatus = (typeof MUSIC_SUGGESTION_STATUSES)[number];
+
+export const MUSIC_SUGGESTION_STATUS_LABELS: Record<MusicSuggestionStatus, string> = {
+  pending: "Đang chờ thầy cô xem",
+  approved: "Đã được nhận vào kho trường",
+  rejected: "Lần này chưa nhận",
+};
+
+/**
+ * Một đề xuất của học sinh cho kho chung — `musicSuggestions/{id}`.
+ *
+ * CÓ `authorUid`, khác hẳn Confession (nơi danh tính bị tách rời có chủ đích).
+ * Ở đây thầy cô cần biết ai đề xuất để còn hỏi lại về nguồn nhạc trước khi ghi
+ * ghi chú bản quyền — và bản thân việc đề xuất một bài nhạc không phải điều
+ * cần ẩn danh để nói ra.
+ */
+export const musicSuggestionSchema = z.object({
+  authorUid: z.string().min(1),
+  title: z.string().min(1).max(200),
+  artist: z.string().max(200).default(""),
+  youtubeUrl: z.string().url(),
+  mood: z.enum(MUSIC_MOODS),
+  status: z.enum(MUSIC_SUGGESTION_STATUSES),
+  /** Uid admin đã xử lý, "" khi còn chờ. */
+  reviewedBy: z.string().default(""),
+});
+
+export type MusicSuggestion = z.infer<typeof musicSuggestionSchema>;
